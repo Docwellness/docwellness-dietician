@@ -4,7 +4,6 @@ import 'package:docwellnesdoc/app/modules/chat/services/service.dart';
 import 'package:docwellnesdoc/app/modules/chat/views/chat_screen.dart';
 import 'package:docwellnesdoc/app/modules/home/controllers/home_controller.dart';
 import 'package:docwellnesdoc/app/modules/home/widgets/patient_request_container.dart';
-import 'package:docwellnesdoc/app/modules/patients/views/patient_profile_view.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -191,10 +190,8 @@ class ActionDetailsView extends StatelessWidget {
                             status: p.status ?? 'Unpaid',
                             avatarUrl: p.avatarUrl,
                             onTap: () {
-                              Get.to(
-                                () => PatientProfileView(
-                                  patientId: p.patientId ?? '',
-                                ),
+                              Get.toNamed(
+                                '/patient-profile/${p.patientId ?? ''}',
                               );
                             },
                           ),
@@ -229,9 +226,7 @@ class ActionDetailsView extends StatelessWidget {
                                 if (isMessagesReceived) {
                                   _openChatWithPatient(id);
                                 } else {
-                                  Get.to(
-                                    () => PatientProfileView(patientId: id),
-                                  );
+                                  Get.toNamed('/patient-profile/$id');
                                 }
                               }
                             },
@@ -292,11 +287,19 @@ class ActionDetailsView extends StatelessWidget {
   }
 
   Future<void> _openChatWithPatient(String patientId) async {
-    Get.put(ChatController());
+    // See patient_profile_view.dart's _openChatWithPatient for why this is
+    // guarded - an unconditional Get.put() here leaked a live socket
+    // subscription on every open, which is how messages ended up rendered
+    // more than once.
+    if (!Get.isRegistered<ChatController>()) {
+      Get.put(ChatController());
+    }
     final chatService = ChatService();
     final conversationId = await chatService.getOrCreateConversation(patientId);
     if (conversationId != null && conversationId.isNotEmpty) {
-      Get.to(() => ChatScreen(conversationId: conversationId));
+      Get.to(
+        () => ChatScreen(conversationId: conversationId, receiverId: patientId),
+      );
       // Refresh dashboard stats after opening chat (marks as read)
       try {
         final hc = Get.find<HomeController>();
@@ -549,7 +552,7 @@ class _NeedAttentionTabbedView extends StatelessWidget {
                         if (!isHistory) {
                           homeController.acknowledgeNeedAttention(id);
                         }
-                        Get.to(() => PatientProfileView(patientId: id));
+                        Get.toNamed('/patient-profile/$id');
                       }
                     },
                   ),

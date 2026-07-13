@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:docwellnesdoc/app/models/all_chats_model.dart';
 import 'package:docwellnesdoc/app/models/chat_model.dart';
@@ -8,6 +7,7 @@ import 'package:docwellnesdoc/app/services/socket_service.dart';
 import 'package:docwellnesdoc/main.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:image_picker/image_picker.dart';
 
 class ChatController extends GetxController {
   ReceiverModel? receiverModel;
@@ -435,7 +435,7 @@ class ChatController extends GetxController {
   // ---------------- SEND IMAGE ----------------
   Future<dynamic> sendImageMessage({
     required String receiverId,
-    File? imageFile,
+    XFile? imageFile,
     String? message,
     String? replyTo,
   }) async {
@@ -464,23 +464,6 @@ class ChatController extends GetxController {
     required String category,
   }) async {
     final clientMessageId = DateTime.now().millisecondsSinceEpoch.toString();
-
-    if (_socketService.isConnected.value) {
-      _socketService.sendMessage(
-        conversationId: conversationId,
-        receiverId: receiverId,
-        clientMessageId: clientMessageId,
-        content: recommendationText,
-        type: 'doctor_recommendation',
-        replyTo: replyingTo?.id,
-        extraData: {
-          'recommendation_data': {
-            'recommendationText': recommendationText,
-            'category': category,
-          },
-        },
-      );
-    }
 
     // Add local message for instant feedback
     final localMessage = ChatModel(

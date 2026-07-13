@@ -1,5 +1,4 @@
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:docwellnesdoc/app/modules/patients/views/patient_profile_view.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -35,7 +34,7 @@ class PatientWidget extends StatelessWidget {
     return GestureDetector(
       onTap: () {
         if (patientId != null) {
-          Get.to(() => PatientProfileView(patientId: patientId!));
+          Get.toNamed('/patient-profile/${patientId!}');
         }
       },
       child: Container(

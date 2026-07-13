@@ -39,9 +39,8 @@ class _NutritionDetailsWidgetState extends State<NutritionDetailsWidget> {
             color: Color(0xffFEF6FB).withValues(alpha: 0.6),
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Wrap(
-            spacing: 23,
-            runSpacing: 20,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
               NutritionCircle(
                 title: "Protein",

@@ -9,6 +9,7 @@ import '../modules/home/bindings/home_binding.dart';
 import '../modules/notifications/bindings/notification_binding.dart';
 import '../modules/notifications/views/notification_view.dart';
 import '../modules/patients/bindings/patients_binding.dart';
+import '../modules/patients/views/patient_profile_view.dart';
 import '../modules/patients/views/patients_view.dart';
 import '../modules/performance/bindings/performance_binding.dart';
 import '../modules/performance/views/performance_view.dart';
@@ -57,6 +58,15 @@ class AppPages {
       name: _Paths.NOTIFICATIONS,
       page: () => const NotificationView(),
       binding: NotificationBinding(),
+    ),
+    GetPage(
+      name: _Paths.PATIENT_PROFILE,
+      // Reading patientId from Get.parameters (populated by the router from
+      // the URL) rather than only a widget constructor arg means a full
+      // browser refresh on this route can reconstruct the page instead of
+      // crashing with no way to recover which patient was being viewed.
+      page: () =>
+          PatientProfileView(patientId: Get.parameters['patientId'] ?? ''),
     ),
   ];
 }

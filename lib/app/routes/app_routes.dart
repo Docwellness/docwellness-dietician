@@ -10,6 +10,7 @@ abstract class Routes {
   static const RECEIPES = _Paths.RECEIPES;
   static const PERFORMANCE = _Paths.PERFORMANCE;
   static const NOTIFICATIONS = _Paths.NOTIFICATIONS;
+  static const PATIENT_PROFILE = _Paths.PATIENT_PROFILE;
 }
 
 abstract class _Paths {
@@ -21,4 +22,5 @@ abstract class _Paths {
   static const RECEIPES = '/receipes';
   static const PERFORMANCE = '/performance';
   static const NOTIFICATIONS = '/notifications';
+  static const PATIENT_PROFILE = '/patient-profile/:patientId';
 }

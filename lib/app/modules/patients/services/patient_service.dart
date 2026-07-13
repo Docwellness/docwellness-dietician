@@ -112,6 +112,32 @@ class PatientService {
     return null;
   }
 
+  Future<dynamic> generateWeek(
+    Map<String, dynamic> data,
+    String patientId,
+    String dietPlanId,
+  ) async {
+    try {
+      final response = await service.request(
+        endPoint: '/patients/$patientId/diet-plans/$dietPlanId/generate-week',
+        method: 'POST',
+        headers: {'Authorization': "Bearer $token"},
+        data: data,
+      );
+
+      if (response != null) {
+        // Surface the tier-gating 403/validation 400 message too, not just
+        // the success payload - the caller distinguishes via 'success'.
+        if (response.data is Map) {
+          return response.data;
+        }
+      }
+    } catch (e) {
+      debugPrint('-----------------------> $e');
+    }
+    return null;
+  }
+
   Future<dynamic> getAiGeneratedDietPlan(
     String patientId,
     String dietPlanId,
@@ -314,6 +340,34 @@ class PatientService {
     try {
       final response = await service.request(
         endPoint: '/patients/$patientId/diet-plans/$dietPlanId/weeks/$week',
+        method: 'GET',
+        headers: {'Authorization': "Bearer $token"},
+      );
+
+      if (response != null &&
+          response.statusCode == 200 &&
+          response.data['success'] == true) {
+        return response.data;
+      }
+    } catch (e) {
+      debugPrint('-----------------------> $e');
+    }
+    return null;
+  }
+
+  /// Same shape as [getSelectedDiet] but for a not-yet-finalized (Draft)
+  /// week - returns the full recipe options pool per servingTime (AI's
+  /// pick(s) pre-flagged isSelected), not just the single recipe the AI
+  /// assigned.
+  Future<dynamic> getDraftWeekOptions(
+    String patientId,
+    String dietPlanId,
+    int week,
+  ) async {
+    try {
+      final response = await service.request(
+        endPoint:
+            '/patients/$patientId/diet-plans/$dietPlanId/weeks/$week/draft-options',
         method: 'GET',
         headers: {'Authorization': "Bearer $token"},
       );

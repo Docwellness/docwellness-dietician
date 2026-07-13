@@ -37,6 +37,7 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
   final Set<int> _uploadingIngredientIndexes = <int>{};
   RecipePreview? _editableRecipe;
   bool _isUploadingMainImage = false;
+  bool _isSavingExistingRecipe = false;
   String? _mainImageUrl;
 
   RecipePreview? get recipe {
@@ -57,6 +58,8 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
     }
     return recipe?.name ?? 'Recipe name';
   }
+
+  String get recipeCategory => recipe?.category ?? '';
 
   String get recipeDescription {
     if (recipe != null) {
@@ -204,34 +207,54 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
     }
   }
 
-  Future<void> _pickAndUploadIngredientImage(int index) async {
+  /// Fetches a fresh internet photo for the ingredient at [index] (Pexels,
+  /// mirrored into Cloudinary server-side) - can be tapped repeatedly to get
+  /// a different result. If this recipe is already saved (has an id, i.e.
+  /// not the not-yet-saved preview flow), the new image is also persisted
+  /// immediately; otherwise it's held in local preview state and gets
+  /// written to the DB naturally when "Add to Database" is tapped.
+  Future<void> _refetchIngredientImage(int index) async {
     if (recipe == null || _uploadingIngredientIndexes.contains(index)) {
       return;
     }
 
-    final file = await _imagePicker.pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 80,
-    );
-    if (file == null) return;
+    final current = recipe!.ingredients[index];
 
     setState(() {
       _uploadingIngredientIndexes.add(index);
     });
 
     try {
-      final imageUrl = await _recipeService.uploadIngredientImage(file.path);
+      final imageUrl = await _recipeService.fetchIngredientImageFromWeb(
+        current.name,
+      );
       if (imageUrl == null || imageUrl.isEmpty || recipe == null) {
         Get.snackbar(
           'Error',
-          'Failed to upload image. Please try again.',
+          "Couldn't find an image for this ingredient. Please try again.",
           snackPosition: SnackPosition.TOP,
         );
         return;
       }
 
+      final recipeId = recipe!.id;
+      if (recipeId != null && recipeId.isNotEmpty) {
+        final persisted = await _recipeService.updateIngredientImage(
+          recipeId: recipeId,
+          ingredientIndex: index,
+          imageUrl: imageUrl,
+        );
+        if (!persisted) {
+          Get.snackbar(
+            'Error',
+            'Failed to save the new image. Please try again.',
+            snackPosition: SnackPosition.TOP,
+          );
+          return;
+        }
+      }
+
       final updatedIngredients = List<Ingredient>.from(recipe!.ingredients);
-      final current = updatedIngredients[index];
 
       updatedIngredients[index] = Ingredient(
         name: current.name,
@@ -255,12 +278,6 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
       _editableRecipe = updatedRecipe;
 
       setState(() {});
-
-      Get.snackbar(
-        'Success',
-        'Ingredient image uploaded successfully.',
-        snackPosition: SnackPosition.TOP,
-      );
     } finally {
       if (mounted) {
         setState(() {
@@ -378,36 +395,26 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
                   ],
                 ),
               ),
-              SizedBox(width: 5),
-              Container(
-                height: 24,
-                width: 144,
-                decoration: BoxDecoration(
-                  color: const Color(0xffFDF2FA),
-                  border: Border.all(color: Color(0xffFCE7F6)),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Center(
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Image.asset(
-                        'assets/icons/check-verified-01.png',
-                        height: 12,
-                        width: 12,
-                      ),
-                      SizedBox(width: 6),
-                      CustomText(
-                        text: "DIETICIAN VERIFIED",
-
-                        color: Color(0xFFEF45B2),
-                        fontWeight: FontWeight.w500,
-                        fontSize: 12,
-                      ),
-                    ],
+              if (recipeCategory.isNotEmpty) ...[
+                SizedBox(width: 5),
+                Container(
+                  height: 24,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xffFDF2FA),
+                    border: Border.all(color: Color(0xffFCE7F6)),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Center(
+                    child: CustomText(
+                      text: recipeCategory,
+                      color: Color(0xFFEF45B2),
+                      fontWeight: FontWeight.w500,
+                      fontSize: 12,
+                    ),
                   ),
                 ),
-              ),
+              ],
             ],
           ),
         ),
@@ -599,8 +606,8 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
                             ingredient: ingredient,
                             servingsMultiplier:
                                 counter / (recipe?.servings ?? 1),
-                            onAddImageTap: () =>
-                                _pickAndUploadIngredientImage(index),
+                            onRefreshImageTap: () =>
+                                _refetchIngredientImage(index),
                             isUploading: _uploadingIngredientIndexes.contains(
                               index,
                             ),
@@ -760,7 +767,14 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
                         return UpdateAiInputsSheet(
                           scrollController: scrollCtrl,
                           onUpdated: () {
-                            setState(() {});
+                            // Make the refined recipe (including its
+                            // preserved id, see copyWithId) authoritative
+                            // for this screen - the `recipe` getter here
+                            // doesn't consult the shared controller, only
+                            // _editableRecipe then the original prop.
+                            setState(() {
+                              _editableRecipe = controller.generatedRecipe.value;
+                            });
                           },
                         );
                       },
@@ -770,6 +784,61 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
               },
               text: 'Update AI Inputs',
               isOutline: true,
+            ),
+          ),
+        if (widget.fromAddRecipeScreen == false)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            child: CustomButton(
+              fontSize: 13.5,
+              onTap: () async {
+                if (_isSavingExistingRecipe || recipe == null) return;
+                setState(() => _isSavingExistingRecipe = true);
+                try {
+                  final r = recipe!;
+                  final saved = await _recipeService.saveExistingRecipe(
+                    id: r.id!,
+                    servingTime: r.servingTime,
+                    servings: r.servings,
+                    category: r.category,
+                    description: r.description,
+                    dietaryHabits: r.dietaryHabits,
+                    freeFrom: r.freeFrom,
+                    ingredients: r.ingredients,
+                    cookingSteps: r.cookingSteps,
+                    nutrition: r.nutrition,
+                    translations: r.translations,
+                  );
+                  if (saved) {
+                    // Close the modal bottom sheet
+                    if (mounted) Navigator.of(context).pop();
+                    Get.snackbar(
+                      'Success',
+                      'Recipe saved successfully.',
+                      snackPosition: SnackPosition.TOP,
+                      backgroundColor: Colors.green.shade100,
+                      colorText: Colors.green.shade900,
+                      duration: const Duration(seconds: 3),
+                    );
+                  } else {
+                    Get.snackbar(
+                      'Error',
+                      'Failed to save recipe. Please try again.',
+                      snackPosition: SnackPosition.TOP,
+                      backgroundColor: Colors.red.shade100,
+                      colorText: Colors.red.shade900,
+                      duration: const Duration(seconds: 3),
+                    );
+                  }
+                } finally {
+                  if (mounted) {
+                    setState(() => _isSavingExistingRecipe = false);
+                  }
+                }
+              },
+              text: _isSavingExistingRecipe ? 'Saving...' : 'Save Recipe',
+              isOutline: false,
+              isLoading: _isSavingExistingRecipe,
             ),
           ),
       ],

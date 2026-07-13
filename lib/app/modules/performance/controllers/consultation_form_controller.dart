@@ -10,6 +10,15 @@ class ConsultationFieldDraft {
   TextEditingController labelController;
   RxList<TextEditingController> optionControllers;
   RxBool required;
+  // Section grouping and conditional-follow-up dependencies aren't editable
+  // via this builder UI, but must round-trip unchanged so seeded fields
+  // don't get silently wiped the first time a dietician saves any edit here
+  // - upsertMyTemplate fully replaces the fields array. genderScope IS
+  // editable here (General / Female only / Male only selector).
+  final String section;
+  RxString genderScope;
+  final String? dependsOnFieldId;
+  final List<String> dependsOnValues;
 
   ConsultationFieldDraft({
     required this.fieldId,
@@ -17,6 +26,10 @@ class ConsultationFieldDraft {
     required String initialLabel,
     required List<String> initialOptions,
     required bool initialRequired,
+    this.section = '',
+    String initialGenderScope = 'general',
+    this.dependsOnFieldId,
+    this.dependsOnValues = const [],
   })  : type = initialType.obs,
         labelController = TextEditingController(text: initialLabel),
         optionControllers = (initialOptions.isEmpty
@@ -25,7 +38,8 @@ class ConsultationFieldDraft {
                     .map((o) => TextEditingController(text: o))
                     .toList())
             .obs,
-        required = initialRequired.obs;
+        required = initialRequired.obs,
+        genderScope = initialGenderScope.obs;
 
   factory ConsultationFieldDraft.fromField(ConsultationFormField f) {
     return ConsultationFieldDraft(
@@ -34,6 +48,10 @@ class ConsultationFieldDraft {
       initialLabel: f.label,
       initialOptions: f.options,
       initialRequired: f.required,
+      section: f.section,
+      initialGenderScope: f.genderScope,
+      dependsOnFieldId: f.dependsOnFieldId,
+      dependsOnValues: f.dependsOnValues,
     );
   }
 
@@ -49,6 +67,10 @@ class ConsultationFieldDraft {
       options: type.value.hasOptions ? opts : const [],
       required: required.value,
       order: order,
+      section: section,
+      genderScope: genderScope.value,
+      dependsOnFieldId: dependsOnFieldId,
+      dependsOnValues: dependsOnValues,
     );
   }
 

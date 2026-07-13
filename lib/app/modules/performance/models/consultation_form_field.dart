@@ -7,6 +7,7 @@ enum ConsultationFieldType {
   yesNo,
   singleChoice,
   multiChoice,
+  file,
 }
 
 extension ConsultationFieldTypeX on ConsultationFieldType {
@@ -27,6 +28,8 @@ extension ConsultationFieldTypeX on ConsultationFieldType {
         return 'singleChoice';
       case ConsultationFieldType.multiChoice:
         return 'multiChoice';
+      case ConsultationFieldType.file:
+        return 'file';
     }
   }
 
@@ -47,6 +50,8 @@ extension ConsultationFieldTypeX on ConsultationFieldType {
         return 'Single Choice';
       case ConsultationFieldType.multiChoice:
         return 'Multiple Choice';
+      case ConsultationFieldType.file:
+        return 'File Upload';
     }
   }
 
@@ -69,6 +74,8 @@ ConsultationFieldType consultationFieldTypeFromApi(String? raw) {
       return ConsultationFieldType.singleChoice;
     case 'multiChoice':
       return ConsultationFieldType.multiChoice;
+    case 'file':
+      return ConsultationFieldType.file;
     case 'text':
     default:
       return ConsultationFieldType.text;
@@ -83,6 +90,16 @@ class ConsultationFormField {
   final List<String> options;
   final bool required;
   final int order;
+  /// Groups consecutive fields under one section header on render (e.g.
+  /// "3. Anthropometry & Weight History"). Empty = ungrouped.
+  final String section;
+  /// Visibility scope against the patient's gender.
+  final String genderScope; // 'general' | 'female' | 'male'
+  /// If set, this field only shows once the referenced field's current
+  /// answer matches one of [dependsOnValues] (e.g. an "Other, please
+  /// specify" follow-up field).
+  final String? dependsOnFieldId;
+  final List<String> dependsOnValues;
 
   ConsultationFormField({
     required this.fieldId,
@@ -91,6 +108,10 @@ class ConsultationFormField {
     this.options = const [],
     this.required = false,
     this.order = 0,
+    this.section = '',
+    this.genderScope = 'general',
+    this.dependsOnFieldId,
+    this.dependsOnValues = const [],
   });
 
   ConsultationFormField copyWith({
@@ -100,6 +121,10 @@ class ConsultationFormField {
     List<String>? options,
     bool? required,
     int? order,
+    String? section,
+    String? genderScope,
+    String? dependsOnFieldId,
+    List<String>? dependsOnValues,
   }) {
     return ConsultationFormField(
       fieldId: fieldId ?? this.fieldId,
@@ -108,10 +133,15 @@ class ConsultationFormField {
       options: options ?? this.options,
       required: required ?? this.required,
       order: order ?? this.order,
+      section: section ?? this.section,
+      genderScope: genderScope ?? this.genderScope,
+      dependsOnFieldId: dependsOnFieldId ?? this.dependsOnFieldId,
+      dependsOnValues: dependsOnValues ?? this.dependsOnValues,
     );
   }
 
   factory ConsultationFormField.fromJson(Map<String, dynamic> json) {
+    final genderScope = (json['genderScope'] ?? 'general').toString();
     return ConsultationFormField(
       fieldId: (json['fieldId'] ?? '').toString(),
       type: consultationFieldTypeFromApi(json['type']?.toString()),
@@ -123,6 +153,16 @@ class ConsultationFormField {
           : <String>[],
       required: json['required'] == true,
       order: (json['order'] is num) ? (json['order'] as num).toInt() : 0,
+      section: (json['section'] ?? '').toString(),
+      genderScope: ['general', 'female', 'male'].contains(genderScope)
+          ? genderScope
+          : 'general',
+      dependsOnFieldId: json['dependsOnFieldId']?.toString(),
+      dependsOnValues: (json['dependsOnValues'] is List)
+          ? List<String>.from(
+              (json['dependsOnValues'] as List).map((e) => e.toString()),
+            )
+          : <String>[],
     );
   }
 
@@ -133,5 +173,9 @@ class ConsultationFormField {
         'options': options,
         'required': required,
         'order': order,
+        'section': section,
+        'genderScope': genderScope,
+        'dependsOnFieldId': dependsOnFieldId,
+        'dependsOnValues': dependsOnValues,
       };
 }

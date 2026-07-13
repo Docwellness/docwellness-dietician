@@ -15,12 +15,15 @@ import 'package:docwellnesdoc/app/modules/patients/widgets/bmi_card.dart';
 import 'package:docwellnesdoc/app/modules/patients/widgets/calorie_intake_container.dart';
 import 'package:docwellnesdoc/app/modules/patients/widgets/line_chart.dart';
 import 'package:docwellnesdoc/app/modules/patients/widgets/show_diet_level_sheet.dart';
+import 'package:docwellnesdoc/app/routes/app_pages.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_button.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+
+enum _WeekCardState { generated, eligible, locked }
 
 class PatientProfileView extends StatefulWidget {
   final String patientId;
@@ -37,6 +40,11 @@ class _PatientProfileViewState extends State<PatientProfileView> {
 
   @override
   void initState() {
+    // Collapsible open/closed flags live on the shared PatientsController
+    // singleton (not per-patient state), so leaving this expanded on one
+    // patient's profile would otherwise carry over when navigating to
+    // another.
+    controller.showFirstConsultationiInfo.value = false;
     controller.getPatientProfile(widget.patientId);
     controller.fetchTrackingData(widget.patientId, 'week');
     controller.fetchJourneyImages(widget.patientId);
@@ -72,11 +80,22 @@ class _PatientProfileViewState extends State<PatientProfileView> {
   }
 
   Future<void> _openChatWithPatient(String patientId) async {
-    Get.put(ChatController());
+    // Get.put() unconditionally here used to create a brand-new
+    // ChatController (with its own live socket subscription) every time a
+    // chat was opened, without ever disposing the previous one - each
+    // leaked subscription kept firing for every future incoming message,
+    // which is how the same message could end up rendered more than once.
+    // Reuse the existing controller if one is already registered, same as
+    // the notification-tap entry point already does.
+    if (!Get.isRegistered<ChatController>()) {
+      Get.put(ChatController());
+    }
     final chatService = ChatService();
     final conversationId = await chatService.getOrCreateConversation(patientId);
     if (conversationId != null && conversationId.isNotEmpty) {
-      Get.to(() => ChatScreen(conversationId: conversationId));
+      Get.to(
+        () => ChatScreen(conversationId: conversationId, receiverId: patientId),
+      );
     } else {
       Get.snackbar(
         'Error',
@@ -94,7 +113,16 @@ class _PatientProfileViewState extends State<PatientProfileView> {
         backgroundColor: Color(0xffFDF2FA),
         leading: IconButton(
           onPressed: () {
-            Get.back();
+            // This screen can be reached with nothing left to pop to (e.g.
+            // a cold reload landing directly on /patient-profile/:id) -
+            // Get.back() would silently do nothing in that case, leaving
+            // the back button appearing broken. Fall back to the patient
+            // list so there's always somewhere for it to go.
+            if (Navigator.of(context).canPop()) {
+              Get.back();
+            } else {
+              Get.offAllNamed(Routes.PATIENTS);
+            }
           },
           icon: Icon(Icons.arrow_back, color: Color(0xff1F2A37)),
         ),
@@ -161,40 +189,74 @@ class _PatientProfileViewState extends State<PatientProfileView> {
     BuildContext context,
     int weekNum,
     Status status,
-    Basic basic,
-  ) async {
+    Basic basic, {
+    List<int>? weeksToGenerate,
+  }) async {
     if (!context.mounted) return;
 
     // Open CreateDietPlanScreen directly — weight field is built into the screen
-    await showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      useSafeArea: true,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    await Get.to(
+      () => CreateDietPlanScreen(
+        firstConsultationId: status.firstConsultationId ?? '',
+        patientId: widget.patientId,
+        requestId: status.requestId ?? '',
+        name: (basic.fullName ?? '').split(' ').first,
+        targetWeek: weekNum,
+        dietPlanId: status.activeDietPlanId,
+        weeksToGenerate: weeksToGenerate,
       ),
-      builder: (ctx) {
-        return DraggableScrollableSheet(
-          initialChildSize: 1,
-          maxChildSize: 1,
-          minChildSize: 0.5,
-          expand: false,
-          builder: (ctx2, sc) {
-            return CreateDietPlanScreen(
-              scrollController: sc,
-              firstConsultationId: status.firstConsultationId ?? '',
-              patientId: widget.patientId,
-              requestId: status.requestId ?? '',
-              name: (basic.fullName ?? '').split(' ').first,
-              targetWeek: weekNum,
-            );
-          },
-        );
-      },
     );
     // Refresh so the calorie cards reflect the (re-)assigned diet immediately.
     await controller.getPatientProfile(widget.patientId);
+  }
+
+  /// Which weeks a tap on week [weekNum]'s "eligible" card should generate -
+  /// Golden always regenerates weeks 3-4 together as a pair; every other
+  /// tier generates one week at a time.
+  List<int> _weeksToGenerateFor(int weekNum, String? tier) {
+    if (tier == 'golden' && (weekNum == 3 || weekNum == 4)) return [3, 4];
+    return [weekNum];
+  }
+
+  /// generated: AI content exists, ready to pick/finalize meals.
+  /// eligible: not generated yet, but tier rules allow generating it now.
+  /// locked: not generated yet, and won't be until an earlier week is
+  /// finalized - matches the backend's validateRegenerateRequest gating.
+  _WeekCardState _weekCardState(
+    int weekNum,
+    String? tier,
+    List<int> generatedWeeks,
+    Set<int> finalizedWeeks,
+  ) {
+    if (generatedWeeks.contains(weekNum)) return _WeekCardState.generated;
+    if (tier == 'golden') {
+      if (weekNum == 3 || weekNum == 4) {
+        return finalizedWeeks.contains(2)
+            ? _WeekCardState.eligible
+            : _WeekCardState.locked;
+      }
+      return _WeekCardState.locked;
+    }
+    if (tier == 'platinum') {
+      if (weekNum >= 2 && weekNum <= 4) {
+        return finalizedWeeks.contains(weekNum - 1)
+            ? _WeekCardState.eligible
+            : _WeekCardState.locked;
+      }
+      return _WeekCardState.locked;
+    }
+    // Silver generates all 4 weeks together up front - not being in
+    // generatedWeeks here just means the initial generation hasn't
+    // completed/synced yet, not that it's individually regenerable.
+    return _WeekCardState.locked;
+  }
+
+  String _lockedExplanation(int weekNum, String? tier) {
+    if (tier == 'golden') return 'Finalize Week 2 first to unlock weeks 3-4.';
+    if (tier == 'platinum') {
+      return 'Finalize Week ${weekNum - 1} first to unlock Week $weekNum.';
+    }
+    return 'This week isn\'t ready yet.';
   }
 
   /// Formats an ISO date string (e.g. "1995-08-14") to "14 Aug 1995"
@@ -207,70 +269,57 @@ class _PatientProfileViewState extends State<PatientProfileView> {
     }
   }
 
-  /// A single info row: [icon container] | [label + value]
-  Widget _basicInfoRow({
-    required IconData icon,
-    required String label,
-    required String value,
-    required Color iconColor,
-    required Color iconBg,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xffFAA7E0).withOpacity(0.5)),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xffEF45B2).withOpacity(0.06),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+  /// Read-only bordered field matching the patient app's CustomField look
+  /// (floating label chip, same border/label colors) - used to mirror the
+  /// Request Diet Plan screen's layout exactly in Basic Information.
+  Widget _boxField({required String label, required String value}) {
+    final hasValue = value.trim().isNotEmpty && value != '—';
+    return InputDecorator(
+      decoration: InputDecoration(
+        contentPadding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+        label: hasValue
+            ? Container(
+                height: 16,
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                decoration: BoxDecoration(
+                  color: const Color(0xffFEF6FB),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+                child: CustomText(
+                  text: label,
+                  fontWeight: FontWeight.w400,
+                  fontSize: 13,
+                  color: const Color(0xff851653),
+                ),
+              )
+            : Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w400,
+                  color: Color(0xff4D5761),
+                ),
+              ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(4),
+          borderSide: BorderSide(
+            color: hasValue ? const Color(0xff530630) : const Color(0xff6C737F),
           ),
-        ],
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(4),
+          borderSide: BorderSide(
+            color: hasValue ? const Color(0xff530630) : const Color(0xff6C737F),
+          ),
+        ),
       ),
-      child: Row(
-        children: [
-          // Icon container
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: iconBg,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, color: iconColor, size: 20),
-          ),
-          const SizedBox(width: 14),
-          // Label + value
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                    color: Color(0xff9DA4AE),
-                    letterSpacing: 0.4,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xff1F2A37),
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-        ],
+      child: Text(
+        hasValue ? value : '',
+        style: const TextStyle(
+          color: Color(0xff530630),
+          fontWeight: FontWeight.w400,
+          fontSize: 13,
+        ),
       ),
     );
   }
@@ -414,7 +463,9 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                           ),
                           SizedBox(width: 4),
                           CustomText(
-                            text: 'FIRST USER',
+                            text: (status?.membershipPlan ?? '').isNotEmpty
+                                ? status!.membershipPlan!.toUpperCase()
+                                : 'NO MEMBERSHIP',
                             fontWeight: FontWeight.w500,
                             fontSize: 12,
                             color: Color(0xffEF45B2),
@@ -527,54 +578,101 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                           padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
                           child: Column(
                             children: [
-                              _basicInfoRow(
-                                icon: Icons.person_outline_rounded,
-                                label: 'Full Name',
-                                value: basic.fullName ?? '—',
-                                iconColor: Color(0xff851653),
-                                iconBg: Color(0xffFCE7F6),
+                              _boxField(
+                                label: 'Start Date for Diet',
+                                value: healthSummary?.startDateForDiet ?? '—',
                               ),
-                              const SizedBox(height: 10),
-                              _basicInfoRow(
-                                icon: Icons.alternate_email_rounded,
+                              const SizedBox(height: 16),
+                              _boxField(
+                                label: 'Full name',
+                                value: basic.fullName ?? '—',
+                              ),
+                              const SizedBox(height: 16),
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: _boxField(
+                                      label: 'Date of Birth',
+                                      value: basic.dateOfBirth != null
+                                          ? _formatDob(basic.dateOfBirth!)
+                                          : '—',
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: _boxField(
+                                      label: 'Gender',
+                                      value: basic.gender ?? '—',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 16),
+                              _boxField(
+                                label: 'Primary Goal',
+                                value: healthSummary?.primaryGoal ?? '—',
+                              ),
+                              const SizedBox(height: 16),
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: _boxField(
+                                      label: 'Initial',
+                                      value: healthSummary?.weight != null
+                                          ? '${healthSummary!.weight} Kg'
+                                          : '—',
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: _boxField(
+                                      label: 'Height',
+                                      value: healthSummary?.height != null
+                                          ? '${healthSummary!.height} CM'
+                                          : '—',
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: _boxField(
+                                      label: 'Target',
+                                      value: healthSummary?.targetWeight ?? '—',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 16),
+                              _boxField(
+                                label: 'Illness Attention',
+                                value:
+                                    (healthSummary
+                                            ?.healthConcerns
+                                            ?.isNotEmpty ??
+                                        false)
+                                    ? healthSummary!.healthConcerns!.join(', ')
+                                    : '—',
+                              ),
+                              const SizedBox(height: 16),
+                              _boxField(
+                                label: 'Activity Level',
+                                value: healthSummary?.activityLevel ?? '—',
+                              ),
+                              const SizedBox(height: 16),
+                              _boxField(
                                 label: 'Username',
                                 value: basic.username ?? '—',
-                                iconColor: Color(0xff7C3AED),
-                                iconBg: Color(0xffEDE9FE),
                               ),
-                              const SizedBox(height: 10),
-                              _basicInfoRow(
-                                icon: Icons.mail_outline_rounded,
+                              const SizedBox(height: 16),
+                              _boxField(
                                 label: 'Email',
                                 value: basic.email ?? '—',
-                                iconColor: Color(0xff0369A1),
-                                iconBg: Color(0xffE0F2FE),
                               ),
-                              const SizedBox(height: 10),
-                              _basicInfoRow(
-                                icon: Icons.phone_android_rounded,
+                              const SizedBox(height: 16),
+                              _boxField(
                                 label: 'WhatsApp Number',
                                 value: basic.whatsappNumber ?? '—',
-                                iconColor: Color(0xff047857),
-                                iconBg: Color(0xffD1FAE5),
-                              ),
-                              const SizedBox(height: 10),
-                              _basicInfoRow(
-                                icon: Icons.wc_rounded,
-                                label: 'Gender',
-                                value: basic.gender ?? '—',
-                                iconColor: Color(0xffC2410C),
-                                iconBg: Color(0xffFFEDD5),
-                              ),
-                              const SizedBox(height: 10),
-                              _basicInfoRow(
-                                icon: Icons.cake_outlined,
-                                label: 'Date of Birth',
-                                value: basic.dateOfBirth != null
-                                    ? _formatDob(basic.dateOfBirth!)
-                                    : '—',
-                                iconColor: Color(0xff9D174D),
-                                iconBg: Color(0xffFCE7F6),
                               ),
                             ],
                           ),
@@ -584,45 +682,63 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                     ),
 
                     Divider(color: Color(0xffFAA7E0)),
-                    Padding(
-                      padding: const EdgeInsets.only(
-                        left: 16,
-                        right: 7,
-                        top: 0,
-                        bottom: 0,
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          CustomText(
-                            text: 'BMI Card',
-                            fontWeight: FontWeight.w500,
-                            fontSize: 17,
-                            color: Color(0xff530630),
+                    Obx(
+                      () => InkWell(
+                        onTap: () => controller.showBmiCard.value =
+                            !controller.showBmiCard.value,
+                        borderRadius: BorderRadius.circular(8),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
                           ),
-                          Obx(
-                            () => IconButton(
-                              onPressed: () {
-                                controller.showBmiCard.value =
-                                    !controller.showBmiCard.value;
-                              },
-                              icon: Icon(
-                                controller.showBmiCard.value
-                                    ? Icons.arrow_drop_up
-                                    : Icons.arrow_drop_down,
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 34,
+                                height: 34,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xffFCE7F6),
+                                  borderRadius: BorderRadius.circular(9),
+                                ),
+                                child: const Icon(
+                                  Icons.monitor_weight_outlined,
+                                  color: Color(0xff851653),
+                                  size: 18,
+                                ),
                               ),
-                              color: Color(0xff530630),
-                              iconSize: 28,
-                            ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: CustomText(
+                                  text: 'BMI Card',
+                                  fontWeight: FontWeight.w500,
+                                  fontSize: 17,
+                                  color: Color(0xff530630),
+                                ),
+                              ),
+                              AnimatedRotation(
+                                turns: controller.showBmiCard.value ? 0.5 : 0,
+                                duration: const Duration(milliseconds: 280),
+                                child: const Icon(
+                                  Icons.keyboard_arrow_down_rounded,
+                                  color: Color(0xff530630),
+                                  size: 24,
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
+                        ),
                       ),
                     ),
                     Obx(
                       () => Visibility(
                         visible: controller.showBmiCard.value,
                         child: Padding(
-                          padding: EdgeInsets.only(bottom: 15),
+                          // Horizontal inset matches Basic Info's box-fields
+                          // (EdgeInsets.fromLTRB(16, 4, 16, 16)) - this had
+                          // none, so the card sat flush with the section's
+                          // edge instead of aligned with everything above it.
+                          padding: EdgeInsets.fromLTRB(16, 0, 16, 15),
                           child: BmiContainer(
                             index: healthSummary?.weightIndex ?? 0,
                             value: healthSummary?.bmi ?? 0.0,
@@ -637,164 +753,229 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                       ),
                     ),
 
-                    Divider(color: Color(0xffFAA7E0)),
-                    if (status!.firstConsultationId != null)
-                      Padding(
-                        padding: const EdgeInsets.only(
-                          left: 16,
-                          right: 7,
-                          top: 0,
-                          bottom: 0,
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            CustomText(
-                              text: 'First Consultation information',
-                              fontWeight: FontWeight.w500,
-                              fontSize: 17,
-                              color: Color(0xff530630),
+                    // Divider only shows alongside the section it separates -
+                    // previously unconditional, so it left a stray line with
+                    // nothing below it whenever there was no First
+                    // Consultation yet (just the "Start First Consultation"
+                    // button, which sits outside this card entirely).
+                    //
+                    // The description text and "View / Edit Consultation"
+                    // button below must stay INSIDE this same conditional,
+                    // not just the header - they were previously gated only
+                    // by showFirstConsultationiInfo (the collapsible's
+                    // open/closed flag), which lives on the shared
+                    // PatientsController singleton. Once expanded for one
+                    // patient with a consultation, that flag stayed true and
+                    // leaked the button onto every other patient's profile,
+                    // including ones with no consultation yet - showing
+                    // alongside "Start First Consultation" (image: BMI Card
+                    // -> orphaned "View / Edit Consultation" -> "Start First
+                    // Consultation", with no "First Consultation
+                    // information" header in between).
+                    if (status!.firstConsultationId != null) ...[
+                      Divider(color: Color(0xffFAA7E0)),
+                      Obx(
+                        () => InkWell(
+                          onTap: () =>
+                              controller.showFirstConsultationiInfo.value =
+                                  !controller.showFirstConsultationiInfo.value,
+                          borderRadius: BorderRadius.circular(8),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
                             ),
-                            Obx(
-                              () => IconButton(
-                                onPressed: () {
-                                  controller.showFirstConsultationiInfo.value =
-                                      !controller
-                                          .showFirstConsultationiInfo
-                                          .value;
-                                },
-                                icon: Icon(
-                                  controller.showFirstConsultationiInfo.value
-                                      ? Icons.arrow_drop_up
-                                      : Icons.arrow_drop_down,
-                                ),
-                                color: Color(0xff530630),
-                                iconSize: 28,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    Obx(
-                      () => Visibility(
-                        visible: controller.showFirstConsultationiInfo.value,
-                        child: Padding(
-                          padding: const EdgeInsets.only(right: 50, left: 35),
-                          child: CustomText(
-                            text:
-                                'Supporting line text lorem ipsum dolor sit amet, consectetur. Supporting line text lorem ipsum dolor sit amet, consectetur.Supporting line text lorem ipsum dolor sit amet, consectetur.',
-                            fontWeight: FontWeight.w400,
-                            fontSize: 13.5,
-                            color: Color(0xff4D5761),
-                          ),
-                        ),
-                      ),
-                    ),
-                    Obx(
-                      () => Visibility(
-                        visible: controller.showFirstConsultationiInfo.value,
-                        child: Padding(
-                          padding: const EdgeInsets.only(
-                            left: 40,
-                            top: 24,
-                            right: 40,
-                          ),
-                          child: CustomButton(
-                            isLoading: controller.isAllQuestionLoading.value,
-                            onTap: () async {
-                              controller.report.value = '';
-
-                              await controller.getConsultation(
-                                widget.patientId,
-                              );
-                              if (!mounted) return;
-                              showModalBottomSheet(
-                                context: context,
-                                backgroundColor: Colors.white,
-                                useSafeArea: true,
-                                isScrollControlled: true,
-                                shape: const RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.vertical(
-                                    top: Radius.circular(20),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 34,
+                                  height: 34,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xffFCE7F6),
+                                    borderRadius: BorderRadius.circular(9),
+                                  ),
+                                  child: const Icon(
+                                    Icons.assignment_outlined,
+                                    color: Color(0xff851653),
+                                    size: 18,
                                   ),
                                 ),
-                                builder: (context) {
-                                  return DraggableScrollableSheet(
-                                    initialChildSize: 1,
-                                    maxChildSize: 1,
-                                    minChildSize: 0.5,
-                                    expand: false,
-                                    builder: (context, scrollController) {
-                                      return QuestionsView(
-                                        scrollController: scrollController,
-                                        gendar: basic.gender!,
-                                        patientId: widget.patientId,
-                                        isDisable: false,
-                                        isEditMode: true,
-                                      );
-                                    },
-                                  );
-                                },
-                              );
-                            },
-                            text: 'View / Edit Consultation',
-                            isOutline: false,
-                            fontSize: 14,
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: CustomText(
+                                    text: 'First Consultation information',
+                                    fontWeight: FontWeight.w500,
+                                    fontSize: 17,
+                                    color: Color(0xff530630),
+                                  ),
+                                ),
+                                AnimatedRotation(
+                                  turns:
+                                      controller
+                                          .showFirstConsultationiInfo
+                                          .value
+                                      ? 0.5
+                                      : 0,
+                                  duration: const Duration(milliseconds: 280),
+                                  child: const Icon(
+                                    Icons.keyboard_arrow_down_rounded,
+                                    color: Color(0xff530630),
+                                    size: 24,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                    if (status.firstConsultationId != null)
-                      Divider(color: Color(0xffFAA7E0)),
+                      Obx(
+                        () => Visibility(
+                          visible: controller.showFirstConsultationiInfo.value,
+                          child: Padding(
+                            padding: const EdgeInsets.only(
+                              left: 40,
+                              top: 16,
+                              right: 40,
+                              bottom: 20,
+                            ),
+                            child: CustomButton(
+                              isLoading: controller.isAllQuestionLoading.value,
+                              onTap: () async {
+                                controller.report.value = '';
+
+                                // Order matters here - must NOT run
+                                // concurrently. getConsultation() ends by
+                                // syncing customAnswerValues against
+                                // consultationTemplate, deleting any answer
+                                // whose fieldId isn't in the template (so a
+                                // removed field's stale answer doesn't
+                                // linger). If the template hasn't been
+                                // fetched yet when that runs, it's empty, so
+                                // every real answer just fetched looks
+                                // "unknown" and gets wiped before the
+                                // template ever arrives to restore them -
+                                // this is exactly what was making saved
+                                // consultations appear empty. Fetch the
+                                // template first so it's already populated
+                                // by the time getConsultation() syncs against
+                                // it.
+                                await controller.fetchConsultationTemplate();
+                                await controller.getConsultation(
+                                  widget.patientId,
+                                );
+                                if (!mounted) return;
+                                showModalBottomSheet(
+                                  context: context,
+                                  backgroundColor: Colors.white,
+                                  useSafeArea: true,
+                                  isScrollControlled: true,
+                                  shape: const RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.vertical(
+                                      top: Radius.circular(20),
+                                    ),
+                                  ),
+                                  builder: (context) {
+                                    return DraggableScrollableSheet(
+                                      initialChildSize: 1,
+                                      maxChildSize: 1,
+                                      minChildSize: 0.5,
+                                      expand: false,
+                                      builder: (context, scrollController) {
+                                        return QuestionsView(
+                                          scrollController: scrollController,
+                                          gendar: basic.gender!,
+                                          patientId: widget.patientId,
+                                          isDisable: false,
+                                          isEditMode: true,
+                                        );
+                                      },
+                                    );
+                                  },
+                                );
+                              },
+                              text: 'View / Edit Consultation',
+                              isOutline: false,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ), // Column
               ), // ClipRRect
             ), // Container
           ), // Padding
           if (status.firstConsultationId != null &&
-              status.activeDietPlanId == null)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-              child: CustomButton(
-                onTap: () async {
-                  await showModalBottomSheet(
-                    context: context,
-                    backgroundColor: Colors.white,
-                    useSafeArea: true,
-                    isScrollControlled: true,
-                    shape: const RoundedRectangleBorder(
-                      borderRadius: BorderRadius.vertical(
-                        top: Radius.circular(20),
+              status.activeDietPlanId == null) ...[
+            if (status.patientConsented == true)
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 2,
+                ),
+                child: CustomButton(
+                  onTap: () async {
+                    await Get.to(
+                      () => CreateDietPlanScreen(
+                        firstConsultationId: status.firstConsultationId ?? '',
+                        patientId: widget.patientId,
+                        requestId: status.requestId ?? "",
+                        name: (basic.fullName ?? '').split(' ').first,
                       ),
-                    ),
-                    builder: (context) {
-                      return DraggableScrollableSheet(
-                        initialChildSize: 1,
-                        maxChildSize: 1,
-                        minChildSize: 0.5,
-                        expand: false,
-                        builder: (context, scrollController) {
-                          return CreateDietPlanScreen(
-                            scrollController: scrollController,
-                            firstConsultationId:
-                                status.firstConsultationId ?? '',
-                            patientId: widget.patientId,
-                            requestId: status.requestId ?? "",
-                            name: (basic.fullName ?? '').split(' ').first,
-                          );
-                        },
-                      );
-                    },
-                  );
-                  // Refresh profile + weekly plans after the sheet closes so
-                  // the Create Diet Plan button flips to the calorie cards.
-                  await controller.getPatientProfile(widget.patientId);
-                },
-                text: 'Create Diet Plan',
-                isOutline: false,
-                fontSize: 14,
+                    );
+                    // Refresh profile + weekly plans after the screen closes
+                    // so the Create Diet Plan button flips to the calorie
+                    // cards.
+                    await controller.getPatientProfile(widget.patientId);
+                  },
+                  text: 'Create Diet Plan',
+                  isOutline: false,
+                  fontSize: 14,
+                ),
+              )
+            else
+              // Patient hasn't reviewed/consented yet - a silently-missing
+              // button here would be confusing, so explain what's blocking
+              // it rather than just omitting it.
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xffFDF2FA),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xffFAA7E0)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.hourglass_top_rounded,
+                        color: Color(0xff851653),
+                        size: 18,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: CustomText(
+                          text:
+                              'Waiting for the patient to review their first consultation and submit consent before a diet plan can be created.',
+                          fontWeight: FontWeight.w400,
+                          fontSize: 12.5,
+                          color: Color(0xff851653),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-            ),
+          ],
           // ── Weekly Diet Plan section ──────────────────────────────
           if (status.firstConsultationId != null &&
               status.activeDietPlanId != null)
@@ -826,6 +1007,80 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                         .toList();
                     final data = matches.isNotEmpty ? matches.first : null;
                     final isFinalized = (data?.totalCalories ?? 0) > 0;
+
+                    final tier = status.membershipTier;
+                    final generatedWeeks =
+                        controller
+                            .patientProfileModel
+                            .value
+                            ?.generatedWeekNumbers ??
+                        [];
+                    final finalizedWeeks = controller.weeklyDietPlans
+                        .where((w) => (w.totalCalories ?? 0) > 0)
+                        .map((w) => w.week!)
+                        .toSet();
+                    final cardState = _weekCardState(
+                      weekNum,
+                      tier,
+                      generatedWeeks,
+                      finalizedWeeks,
+                    );
+
+                    // ── LOCKED CARD (not yet eligible to generate) ────
+                    if (!isFinalized && cardState == _WeekCardState.locked) {
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 12),
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () => Get.snackbar(
+                            'Week $weekNum locked',
+                            _lockedExplanation(weekNum, tier),
+                            backgroundColor: const Color(0xffFEF6FB),
+                            colorText: const Color(0xff851653),
+                            snackPosition: SnackPosition.TOP,
+                            duration: const Duration(seconds: 3),
+                          ),
+                          child: Container(
+                            width: 120,
+                            height: 130,
+                            decoration: BoxDecoration(
+                              color: const Color(0xffF3F4F6),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: const Color(0xffE5E7EB),
+                              ),
+                            ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(
+                                  Icons.lock_outline,
+                                  color: Color(0xff9DA4AE),
+                                  size: 22,
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Week $weekNum',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xff6C737F),
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                const Text(
+                                  'Locked',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: Color(0xff9DA4AE),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    }
 
                     // ── FILLED CARD ────────────────────────────────────
                     if (isFinalized) {
@@ -894,7 +1149,15 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                       );
                     }
 
-                    // ── EMPTY PLACEHOLDER CARD (Week 2/3/4) ───────────
+                    // ── GENERATED-NOT-FINALIZED / ELIGIBLE CARD ───────
+                    // Generated: AI content already exists for this week -
+                    // reuse the existing "pick meals" flow (same as today's
+                    // behavior, from back when every week was always
+                    // generated together up front). Eligible: nothing
+                    // generated yet, but tier rules allow generating it now
+                    // - opens the new generate flow scoped to this week
+                    // (or, for Golden's weeks 3-4, both together).
+                    final isEligible = cardState == _WeekCardState.eligible;
                     return Padding(
                       padding: const EdgeInsets.only(right: 12),
                       child: GestureDetector(
@@ -903,6 +1166,9 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                           weekNum,
                           status,
                           basic,
+                          weeksToGenerate: isEligible
+                              ? _weeksToGenerateFor(weekNum, tier)
+                              : null,
                         ),
                         child: Container(
                           width: 120,
@@ -926,9 +1192,11 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                                   color: const Color(0xffFCE7F6),
                                   shape: BoxShape.circle,
                                 ),
-                                child: const Icon(
-                                  Icons.add_rounded,
-                                  color: Color(0xff851653),
+                                child: Icon(
+                                  isEligible
+                                      ? Icons.add_rounded
+                                      : Icons.restaurant_menu,
+                                  color: const Color(0xff851653),
                                   size: 22,
                                 ),
                               ),
@@ -942,9 +1210,9 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                                 ),
                               ),
                               const SizedBox(height: 2),
-                              const Text(
-                                'Add plan',
-                                style: TextStyle(
+                              Text(
+                                isEligible ? 'Generate plan' : 'Pick meals',
+                                style: const TextStyle(
                                   fontSize: 10,
                                   color: Color(0xff9DA4AE),
                                 ),
@@ -1102,43 +1370,53 @@ class _PatientProfileViewState extends State<PatientProfileView> {
           if (status.firstConsultationId == null)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-              child: CustomButton(
-                onTap: () {
-                  controller.report.value = '';
-                  controller.clearCustomAnswers();
-                  controller.fetchConsultationTemplate();
+              child: Obx(
+                () => CustomButton(
+                  isLoading: controller.isConsultationTemplateLoading.value,
+                  onTap: () async {
+                    controller.report.value = '';
+                    controller.clearCustomAnswers();
 
-                  showModalBottomSheet(
-                    context: context,
-                    backgroundColor: Colors.white,
-                    useSafeArea: true,
-                    isScrollControlled: true,
-                    shape: const RoundedRectangleBorder(
-                      borderRadius: BorderRadius.vertical(
-                        top: Radius.circular(20),
+                    // Must be awaited before the sheet opens - the template
+                    // starts empty, and QuestionsView shows a "not configured"
+                    // placeholder while consultationTemplate is empty. Opening
+                    // the sheet before the fetch resolves briefly flashed that
+                    // placeholder before the real questionnaire appeared.
+                    await controller.fetchConsultationTemplate();
+                    if (!mounted) return;
+
+                    showModalBottomSheet(
+                      context: context,
+                      backgroundColor: Colors.white,
+                      useSafeArea: true,
+                      isScrollControlled: true,
+                      shape: const RoundedRectangleBorder(
+                        borderRadius: BorderRadius.vertical(
+                          top: Radius.circular(20),
+                        ),
                       ),
-                    ),
-                    builder: (context) {
-                      return DraggableScrollableSheet(
-                        initialChildSize: 1,
-                        maxChildSize: 1,
-                        minChildSize: 0.5,
-                        expand: false,
-                        builder: (context, scrollController) {
-                          return QuestionsView(
-                            isDisable: false,
-                            scrollController: scrollController,
-                            gendar: basic.gender!,
-                            patientId: widget.patientId,
-                          );
-                        },
-                      );
-                    },
-                  );
-                },
-                text: 'Start First Consultation',
-                isOutline: true,
-                fontSize: 14,
+                      builder: (context) {
+                        return DraggableScrollableSheet(
+                          initialChildSize: 1,
+                          maxChildSize: 1,
+                          minChildSize: 0.5,
+                          expand: false,
+                          builder: (context, scrollController) {
+                            return QuestionsView(
+                              isDisable: false,
+                              scrollController: scrollController,
+                              gendar: basic.gender!,
+                              patientId: widget.patientId,
+                            );
+                          },
+                        );
+                      },
+                    );
+                  },
+                  text: 'Start First Consultation',
+                  isOutline: true,
+                  fontSize: 14,
+                ),
               ),
             ),
           if (status.firstConsultationId != null &&

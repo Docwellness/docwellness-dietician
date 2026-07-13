@@ -22,8 +22,15 @@ import 'package:speech_to_text/speech_to_text.dart';
 
 class ChatScreen extends StatefulWidget {
   final String conversationId;
+  // Known up front by callers that already have the patient's id (e.g. from
+  // a patient profile). Without this, the controller had to guess the
+  // receiver by scanning fetched messages for one sent by the patient -
+  // which is always empty for a brand-new conversation, so every message a
+  // dietician tried to send to a patient they'd never messaged before
+  // silently failed with a missing-receiverId error from the backend.
+  final String? receiverId;
 
-  const ChatScreen({super.key, required this.conversationId});
+  const ChatScreen({super.key, required this.conversationId, this.receiverId});
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -43,6 +50,12 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
+    // Set immediately (not just as a fallback inferred from message
+    // history) so sending works even before the patient has ever sent
+    // anything in this conversation.
+    if (widget.receiverId != null && widget.receiverId!.isNotEmpty) {
+      controller.currentReceiverId = widget.receiverId;
+    }
     controller.getPatientChat(widget.conversationId);
     _speechToText.initialize();
 
@@ -93,7 +106,13 @@ class _ChatScreenState extends State<ChatScreen> {
     );
     if (image == null) return;
 
-    final file = File(image.path);
+    // Read bytes once up front for the preview - File(image.path) only
+    // works on platforms with real filesystem access. On Flutter Web,
+    // image_picker's XFile.path is a blob: URL, not a filesystem path, so
+    // dart:io's File can't open it at all (this silently broke both the
+    // preview and the actual upload, which also used to build a File from
+    // this same path).
+    final imageBytes = await image.readAsBytes();
 
     // Show preview dialog with caption
     final captionController = TextEditingController();
@@ -128,7 +147,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 ],
               ),
             ),
-            Expanded(child: Image.file(file, fit: BoxFit.contain)),
+            Expanded(child: Image.memory(imageBytes, fit: BoxFit.contain)),
             Padding(
               padding: EdgeInsets.only(
                 bottom: MediaQuery.of(Get.context!).viewInsets.bottom + 16,
@@ -182,12 +201,17 @@ class _ChatScreenState extends State<ChatScreen> {
 
       final localId = DateTime.now().millisecondsSinceEpoch.toString();
 
+      final resolvedReceiverId =
+          controller.receiverModel?.receiverId ??
+          controller.currentReceiverId ??
+          "";
+
       // Add locally
       controller.addLocalMessage(
         ChatModel(
           id: localId,
-          senderId: "currentUserId",
-          receiverId: controller.receiverModel?.receiverId ?? "",
+          senderId: userId ?? "",
+          receiverId: resolvedReceiverId,
           message: captionController.text.trim(),
           messageType: "image",
           attachment: image.path,
@@ -204,8 +228,8 @@ class _ChatScreenState extends State<ChatScreen> {
       final replyId = controller.replyingTo?.id;
 
       final response = await controller.sendImageMessage(
-        receiverId: controller.receiverModel?.receiverId ?? "",
-        imageFile: file,
+        receiverId: resolvedReceiverId,
+        imageFile: image,
         message: captionController.text.trim().isEmpty
             ? null
             : captionController.text.trim(),
@@ -1037,8 +1061,14 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget imageBubble(ChatModel chat) {
     final rawUrl = chat.attachment ?? chat.message;
     if (rawUrl.isEmpty) return const SizedBox.shrink();
+    // blob: URLs (what image_picker's XFile.path is on Flutter Web) are
+    // loadable via NetworkImage - the browser resolves them natively. This
+    // matters for the optimistic local message shown while an image upload
+    // is still in flight; FileImage(File(...)) doesn't work on web at all.
     final isNetwork =
-        rawUrl.startsWith('http://') || rawUrl.startsWith('https://');
+        rawUrl.startsWith('http://') ||
+        rawUrl.startsWith('https://') ||
+        rawUrl.startsWith('blob:');
     final imageUrl = rawUrl;
     final imageProvider = isNetwork
         ? NetworkImage(imageUrl)
@@ -1096,7 +1126,9 @@ class _ChatScreenState extends State<ChatScreen> {
 
   void _openFullScreenImage(String imageUrl) {
     final isNetwork =
-        imageUrl.startsWith('http://') || imageUrl.startsWith('https://');
+        imageUrl.startsWith('http://') ||
+        imageUrl.startsWith('https://') ||
+        imageUrl.startsWith('blob:');
     Get.to(
       () => Scaffold(
         backgroundColor: Colors.black,

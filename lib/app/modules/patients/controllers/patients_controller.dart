@@ -9,7 +9,6 @@ import 'package:docwellnesdoc/app/models/patient_profile_model.dart';
 import 'package:docwellnesdoc/app/models/tracking_data_model.dart';
 import 'package:docwellnesdoc/app/models/update_ai_diet_plain_model.dart';
 import 'package:docwellnesdoc/app/modules/patients/services/patient_service.dart';
-import 'package:docwellnesdoc/app/modules/patients/views/patient_profile_view.dart';
 import 'package:docwellnesdoc/app/modules/patients/views/questions_view.dart';
 import 'package:docwellnesdoc/app/modules/performance/models/consultation_form_field.dart';
 import 'package:docwellnesdoc/app/modules/performance/services/consultation_form_service.dart';
@@ -103,8 +102,66 @@ class PatientsController extends GetxController {
   /// Currently selected shift (e.g. "Breakfast", "Morning Drink", ...)
   RxString selectedShift = "Breakfast".obs;
 
+  /// Currently selected day-group in the draft-review screen - one of
+  /// 'Monday' (repeats Friday), 'Tuesday' (repeats Saturday), 'Wednesday'
+  /// (repeats Sunday), 'Thursday' (unique). See backend utils/dayGroups.js.
+  RxString selectedDayGroup = 'Monday'.obs;
+
+  static const List<String> dayGroups = [
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+  ];
+
+  /// Full recipe options pool (AI's pick(s) plus every other matching
+  /// recipe, incl. sides/salads cross-listed into Lunch/Dinner/Evening
+  /// Snack - see backend utils/dietPlanOptions.js) for a not-yet-finalized
+  /// (Draft) diet plan's week - powers select_diet_sheet.dart. Deliberately
+  /// separate from `dietPlanWeekData` below, which is the finalized-week
+  /// screen's own state, to avoid the two screens silently clobbering each
+  /// other's data through this shared controller singleton.
+  Rx<DietPlanWeekData?> draftDietOptions = Rx<DietPlanWeekData?>(null);
+
+  /// The current tab's full options list (AI's pick(s) already selected -
+  /// see weekSelectedRecipes) for the draft-review screen.
+  RxList<Recipe> shiftOptions = <Recipe>[].obs;
+
+  /// Slots the dietician has asked to see the full options pool for (via
+  /// [toggleShowMoreOptions]), keyed by servingTime - collapsed by default so
+  /// switching tabs doesn't show an overwhelming list, but stays expanded
+  /// across tab switches once opened.
+  RxSet<String> expandedShifts = <String>{}.obs;
+
+  /// How many close alternatives to preview alongside the selections before
+  /// the dietician has to tap "show more".
+  static const int _previewAlternativesCount = 3;
+
   Rx<DietPlanData?> dietPlanData = Rx<DietPlanData?>(null);
   RxMap<int, List<Recipe>> weekSelectedRecipes = <int, List<Recipe>>{}.obs;
+
+  /// Servings multiplier per selected recipe, keyed by id + servingTime (see
+  /// servingsKey) rather than id alone - the same recipe (e.g. Chapati) can
+  /// be selected in both Lunch and Dinner in the same week with different
+  /// counts (3 chapatis at Lunch, 2 at Dinner), and those must not collide.
+  /// Values: e.g. 3 for "3 chapatis", or 400 for "400g of Chole" (gram/ml-
+  /// based items store the adjusted absolute quantity, not a multiplier -
+  /// see incrementServings/calculateTotalsForWeek). Defaults to the
+  /// recipe's own baseServingQuantity (1x) when a card is first selected.
+  RxMap<String, num> selectedServings = <String, num>{}.obs;
+
+  /// Same shape as [selectedServings], for the second independently-
+  /// adjustable component of a compound snack (e.g. the seeds/chikki
+  /// mix-in alongside a fruit - see Recipe.hasSecondaryComponent). Empty
+  /// for every ordinary single-quantity recipe.
+  RxMap<String, num> selectedSecondaryServings = <String, num>{}.obs;
+
+  /// Composite key for [selectedServings]/[selectedSecondaryServings] - see
+  /// those fields' doc comments. Includes dayGroup (not just id+servingTime)
+  /// since the same recipe can be legitimately selected under two different
+  /// day-groups' same slot with different counts (e.g. 3 chapatis at
+  /// Monday-group's Lunch, 2 at Tuesday-group's Lunch).
+  String servingsKey(Recipe r) => '${r.id}|${r.servingTime}|${r.dayGroup}';
 
   /// Tracks which weeks the user has manually toggled selections on.
   /// If a week is in this set and its selection list is empty, totals show 0.
@@ -525,10 +582,21 @@ class PatientsController extends GetxController {
     customAnswerValues[fieldId] = list;
   }
 
+  static const _consentFieldIds = {
+    'consent_acknowledgement',
+    'consent_signature_name',
+  };
+
   /// Build the `customAnswers` payload sent inside the first-consultation form.
   List<Map<String, dynamic>> _buildCustomAnswersPayload() {
     final result = <Map<String, dynamic>>[];
     for (final f in consultationTemplate) {
+      // Consent & Confidentiality is the patient's to fill in, not the
+      // dietician's - never include it in a dietician save (the backend
+      // strips it too, but excluding it here also means saving doesn't
+      // submit stale/locked values back as if the dietician had "answered"
+      // them).
+      if (_consentFieldIds.contains(f.fieldId)) continue;
       dynamic value;
       switch (f.type) {
         case ConsultationFieldType.text:
@@ -547,6 +615,10 @@ class PatientsController extends GetxController {
               ? List<String>.from(raw.map((e) => e.toString()))
               : <String>[];
           break;
+        case ConsultationFieldType.file:
+          // Lives in labReports.files via the separate pickedReport
+          // multipart upload, not in customAnswers.
+          continue;
       }
       result.add({
         'fieldId': f.fieldId,
@@ -564,6 +636,30 @@ class PatientsController extends GetxController {
       c.dispose();
     }
     _customTextControllers.clear();
+  }
+
+  /// Whether [field] should be shown to the dietician right now, given the
+  /// patient's gender and the current in-progress answers (for
+  /// dependsOnFieldId conditional follow-ups, e.g. "If Other, specify").
+  bool isFieldVisible(ConsultationFormField field, String patientGender) {
+    final scopeOk = switch (field.genderScope) {
+      'female' => patientGender == 'Female',
+      'male' => patientGender == 'Male',
+      _ => true,
+    };
+    if (!scopeOk) return false;
+    if (field.dependsOnFieldId == null) return true;
+    return _dependencyMet(field);
+  }
+
+  bool _dependencyMet(ConsultationFormField field) {
+    final parentAnswer = customAnswerValues[field.dependsOnFieldId];
+    if (parentAnswer is List) {
+      return parentAnswer.any(
+        (v) => field.dependsOnValues.contains(v.toString()),
+      );
+    }
+    return field.dependsOnValues.contains((parentAnswer ?? '').toString());
   }
 
   // api functions
@@ -1163,12 +1259,11 @@ class PatientsController extends GetxController {
       if (response != null) {
         log("---> Response: $response");
 
-        // The server will now populate labReports.files in response
-        String? firstConsultationId = response['data']?['_id'];
-        patientProfileModel.value?.status?.firstConsultationId =
-            firstConsultationId;
-
-        patientProfileModel.refresh();
+        // Re-fetch the full profile rather than patching firstConsultationId
+        // locally - editing an already-consented consultation resets
+        // status.patientConsented server-side (the patient must re-consent),
+        // and that's what gates the "Create Diet Plan" button.
+        await getPatientProfile(patientId);
         Get.back();
       }
     } catch (e) {
@@ -1178,18 +1273,31 @@ class PatientsController extends GetxController {
     isConsultationSending.value = false;
   }
 
-  Future<void> generateDietPlan(
+  /// Returns the newly-created diet plan's id (or null on failure) so the
+  /// caller can use it directly for the immediate follow-up fetch, rather
+  /// than reading it back via `patientProfileModel.value?.status?.
+  /// activeDietPlanId` - that chain is an optional-chained *write* below,
+  /// which silently no-ops if patientProfileModel.value or .status happens
+  /// to be null at this point (e.g. profile not yet loaded), leaving the
+  /// caller to fetch with an empty dietPlanId and show a blank/zeroed plan
+  /// even though generation actually succeeded.
+  Future<String?> generateDietPlan(
     String patientId,
     String firstConsultationId,
-    String requestId,
-  ) async {
+    String requestId, {
+    DateTime? startDate,
+    double? currentWeight,
+  }) async {
     generateDietPlanLoading.value = true;
     final data = {
       'firstConsultationId': firstConsultationId,
       'requestId': requestId,
       'calorieStrategy': selectedCalorieStrategy,
       'macroStrategy': selectedMacroStrategy,
+      if (startDate != null) 'startDate': startDate.toIso8601String(),
+      if (currentWeight != null) 'currentWeight': currentWeight,
     };
+    String? dietPlanId;
     try {
       final response = await service.generateDietPlan(data, patientId);
       if (response != null) {
@@ -1198,7 +1306,7 @@ class PatientsController extends GetxController {
         if (response['success'] == true) {
           showGenerateDietPlanSheet.value = true;
 
-          String? dietPlanId = response['data']?['dietPlanId'];
+          dietPlanId = response['data']?['dietPlanId'];
           patientProfileModel.value?.status?.activeDietPlanId = dietPlanId;
 
           patientProfileModel.refresh();
@@ -1208,6 +1316,39 @@ class PatientsController extends GetxController {
       debugPrint('-----------------$e');
     }
     generateDietPlanLoading.value = false;
+    return dietPlanId;
+  }
+
+  /// Generates (or regenerates) specific week(s) of an already-created diet
+  /// plan - the dietician-initiated cadence for Golden (weeks 3-4) and
+  /// Platinum (one week at a time) tiers. Returns the raw response so the
+  /// caller can surface a tier-gating/validation message on failure, unlike
+  /// generateDietPlan above which only logs it.
+  Future<Map<String, dynamic>?> regenerateWeek(
+    String patientId,
+    String dietPlanId,
+    List<int> weekNumbers, {
+    double? currentWeight,
+  }) async {
+    generateDietPlanLoading.value = true;
+    final data = {
+      'weekNumbers': weekNumbers,
+      'calorieStrategy': selectedCalorieStrategy,
+      'macroStrategy': selectedMacroStrategy,
+      if (currentWeight != null) 'currentWeight': currentWeight,
+    };
+    Map<String, dynamic>? response;
+    try {
+      response = await service.generateWeek(data, patientId, dietPlanId);
+      if (response != null && response['success'] == true) {
+        showGenerateDietPlanSheet.value = true;
+        await getPatientProfile(patientId);
+      }
+    } catch (e) {
+      debugPrint('-----------------$e');
+    }
+    generateDietPlanLoading.value = false;
+    return response;
   }
 
   Future<void> getAiGeneratedDietPlan(
@@ -1247,6 +1388,246 @@ class PatientsController extends GetxController {
     updateShiftMeals(selectedShift.value);
   }
 
+  /// Loads the full recipe-options pool for one week of a not-yet-finalized
+  /// (Draft) diet plan - the data source for select_diet_sheet.dart. Unlike
+  /// getAiGeneratedDietPlan (which loads all 4 weeks' single AI-picked
+  /// recipe per slot in one call), this endpoint is week-scoped and returns
+  /// every eligible recipe per slot, so it's called once for whichever
+  /// single week that screen is reviewing.
+  Future<void> getDraftDietOptions(
+    String patientId,
+    String dietPlanId,
+    int week,
+  ) async {
+    generateDietPlanLoading.value = true;
+    // Fresh screen load - don't carry over a previous patient/plan's
+    // expanded-options or day-group tab state onto this one.
+    expandedShifts.clear();
+    selectedDayGroup.value = 'Monday';
+
+    try {
+      final response = await service.getDraftWeekOptions(
+        patientId,
+        dietPlanId,
+        week,
+      );
+
+      if (response != null) {
+        final data = DietPlanWeekData.fromJson(response["data"]);
+        draftDietOptions.value = data;
+        selectedWeek.value = "Week $week";
+        _applyDraftOptionsForWeek(week);
+      }
+    } catch (e) {
+      debugPrint("Error: $e");
+    }
+
+    generateDietPlanLoading.value = false;
+  }
+
+  /// Seeds weekSelectedRecipes with whichever recipes the backend already
+  /// flagged isSelected (the AI's own picks) and refreshes the current
+  /// tab's options list - this is what makes the Total Budget non-zero by
+  /// default, matching "the calorie selection already done" instead of
+  /// requiring the dietician to manually re-tap every card.
+  void _applyDraftOptionsForWeek(int weekNumber) {
+    final data = draftDietOptions.value;
+    if (data == null) return;
+
+    final defaultSelected = <Recipe>[];
+    for (final dayGroupOptions in data.dayGroups) {
+      for (final st in dayGroupOptions.servingTimes) {
+        // The Supplements pseudo-slot is a browsing convenience only - any
+        // already-selected supplement it shows also appears (and gets
+        // processed) under its own real slot, so skip it here to avoid
+        // double-counting the same selection twice.
+        if (st.servingTime == 'Supplements') continue;
+        for (final r in st.recipes) {
+          if (!r.isSelected) continue;
+          final recipe = _recipeFromOptionModel(
+            r,
+            st.servingTime,
+            dayGroupOptions.dayGroup,
+          );
+          defaultSelected.add(recipe);
+          // A backend `servings` of exactly 1 means "never explicitly set"
+          // (see cleanSelectedMeals' default) for any unit - not a genuine
+          // "1 gram" or "exactly 1 piece" - so seed from the trend-aware
+          // default instead. Piece-based items need this too now: a
+          // weight-loss default is 1/4, not 1, so "1" can no longer be
+          // trusted as the piece baseline the way it was before this phase.
+          final isUnexplicitDefault = r.servings == 1;
+          selectedServings[servingsKey(recipe)] = isUnexplicitDefault
+              ? _defaultServingsForTrend(recipe)
+              : r.servings;
+          if (recipe.hasSecondaryComponent) {
+            final isUnexplicitSecondaryDefault = r.secondaryServings == 1;
+            selectedSecondaryServings[servingsKey(
+              recipe,
+            )] = isUnexplicitSecondaryDefault
+                ? recipe.secondaryBaseQuantity
+                : r.secondaryServings;
+          }
+        }
+      }
+    }
+    weekSelectedRecipes[weekNumber] = defaultSelected;
+
+    updateShiftOptions(selectedShift.value);
+    calculateTotalsForWeek(weekNumber);
+  }
+
+  /// Switches which day-group tab is active - purely a client-side filter
+  /// over the already-fetched data.dayGroups (all 4 groups were bundled
+  /// into one response), so no re-fetch is needed and in-progress
+  /// selections in other groups are never lost.
+  void updateSelectedDayGroup(String dayGroup) {
+    selectedDayGroup.value = dayGroup;
+    updateShiftOptions(selectedShift.value);
+    final currentWeekNumber = int.parse(selectedWeek.value.split(" ").last);
+    calculateTotalsForWeek(currentWeekNumber);
+  }
+
+  /// Set the current tab's shift and refresh its full options list (the
+  /// draft-review screen's counterpart to updateShiftMeals) - scoped to
+  /// whichever day-group is currently selected.
+  void updateShiftOptions(String shift) {
+    selectedShift.value = shift;
+    final data = draftDietOptions.value;
+    if (data == null) {
+      shiftOptions.value = [];
+      return;
+    }
+    final dayGroupOptions = data.dayGroups.firstWhere(
+      (g) => g.dayGroup == selectedDayGroup.value,
+      orElse: () =>
+          DayGroupOptions(dayGroup: selectedDayGroup.value, servingTimes: []),
+    );
+    final match = dayGroupOptions.servingTimes.firstWhere(
+      (s) => s.servingTime == shift,
+      orElse: () =>
+          ServingTimeModel(servingTime: '', selectedRecipeId: '', recipes: []),
+    );
+    shiftOptions.value = match.recipes
+        .map((r) => _recipeFromOptionModel(r, shift, selectedDayGroup.value))
+        .toList();
+  }
+
+  void toggleShowMoreOptions(String shift) {
+    if (expandedShifts.contains(shift)) {
+      expandedShifts.remove(shift);
+    } else {
+      expandedShifts.add(shift);
+    }
+  }
+
+  /// Selected recipes first, then unselected ones ranked by how close their
+  /// calories are to the selected recipes' average - "almost similar",
+  /// matching what a dietician would consider a natural swap. Once expanded
+  /// the full pool renders in this same order, so scrolling further
+  /// naturally surfaces the more calorie-different (more varied) options.
+  List<Recipe> _sortedOptions(
+    List<Recipe> options,
+    List<Recipe> selectedForWeek,
+  ) {
+    final selected = options.where(selectedForWeek.contains).toList();
+    final unselected = options
+        .where((r) => !selectedForWeek.contains(r))
+        .toList();
+    if (selected.isNotEmpty) {
+      final avgCalories =
+          selected.map((r) => r.nutrition.calories).reduce((a, b) => a + b) /
+          selected.length;
+      unselected.sort(
+        (a, b) => (a.nutrition.calories - avgCalories).abs().compareTo(
+          (b.nutrition.calories - avgCalories).abs(),
+        ),
+      );
+    }
+    return [...selected, ...unselected];
+  }
+
+  /// The cards actually shown for a shift: every selection plus a small
+  /// preview of similar alternatives, unless the dietician has expanded
+  /// this slot to see the full pool.
+  List<Recipe> visibleShiftOptions(
+    List<Recipe> options,
+    List<Recipe> selectedForWeek,
+    String shift,
+  ) {
+    final sorted = _sortedOptions(options, selectedForWeek);
+    if (expandedShifts.contains(shift)) return sorted;
+    final selectedCount = options.where(selectedForWeek.contains).length;
+    return sorted.take(selectedCount + _previewAlternativesCount).toList();
+  }
+
+  /// How many unselected alternatives are hidden behind "show more" for this
+  /// shift - 0 once expanded (nothing left to reveal) or if the pool is
+  /// already small enough to show in full.
+  int extraOptionsCount(List<Recipe> options, List<Recipe> selectedForWeek) {
+    final selectedCount = options.where(selectedForWeek.contains).length;
+    final unselectedCount = options.length - selectedCount;
+    return (unselectedCount - _previewAlternativesCount).clamp(
+      0,
+      unselectedCount,
+    );
+  }
+
+  /// Adapts a RecipeModel (the options-pool shape, models/update_ai_diet_
+  /// plain_model.dart) into a Recipe (models/ai_diet_plain_model.dart) so
+  /// the existing weekSelectedRecipes/toggleMealSelection/
+  /// calculateTotalsForWeek/buildFinalizeWeekPayload machinery - already
+  /// built around Recipe and unrelated to this feature - keeps working
+  /// unchanged. baseServingQuantity/servingUnit carry the recipe's own
+  /// serving size (e.g. Chole=350g, Chapati=1 piece) forward so the
+  /// servings stepper has a "1x" reference point to scale from.
+  ///
+  /// [slotServingTime] is the tab/slot this recipe was picked FOR, not
+  /// necessarily its own native servingTime - a side/salad cross-listed
+  /// into e.g. Dinner (see utils/dietPlanOptions.js's broadening) still
+  /// natively stores servingTime:'Lunch', but must be finalized under
+  /// Dinner if that's the tab the dietician selected it from.
+  ///
+  /// "Supplements" is a browsing-only pseudo-tab (see buildServingTimeOptions
+  /// in dietPlanOptions.js) - a supplement picked from it must still persist
+  /// under its own real servingTime (e.g. "Night Drink"), never under the
+  /// literal string "Supplements", which finalizeWeekPlan would reject.
+  ///
+  /// [dayGroup] is which of the 4 day-groups (Monday/Tuesday/Wednesday/
+  /// Thursday) this recipe was picked for - see dayGroups.js.
+  Recipe _recipeFromOptionModel(
+    RecipeModel m,
+    String slotServingTime,
+    String dayGroup,
+  ) {
+    final persistedServingTime = slotServingTime == 'Supplements'
+        ? (m.servingTime.isNotEmpty ? m.servingTime : slotServingTime)
+        : slotServingTime;
+    return Recipe(
+      id: m.id,
+      name: m.name,
+      image: m.image,
+      totalWeightGrams: m.servingSize.quantity.round(),
+      nutrition: Nutrition(
+        calories: m.nutrition.calories,
+        protein: m.nutrition.protein,
+        carbs: m.nutrition.carbs,
+        fats: m.nutrition.fats,
+        fiber: m.nutrition.fiber,
+      ),
+      baseServingQuantity: m.servingSize.quantity > 0
+          ? m.servingSize.quantity
+          : 1,
+      servingUnit: m.servingSize.unit.isNotEmpty ? m.servingSize.unit : 'g',
+      servingTime: persistedServingTime,
+      tags: m.tags,
+      dayGroup: dayGroup,
+      secondaryLabel: m.secondaryComponent?.label ?? '',
+      secondaryBaseQuantity: m.secondaryComponent?.quantity ?? 1,
+      secondaryUnit: m.secondaryComponent?.unit ?? '',
+    );
+  }
+
   // --------------------------
   // update week -> set selectedWeekMeals and recompute shiftMeals
   // --------------------------
@@ -1283,10 +1664,51 @@ class PatientsController extends GetxController {
     List<Recipe> currentWeekRecipes =
         weekSelectedRecipes[currentWeekNumber] ?? [];
 
-    if (currentWeekRecipes.contains(recipe)) {
+    // Supplements are meant to be identical across all 4 day-groups (see
+    // buildPrompt's "Morning Drink and any Supplements pick must use the
+    // exact same recipeId across all 4 day-groups" rule) and can be
+    // selected from two places (their own real slot, e.g. Night Drink, and
+    // the browsing-only Supplements tab - see buildServingTimeOptionsFromDocs'
+    // 'supplement' tag). Treating this as one whole-week decision - not 4
+    // independent per-day-group ones - means deselecting it from either
+    // place actually removes it everywhere, instead of leaving it still
+    // selected under the other 3 groups.
+    if (recipe.tags.contains('supplement')) {
+      final isCurrentlySelected = currentWeekRecipes.any(
+        (r) => r.id == recipe.id && r.servingTime == recipe.servingTime,
+      );
+      for (final dg in dayGroups) {
+        final variant = recipe.copyWith(dayGroup: dg);
+        currentWeekRecipes.removeWhere(
+          (r) =>
+              r.id == recipe.id &&
+              r.servingTime == recipe.servingTime &&
+              r.dayGroup == dg,
+        );
+        selectedServings.remove(servingsKey(variant));
+        selectedSecondaryServings.remove(servingsKey(variant));
+        if (!isCurrentlySelected) {
+          currentWeekRecipes.add(variant);
+          selectedServings[servingsKey(variant)] = _defaultServingsForTrend(
+            variant,
+          );
+          if (variant.hasSecondaryComponent) {
+            selectedSecondaryServings[servingsKey(variant)] =
+                variant.secondaryBaseQuantity;
+          }
+        }
+      }
+    } else if (currentWeekRecipes.contains(recipe)) {
       currentWeekRecipes.remove(recipe);
+      selectedServings.remove(servingsKey(recipe));
+      selectedSecondaryServings.remove(servingsKey(recipe));
     } else {
       currentWeekRecipes.add(recipe);
+      selectedServings[servingsKey(recipe)] = _defaultServingsForTrend(recipe);
+      if (recipe.hasSecondaryComponent) {
+        selectedSecondaryServings[servingsKey(recipe)] =
+            recipe.secondaryBaseQuantity;
+      }
     }
 
     weekSelectedRecipes[currentWeekNumber] = currentWeekRecipes;
@@ -1295,27 +1717,206 @@ class PatientsController extends GetxController {
     calculateTotalsForWeek(currentWeekNumber);
   }
 
+  // -----------------------------------------------------------------------
+  // Trend-aware default/clamp/step logic (phase 4) - portions vary by the
+  // patient's weight-loss/gain goal, but only within Lunch/Dinner/Evening
+  // Snack where "sabji"/"side"/"salad" concepts actually apply; every other
+  // slot (Breakfast, drinks, supplements) keeps the flat base-default/50g-
+  // step behavior unchanged.
+  // -----------------------------------------------------------------------
+
+  static const Set<String> _trendScopedSlots = {
+    'Lunch',
+    'Dinner',
+    'Evening Snack',
+  };
+
+  /// Gram-based trend clamping (sabji/salad ranges) only applies within
+  /// Lunch/Dinner/Evening Snack, where those concepts mean something.
+  /// Piece-based fractional stepping applies everywhere a piece-counted
+  /// item appears (e.g. a Breakfast paratha), since "how many" is a
+  /// trend-relevant question regardless of meal slot.
+  bool _isTrendScoped(Recipe r) =>
+      _isPieceBased(r) || _trendScopedSlots.contains(r.servingTime);
+
+  /// The dietician-facing weight trend for the currently loaded draft -
+  /// 'loss' or 'gain', derived server-side from the patient's primaryGoal
+  /// (see resolveWeightTrend in dietPlanController.js).
+  String get weightTrend => draftDietOptions.value?.weightTrend ?? 'gain';
+
+  /// Distinguishes a piece-based side (Chapati/Bhakri) from a salad
+  /// (tags:'salad') from everything else gram/ml-based (sabji, curry,
+  /// Steamed Rice) - both salad and "everything else" are gram-unit, so
+  /// unit alone can't tell them apart.
+  bool _isPieceBased(Recipe r) => r.servingUnit == 'piece';
+  bool _isSalad(Recipe r) => r.tags.contains('salad');
+
+  /// Piece-based sides (Chapati, Bhakri - tags:'side', an accompaniment to
+  /// a main dish) have no ceiling. Piece-based standalone dishes (Soya
+  /// Sandwich, the paratha family - not tagged 'side') cap at 5.
+  num? _pieceCeiling(Recipe r) => r.tags.contains('side') ? null : 5;
+
+  /// Default quantity to seed for a never-explicitly-adjusted selection.
+  num _defaultServingsForTrend(Recipe r) {
+    if (!_isTrendScoped(r)) return r.baseServingQuantity;
+    final isLoss = weightTrend == 'loss';
+    // A slightly-below-whole default (not the smallest possible 1/4) so
+    // every card doesn't start identically tiny - still clearly lighter
+    // than the gain default, and the dietician can step it either way.
+    if (_isPieceBased(r)) return isLoss ? 0.5 : 1;
+    if (_isSalad(r)) return isLoss ? 100 : 180;
+    return isLoss ? 75 : 125;
+  }
+
+  /// Clamps a stepper-adjusted value to the trend's realistic range - only
+  /// within scope; out-of-scope slots (Breakfast etc.) are never clamped.
+  /// Piece-based items are floored at 1/4; sides (tags:'side') have no
+  /// ceiling, everything else piece-based caps at 5.
+  num _clampServingsForTrend(Recipe r, num value) {
+    if (!_isTrendScoped(r)) return value;
+    final isLoss = weightTrend == 'loss';
+    if (_isPieceBased(r)) {
+      final floored = value < 0.25 ? 0.25 : value;
+      final ceiling = _pieceCeiling(r);
+      return ceiling != null && floored > ceiling ? ceiling : floored;
+    }
+    if (_isSalad(r)) {
+      return isLoss ? value.clamp(75, 125) : value.clamp(155, 205);
+    }
+    return isLoss ? value.clamp(50, 100) : value.clamp(100, 150);
+  }
+
+  /// 1/4-step below 1 piece, 1/2-step at/above 1 - produces
+  /// 1/4, 1/2, 3/4, 1, 1 1/2, 2... in both directions.
+  num _pieceStep(num current, {required bool incrementing}) {
+    if (incrementing) return current < 1 ? 0.25 : 0.5;
+    return current > 1 ? 0.5 : 0.25;
+  }
+
+  /// Step size for the servings +/- control on gram/ml-based items (sides
+  /// use [_pieceStep] instead - see incrementServings/decrementServings).
+  num _servingsStep(String unit) => unit == 'piece' ? 1 : 50;
+
+  void incrementServings(Recipe recipe) {
+    final key = servingsKey(recipe);
+    final current = selectedServings[key] ?? recipe.baseServingQuantity;
+    // Piece-based items always use fractional stepping (see _isTrendScoped
+    // - piece-based is always in scope regardless of meal slot).
+    final step = _isPieceBased(recipe)
+        ? _pieceStep(current, incrementing: true)
+        : _servingsStep(recipe.servingUnit);
+    selectedServings[key] = _clampServingsForTrend(recipe, current + step);
+    final currentWeekNumber = int.parse(selectedWeek.value.split(" ").last);
+    calculateTotalsForWeek(currentWeekNumber);
+  }
+
+  void decrementServings(Recipe recipe) {
+    final key = servingsKey(recipe);
+    final current = selectedServings[key] ?? recipe.baseServingQuantity;
+    final isTrendPiece = _isPieceBased(recipe);
+    final step = isTrendPiece
+        ? _pieceStep(current, incrementing: false)
+        : _servingsStep(recipe.servingUnit);
+    // Floor at one step - never zero/negative servings of a selected item
+    // (piece-based trend items floor at 1/4 via the clamp below instead).
+    final next = isTrendPiece
+        ? current - step
+        : (current - step < step ? step : current - step);
+    selectedServings[key] = _clampServingsForTrend(recipe, next);
+    final currentWeekNumber = int.parse(selectedWeek.value.split(" ").last);
+    calculateTotalsForWeek(currentWeekNumber);
+  }
+
+  /// Step size for the secondary-component +/- control (see
+  /// Recipe.hasSecondaryComponent) - 1 tbsp for scoopable mix-ins, 10g for
+  /// gram-based ones (e.g. chikki) - deliberately finer than the primary
+  /// gram step since these are small quantities (e.g. 80g chikki total).
+  num _secondaryStep(String unit) => unit == 'tbsp' ? 1 : 10;
+
+  void incrementSecondaryServings(Recipe recipe) {
+    final key = servingsKey(recipe);
+    final current =
+        selectedSecondaryServings[key] ?? recipe.secondaryBaseQuantity;
+    final step = _secondaryStep(recipe.secondaryUnit);
+    selectedSecondaryServings[key] = current + step;
+    final currentWeekNumber = int.parse(selectedWeek.value.split(" ").last);
+    calculateTotalsForWeek(currentWeekNumber);
+  }
+
+  void decrementSecondaryServings(Recipe recipe) {
+    final key = servingsKey(recipe);
+    final current =
+        selectedSecondaryServings[key] ?? recipe.secondaryBaseQuantity;
+    final step = _secondaryStep(recipe.secondaryUnit);
+    // Floor at one step - never zero/negative servings of a selected item.
+    selectedSecondaryServings[key] = current - step < step
+        ? step
+        : current - step;
+    final currentWeekNumber = int.parse(selectedWeek.value.split(" ").last);
+    calculateTotalsForWeek(currentWeekNumber);
+  }
+
+  /// Ratio of the dietician-set servings to the recipe's own base serving -
+  /// e.g. Chole adjusted to 400g / base 350g = ~1.14x. Works uniformly for
+  /// piece-based items too, since their baseServingQuantity is 1 (so e.g.
+  /// 3 chapatis / 1 = 3x, the same as a plain count multiplier).
+  num _servingsRatio(Recipe r) {
+    final servings = selectedServings[servingsKey(r)] ?? r.baseServingQuantity;
+    if (r.baseServingQuantity <= 0) return 1;
+    return servings / r.baseServingQuantity;
+  }
+
+  /// Same as [_servingsRatio], for the secondary component (see
+  /// Recipe.hasSecondaryComponent) - 1 if there's no secondary component.
+  num _secondaryServingsRatio(Recipe r) {
+    if (!r.hasSecondaryComponent) return 1;
+    final servings =
+        selectedSecondaryServings[servingsKey(r)] ?? r.secondaryBaseQuantity;
+    if (r.secondaryBaseQuantity <= 0) return 1;
+    return servings / r.secondaryBaseQuantity;
+  }
+
+  /// The ratio used to scale a recipe's total nutrition. For ordinary
+  /// recipes this is just [_servingsRatio]. For a compound snack with a
+  /// secondary component (e.g. banana + seeds), the recipe's stated
+  /// nutrition covers BOTH components together at their base quantities,
+  /// and there's no per-ingredient calorie breakdown to split it precisely
+  /// - the average of both components' individual ratios is a reasonable,
+  /// honest approximation (not fabricated precision), consistent with the
+  /// flat approximations already used elsewhere in this app (15g/tbsp,
+  /// 250ml/cup).
+  num _nutritionScaleRatio(Recipe r) {
+    if (!r.hasSecondaryComponent) return _servingsRatio(r);
+    return (_servingsRatio(r) + _secondaryServingsRatio(r)) / 2;
+  }
+
   // CALCULATE TOTAL NUTRITION
   void calculateTotalsForWeek(int weekNumber) {
-    final selectedRecipesForWeek = weekSelectedRecipes[weekNumber] ?? [];
+    // weekSelectedRecipes holds every day-group's selections mixed
+    // together (see _applyDraftOptionsForWeek) - "Total Budget" is scoped
+    // to whichever day-group is currently active, otherwise it would sum
+    // all 4 groups' calories at once.
+    final selectedRecipesForWeek = (weekSelectedRecipes[weekNumber] ?? [])
+        .where((r) => r.dayGroup == selectedDayGroup.value)
+        .toList();
 
     // If user has manually selected recipes, use those
     if (selectedRecipesForWeek.isNotEmpty) {
       totalCalories.value = selectedRecipesForWeek.fold(
         0.0,
-        (sum, r) => sum + r.nutrition.calories,
+        (sum, r) => sum + r.nutrition.calories * _nutritionScaleRatio(r),
       );
       totalProtein.value = selectedRecipesForWeek.fold(
         0.0,
-        (sum, r) => sum + r.nutrition.protein,
+        (sum, r) => sum + r.nutrition.protein * _nutritionScaleRatio(r),
       );
       totalFat.value = selectedRecipesForWeek.fold(
         0.0,
-        (sum, r) => sum + r.nutrition.fats,
+        (sum, r) => sum + r.nutrition.fats * _nutritionScaleRatio(r),
       );
       totalCarbs.value = selectedRecipesForWeek.fold(
         0.0,
-        (sum, r) => sum + r.nutrition.carbs,
+        (sum, r) => sum + r.nutrition.carbs * _nutritionScaleRatio(r),
       );
       return;
     }
@@ -1816,27 +2417,36 @@ class PatientsController extends GetxController {
   Map<String, dynamic> buildFinalizeWeekPayload() {
     int weekNumber = int.parse(selectedWeek.value.split(" ").last);
 
-    // original 7 serving-times data from API
-    final weekMeals = selectedWeekMeals;
-
-    // user-selected recipes for this week
+    // user-selected recipes for this week - built from the options-pool
+    // draft-review flow (getDraftDietOptions/weekSelectedRecipes), which is
+    // now this screen's only data source (selectedWeekMeals/dietPlanData
+    // belonged to the older single-recipe-per-slot flow this replaced).
+    //
+    // finalizeWeekPlan now keeps every selected recipe per servingTime (not
+    // just one), so a Sabji + a side + a salad all selected under Lunch all
+    // survive finalize.
     final selectedRecipes = weekSelectedRecipes[weekNumber] ?? [];
 
-    // build dailyMeals → exactly like backend expects, and compute nutrition
     double weekCalories = 0, weekFat = 0, weekCarbs = 0, weekProtein = 0;
-    final selectedMeals = weekMeals.map((meal) {
-      final selected = selectedRecipes.firstWhere(
-        (r) => r.id == meal.recipeId,
-        orElse: () =>
-            getRecipeById(meal.recipeId)!, // fallback = original recipe
-      );
+    final selectedMeals = selectedRecipes.map((selected) {
+      final ratio = _nutritionScaleRatio(selected);
+      weekCalories += selected.nutrition.calories * ratio;
+      weekFat += selected.nutrition.fats * ratio;
+      weekCarbs += selected.nutrition.carbs * ratio;
+      weekProtein += selected.nutrition.protein * ratio;
 
-      weekCalories += selected.nutrition.calories;
-      weekFat += selected.nutrition.fats;
-      weekCarbs += selected.nutrition.carbs;
-      weekProtein += selected.nutrition.protein;
-
-      return {"servingTime": meal.servingTime, "recipeId": selected.id};
+      return {
+        "dayGroup": selected.dayGroup,
+        "servingTime": selected.servingTime,
+        "recipeId": selected.id,
+        "servings":
+            selectedServings[servingsKey(selected)] ??
+            selected.baseServingQuantity,
+        if (selected.hasSecondaryComponent)
+          "secondaryServings":
+              selectedSecondaryServings[servingsKey(selected)] ??
+              selected.secondaryBaseQuantity,
+      };
     }).toList();
 
     // backend requires summary values as **strings**
@@ -1893,9 +2503,11 @@ class PatientsController extends GetxController {
         await getPatientProfile(patientId);
         // Reset weight override
         currentWeightForWeek.value = 0.0;
-        // Close both SelectDietSheet and CreateDietPlanScreen bottom sheets
-        // to return to the patient profile screen
-        Get.close(2);
+        // Pop both SelectDietSheet and CreateDietPlanScreen (now pushed
+        // full screens, not bottom sheets) to return to the patient
+        // profile screen.
+        Get.back();
+        Get.back();
       }
     } catch (e) {
       debugPrint("Finalize Week Error: $e");
@@ -1964,7 +2576,7 @@ class PatientsController extends GetxController {
 
         Get.back();
         Get.back();
-        Get.off(() => PatientProfileView(patientId: patientId));
+        Get.offNamed('/patient-profile/$patientId');
         Get.snackbar(
           "Success",
           paymentSent
@@ -2071,7 +2683,8 @@ class PatientsController extends GetxController {
     final data = dietPlanWeekData.value;
     if (data == null) return;
 
-    final shiftData = data.servingTimes.firstWhere(
+    final allServingTimes = data.dayGroups.expand((g) => g.servingTimes);
+    final shiftData = allServingTimes.firstWhere(
       (e) => e.servingTime == getSelectedShift.value,
       orElse: () =>
           ServingTimeModel(servingTime: '', selectedRecipeId: '', recipes: []),
@@ -2082,7 +2695,11 @@ class PatientsController extends GetxController {
 
   void toggleRecipeSelection(String recipeId) {
     // Find which serving time this recipe belongs to
-    for (var st in dietPlanWeekData.value?.servingTimes ?? []) {
+    final weekData = dietPlanWeekData.value;
+    final allServingTimes = weekData == null
+        ? <ServingTimeModel>[]
+        : weekData.dayGroups.expand((g) => g.servingTimes).toList();
+    for (var st in allServingTimes) {
       final matchIndex = st.recipes.indexWhere((r) => r.id == recipeId);
       if (matchIndex != -1) {
         final isCurrentlySelected = st.recipes[matchIndex].isSelected;
@@ -2107,7 +2724,11 @@ class PatientsController extends GetxController {
     double carbs = 0;
     double protein = 0;
 
-    for (var st in dietPlanWeekData.value?.servingTimes ?? []) {
+    final weekData = dietPlanWeekData.value;
+    final allServingTimes = weekData == null
+        ? <ServingTimeModel>[]
+        : weekData.dayGroups.expand((g) => g.servingTimes).toList();
+    for (var st in allServingTimes) {
       for (var r in st.recipes) {
         if (r.isSelected) {
           // cast dynamic to num first
@@ -2134,7 +2755,7 @@ class PatientsController extends GetxController {
     final data = dietPlanWeekData.value;
     if (data == null) return {};
 
-    final weekMeals = data.servingTimes;
+    final weekMeals = data.dayGroups.expand((g) => g.servingTimes).toList();
 
     final selectedMeals = weekMeals.map((meal) {
       // find recipe the user selected

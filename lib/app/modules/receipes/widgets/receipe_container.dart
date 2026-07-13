@@ -6,6 +6,12 @@ class ReceipeContainer extends StatelessWidget {
   final String title;
   final String subTitle;
   final VoidCallback onTap;
+  // Defaults to the historical fixed size so the Home screen's horizontal
+  // list (which gives this widget unbounded width) keeps its current layout.
+  // Callers laid out in a constrained cell (e.g. a GridView column) should
+  // pass the cell's actual width so the image fills it instead of floating
+  // at a fixed size that only coincidentally matches one screen width.
+  final double imageWidth;
 
   const ReceipeContainer({
     super.key,
@@ -13,6 +19,7 @@ class ReceipeContainer extends StatelessWidget {
     required this.title,
     required this.subTitle,
     required this.onTap,
+    this.imageWidth = 121.33,
   });
 
   bool get _isNetworkImage =>
@@ -23,13 +30,13 @@ class ReceipeContainer extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: SizedBox(
-        height: 160,
+        height: 184,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
               height: 120,
-              width: 121.33,
+              width: imageWidth,
               decoration: BoxDecoration(
                 color: const Color(0xffFDF2FA),
                 borderRadius: BorderRadius.circular(16),
@@ -80,7 +87,7 @@ class ReceipeContainer extends StatelessWidget {
                 fontWeight: FontWeight.w500,
                 fontSize: 15.5,
                 overflow: TextOverflow.ellipsis,
-                maxLines: 1,
+                maxLines: 2,
               ),
             ),
             Flexible(

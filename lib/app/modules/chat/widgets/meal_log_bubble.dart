@@ -184,7 +184,11 @@ class MealLogBubble extends StatelessWidget {
                       ),
                     ),
 
-                  if (chat.description != null && chat.description!.isNotEmpty)
+                  // Meal notes store the same text in both `message` and
+                  // `description` - only show it once.
+                  if (chat.description != null &&
+                      chat.description!.isNotEmpty &&
+                      chat.description != chat.message)
                     Padding(
                       padding: const EdgeInsets.only(top: 6),
                       child: Text(

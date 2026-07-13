@@ -5,7 +5,6 @@ import 'package:docwellnesdoc/app/modules/home/views/action_details_view.dart';
 import 'package:docwellnesdoc/app/modules/home/views/all_patient_requests_view.dart';
 import 'package:docwellnesdoc/app/modules/home/views/doctor_profile_view.dart';
 import 'package:docwellnesdoc/app/modules/home/widgets/patient_request_container.dart';
-import 'package:docwellnesdoc/app/modules/patients/views/patient_profile_view.dart';
 import 'package:docwellnesdoc/app/modules/receipes/views/add_receipes.dart';
 import 'package:docwellnesdoc/app/modules/receipes/views/view_added_receipes.dart';
 import 'package:docwellnesdoc/app/modules/receipes/widgets/receipe_container.dart';
@@ -267,11 +266,7 @@ class HomeView extends GetView<HomeController> {
                       goal: data.primaryGoal ?? "",
                       title: data.patientName ?? "",
                       onTap: () {
-                        Get.to(
-                          () => PatientProfileView(
-                            patientId: data.patientId ?? '',
-                          ),
-                        );
+                        Get.toNamed('/patient-profile/${data.patientId ?? ''}');
                       },
                       status: data.status ?? 'Unpaid',
                       avatarUrl: data.avatarUrl,
@@ -329,7 +324,7 @@ class HomeView extends GetView<HomeController> {
             Obx(() {
               if (controller.isLoadingCategories.value) {
                 return SizedBox(
-                  height: 161,
+                  height: 185,
                   child: Center(
                     child: CircularProgressIndicator(color: Color(0xff851653)),
                   ),
@@ -337,7 +332,7 @@ class HomeView extends GetView<HomeController> {
               }
               if (controller.recipeCategories.isEmpty) {
                 return SizedBox(
-                  height: 161,
+                  height: 185,
                   child: Center(
                     child: CustomText(
                       text: 'No recipe categories yet',
@@ -349,7 +344,7 @@ class HomeView extends GetView<HomeController> {
                 );
               }
               return SizedBox(
-                height: 161,
+                height: 185,
                 width: double.infinity,
                 child: ListView.builder(
                   shrinkWrap: true,

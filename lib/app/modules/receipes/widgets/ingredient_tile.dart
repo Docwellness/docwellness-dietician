@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 class IngredientTile extends StatelessWidget {
   final Ingredient? ingredient;
   final double servingsMultiplier;
-  final VoidCallback? onAddImageTap;
+  final VoidCallback? onRefreshImageTap;
   final bool isUploading;
   final String? translatedName;
   final String? translatedDescription;
@@ -14,11 +14,23 @@ class IngredientTile extends StatelessWidget {
     super.key,
     this.ingredient,
     this.servingsMultiplier = 1.0,
-    this.onAddImageTap,
+    this.onRefreshImageTap,
     this.isUploading = false,
     this.translatedName,
     this.translatedDescription,
   });
+
+  /// Formats a quantity for display without ever collapsing a real nonzero
+  /// value down to "0" - whole numbers show with no decimals, fractional
+  /// values (common for cup/tbsp/tsp, e.g. 0.25 cup) show with up to 2
+  /// decimals, trailing zeros trimmed.
+  static String _formatQuantity(double q) {
+    if (q == q.roundToDouble()) return q.toStringAsFixed(0);
+    var s = q.toStringAsFixed(2);
+    s = s.replaceFirst(RegExp(r'0+$'), '');
+    s = s.replaceFirst(RegExp(r'\.$'), '');
+    return s;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -59,7 +71,7 @@ class IngredientTile extends StatelessWidget {
                                   color: const Color(0xffF9FAFB),
                                   alignment: Alignment.center,
                                   child: const Icon(
-                                    Icons.add,
+                                    Icons.image_outlined,
                                     size: 36,
                                     color: Color(0xff98A2B3),
                                   ),
@@ -69,19 +81,19 @@ class IngredientTile extends StatelessWidget {
                                 color: const Color(0xffF9FAFB),
                                 alignment: Alignment.center,
                                 child: const Icon(
-                                  Icons.add,
+                                  Icons.image_outlined,
                                   size: 36,
                                   color: Color(0xff98A2B3),
                                 ),
                               ),
                       ),
                     ),
-                    if (onAddImageTap != null)
+                    if (onRefreshImageTap != null)
                       Positioned(
                         right: 4,
                         bottom: 4,
                         child: InkWell(
-                          onTap: isUploading ? null : onAddImageTap,
+                          onTap: isUploading ? null : onRefreshImageTap,
                           child: Container(
                             height: 24,
                             width: 24,
@@ -100,7 +112,7 @@ class IngredientTile extends StatelessWidget {
                                     ),
                                   )
                                 : const Icon(
-                                    Icons.add,
+                                    Icons.refresh,
                                     size: 16,
                                     color: Colors.white,
                                   ),
@@ -130,7 +142,7 @@ class IngredientTile extends StatelessWidget {
                       SizedBox(height: 10),
                       CustomText(
                         text:
-                            "$category • $priceLevel • ${quantity.toStringAsFixed(0)}$unit",
+                            "$category • $priceLevel • ${_formatQuantity(quantity)}$unit",
 
                         color: Color(0xff6C737F),
                         fontWeight: FontWeight.w400,

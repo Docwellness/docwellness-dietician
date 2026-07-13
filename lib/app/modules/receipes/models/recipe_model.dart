@@ -95,8 +95,36 @@ class RecipePreview {
     );
   }
 
+  /// Returns a copy with [id] overridden - used when an endpoint (e.g.
+  /// ai-update-from-edits) returns a refined preview with no `id` of its
+  /// own, so the caller's already-known recipe id isn't lost.
+  RecipePreview copyWithId(String? newId) {
+    return RecipePreview(
+      id: newId,
+      name: name,
+      image: image,
+      description: description,
+      category: category,
+      cuisine: cuisine,
+      servingTime: servingTime,
+      servings: servings,
+      preparationTime: preparationTime,
+      cookingTime: cookingTime,
+      dietaryHabits: dietaryHabits,
+      freeFrom: freeFrom,
+      ingredients: ingredients,
+      servingSize: servingSize,
+      nutrition: nutrition,
+      cookingSteps: cookingSteps,
+      warnings: warnings,
+      languages: languages,
+      translations: translations,
+    );
+  }
+
   Map<String, dynamic> toJson() {
     return {
+      if (id != null) '_id': id,
       'name': name,
       'image': image,
       'description': description,

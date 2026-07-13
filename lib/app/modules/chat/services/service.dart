@@ -1,9 +1,8 @@
-import 'dart:io';
-
 import 'package:dio/dio.dart';
 import 'package:docwellnesdoc/app/utils/functions/dio_function.dart';
 import 'package:docwellnesdoc/main.dart';
 import 'package:flutter/widgets.dart';
+import 'package:image_picker/image_picker.dart';
 
 class ChatService {
   final ApiService service = ApiService();
@@ -59,8 +58,12 @@ class ChatService {
         headers: {'Authorization': "Bearer $token"},
       );
 
+      // Backend responds 201 (Created) for a new message, not 200 - this
+      // strict == 200 check was silently treating every successful send as
+      // a failure (the message was actually saved and broadcast; only the
+      // sender's own UI never found out).
       if (response != null &&
-          response.statusCode == 200 &&
+          (response.statusCode == 200 || response.statusCode == 201) &&
           response.data['success'] == true) {
         return response.data;
       }
@@ -72,7 +75,7 @@ class ChatService {
 
   Future<dynamic> sendImageInChatOrReply({
     required String receiverId,
-    File? imageFile,
+    XFile? imageFile,
     String? message,
     String? replyTo,
   }) async {
@@ -81,14 +84,9 @@ class ChatService {
 
       //  Image
       if (imageFile != null) {
+        final bytes = await imageFile.readAsBytes();
         formData.files.add(
-          MapEntry(
-            'image',
-            await MultipartFile.fromFile(
-              imageFile.path,
-              filename: imageFile.path.split('/').last,
-            ),
-          ),
+          MapEntry('image', MultipartFile.fromBytes(bytes, filename: imageFile.name)),
         );
       }
 
@@ -110,7 +108,7 @@ class ChatService {
       );
 
       if (response != null &&
-          response.statusCode == 200 &&
+          (response.statusCode == 200 || response.statusCode == 201) &&
           response.data['success'] == true) {
         return response.data;
       }

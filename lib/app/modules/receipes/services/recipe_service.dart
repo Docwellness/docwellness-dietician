@@ -3,6 +3,22 @@ import 'package:docwellnesdoc/app/modules/receipes/models/recipe_model.dart';
 import 'package:docwellnesdoc/app/utils/functions/dio_function.dart';
 import 'package:docwellnesdoc/main.dart';
 
+/// Thrown when the backend rejects a recipe request with a specific,
+/// user-facing reason (e.g. a dietary constraint conflict) rather than a
+/// generic failure, so the UI can show the real cause instead of a fallback
+/// "something went wrong" message.
+class RecipeApiException implements Exception {
+  final String message;
+  final List<String> errors;
+
+  RecipeApiException(this.message, {this.errors = const []});
+
+  /// Human-readable text combining the top-level message with any detailed
+  /// per-conflict errors, suitable for showing directly in a snackbar.
+  String get displayMessage =>
+      errors.isEmpty ? message : errors.join('\n');
+}
+
 class RecipeService {
   final ApiService _apiService = ApiService();
 
@@ -44,8 +60,17 @@ class RecipeService {
       print(
         '❌ generateRecipePreview failed: status=${response?.statusCode}, data=${response?.data}',
       );
+
+      if (response?.data is Map && response!.data['message'] != null) {
+        final rawErrors = response.data['errors'];
+        throw RecipeApiException(
+          response.data['message'] as String,
+          errors: rawErrors is List ? rawErrors.map((e) => e.toString()).toList() : const [],
+        );
+      }
       return null;
     } catch (e) {
+      if (e is RecipeApiException) rethrow;
       print('❌ generateRecipePreview exception: $e');
       return null;
     }
@@ -92,8 +117,16 @@ class RecipeService {
         return RecipePreview.fromJson(response.data['data']);
       }
 
+      if (response?.data is Map && response!.data['message'] != null) {
+        final rawErrors = response.data['errors'];
+        throw RecipeApiException(
+          response.data['message'] as String,
+          errors: rawErrors is List ? rawErrors.map((e) => e.toString()).toList() : const [],
+        );
+      }
       return null;
     } catch (e) {
+      if (e is RecipeApiException) rethrow;
       return null;
     }
   }
@@ -232,10 +265,39 @@ class RecipeService {
     }
   }
 
-  /// List all recipes with optional category filter
+  /// Real recipe counts per serving-time slot, optionally scoped to a
+  /// top-level category group, plus the Supplements total - powers the
+  /// "Recipes & Supplements" landing grid.
+  /// GET /api/dietician/recipes/serving-time-summary
+  Future<ServingTimeSummary> getServingTimeSummary({String? topCategory}) async {
+    try {
+      final query = (topCategory != null && topCategory != 'All')
+          ? '?topCategory=$topCategory'
+          : '';
+      final response = await _apiService.request(
+        endPoint: '/recipes/serving-time-summary$query',
+        method: 'GET',
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      if (response != null &&
+          response.statusCode == 200 &&
+          response.data['success'] == true) {
+        return ServingTimeSummary.fromJson(response.data['data']);
+      }
+      return ServingTimeSummary(counts: [], supplementsCount: 0);
+    } catch (e) {
+      return ServingTimeSummary(counts: [], supplementsCount: 0);
+    }
+  }
+
+  /// List all recipes with optional category/topCategory/servingTime filters
   /// GET /api/dietician/recipes
   Future<RecipeListResponse> listRecipes({
     String? category,
+    String? topCategory,
+    String? servingTime,
+    String? tag,
     int page = 1,
     int limit = 20,
   }) async {
@@ -243,6 +305,15 @@ class RecipeService {
       String queryString = '?page=$page&limit=$limit';
       if (category != null && category != 'All') {
         queryString += '&category=$category';
+      }
+      if (topCategory != null && topCategory != 'All') {
+        queryString += '&topCategory=$topCategory';
+      }
+      if (servingTime != null && servingTime.isNotEmpty) {
+        queryString += '&servingTime=$servingTime';
+      }
+      if (tag != null && tag.isNotEmpty) {
+        queryString += '&tag=$tag';
       }
 
       final response = await _apiService.request(
@@ -310,6 +381,58 @@ class RecipeService {
     }
   }
 
+  /// Persist the full edited state of an already-saved recipe - used by the
+  /// "Save Recipe" button on an existing recipe's detail screen, since
+  /// "Update AI Inputs" only refines the in-memory preview and never writes
+  /// to the database on its own. Includes any ingredient image refreshes.
+  /// PATCH /api/dietician/recipes/:id
+  Future<bool> saveExistingRecipe({
+    required String id,
+    required String servingTime,
+    required int servings,
+    String? category,
+    String? description,
+    DietaryHabits? dietaryHabits,
+    FreeFrom? freeFrom,
+    List<Ingredient>? ingredients,
+    List<String>? cookingSteps,
+    Nutrition? nutrition,
+    Map<String, RecipeTranslation>? translations,
+  }) async {
+    try {
+      final body = <String, dynamic>{
+        'servingTime': servingTime,
+        'servings': servings,
+        if (category != null) 'category': category,
+        if (description != null) 'description': description,
+        if (dietaryHabits != null) 'dietaryHabits': dietaryHabits.toJson(),
+        if (freeFrom != null) 'freeFrom': freeFrom.toJson(),
+        if (ingredients != null)
+          'ingredients': ingredients.map((e) => e.toJson()).toList(),
+        if (cookingSteps != null) 'cookingSteps': cookingSteps,
+        if (nutrition != null) 'nutrition': nutrition.toJson(),
+        if (translations != null && translations.isNotEmpty)
+          'translations': translations.map(
+            (key, value) => MapEntry(key, value.toJson()),
+          ),
+      };
+
+      final response = await _apiService.request(
+        endPoint: '/recipes/$id',
+        method: 'PATCH',
+        data: body,
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      return response != null &&
+          response.statusCode == 200 &&
+          response.data['success'] == true;
+    } catch (e) {
+      print('❌ saveExistingRecipe exception: $e');
+      return false;
+    }
+  }
+
   /// Upload main recipe image to Cloudinary via backend
   /// POST /api/dietician/uploads/recipe-image
   Future<String?> uploadRecipeImage(String filePath) async {
@@ -371,6 +494,63 @@ class RecipeService {
       return null;
     }
   }
+
+  /// Fetch a real photo of an ingredient from the internet (Pexels, mirrored
+  /// into Cloudinary server-side) - replaces the device-upload flow. Can be
+  /// called repeatedly for the same ingredient to get a different result.
+  /// POST /api/dietician/uploads/ingredient-image/fetch
+  Future<String?> fetchIngredientImageFromWeb(String ingredientName) async {
+    try {
+      final response = await _apiService.request(
+        endPoint: '/uploads/ingredient-image/fetch',
+        method: 'POST',
+        data: {'ingredientName': ingredientName},
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      if (response != null &&
+          response.statusCode == 200 &&
+          response.data['success'] == true) {
+        return response.data['data']?['url']?.toString();
+      }
+
+      print(
+        '❌ fetchIngredientImageFromWeb failed: status=${response?.statusCode}, data=${response?.data}',
+      );
+      return null;
+    } catch (e) {
+      print('❌ fetchIngredientImageFromWeb exception: $e');
+      return null;
+    }
+  }
+
+  /// Persist a single ingredient's refreshed image on an already-saved
+  /// recipe (only relevant when editing an existing recipe, not a
+  /// not-yet-saved preview - see recipe_details.dart's fromAddRecipeScreen).
+  /// Matches by array index, not name - a recipe can have two ingredients
+  /// with the same name, and the backend only updates the exact index sent.
+  /// PATCH /api/dietician/recipes/:id/ingredient-image
+  Future<bool> updateIngredientImage({
+    required String recipeId,
+    required int ingredientIndex,
+    required String imageUrl,
+  }) async {
+    try {
+      final response = await _apiService.request(
+        endPoint: '/recipes/$recipeId/ingredient-image',
+        method: 'PATCH',
+        data: {'ingredientIndex': ingredientIndex, 'imageUrl': imageUrl},
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      return response != null &&
+          response.statusCode == 200 &&
+          response.data['success'] == true;
+    } catch (e) {
+      print('❌ updateIngredientImage exception: $e');
+      return false;
+    }
+  }
 }
 
 /// Recipe Category model
@@ -388,6 +568,53 @@ class RecipeCategory {
       image: json['image'],
     );
   }
+}
+
+/// Real per-serving-time recipe count, e.g. {servingTime: 'Breakfast', count: 19}.
+class ServingTimeCount {
+  final String servingTime;
+  final int count;
+
+  ServingTimeCount({required this.servingTime, required this.count});
+
+  factory ServingTimeCount.fromJson(Map<String, dynamic> json) {
+    return ServingTimeCount(
+      servingTime: json['servingTime'] ?? '',
+      count: json['count'] ?? 0,
+    );
+  }
+}
+
+/// Response shape for GET /recipes/serving-time-summary - the 7 real
+/// serving-time counts plus the always-present Supplements shortcut count.
+class ServingTimeSummary {
+  final List<ServingTimeCount> counts;
+  final int supplementsCount;
+  final int sidesCount;
+  final int saladCount;
+
+  ServingTimeSummary({
+    required this.counts,
+    required this.supplementsCount,
+    this.sidesCount = 0,
+    this.saladCount = 0,
+  });
+
+  factory ServingTimeSummary.fromJson(Map<String, dynamic> json) {
+    final rawCounts = json['servingTimeCounts'] as List? ?? [];
+    return ServingTimeSummary(
+      counts: rawCounts.map((e) => ServingTimeCount.fromJson(e)).toList(),
+      supplementsCount: json['supplementsCount'] ?? 0,
+      sidesCount: json['sidesCount'] ?? 0,
+      saladCount: json['saladCount'] ?? 0,
+    );
+  }
+
+  int countFor(String servingTime) =>
+      counts.firstWhere(
+        (c) => c.servingTime == servingTime,
+        orElse: () => ServingTimeCount(servingTime: servingTime, count: 0),
+      ).count;
 }
 
 /// Recipe list item model

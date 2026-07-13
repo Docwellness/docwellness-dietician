@@ -63,17 +63,24 @@ class UpdateAiInputsSheet extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             children: [
               // Recipe Name
-              CustomField(
-                isPresent: true,
-                controller: controller.recipeNameController,
-                lable: 'Recipe Name',
-                suffixIcon: Padding(
-                  padding: const EdgeInsets.all(13),
-                  child: Image.asset(
-                    'assets/icons/icon.png',
-                    height: 20,
-                    width: 20,
-                    fit: BoxFit.cover,
+              Obx(
+                () => CustomField(
+                  isPresent: controller.recipeNameHasError.value,
+                  controller: controller.recipeNameController,
+                  lable: 'Recipe Name',
+                  onChange: (value) {
+                    if (value != null && value.trim().isNotEmpty) {
+                      controller.recipeNameHasError.value = false;
+                    }
+                  },
+                  suffixIcon: Padding(
+                    padding: const EdgeInsets.all(13),
+                    child: Image.asset(
+                      'assets/icons/icon.png',
+                      height: 20,
+                      width: 20,
+                      fit: BoxFit.cover,
+                    ),
                   ),
                 ),
               ),
@@ -206,8 +213,7 @@ class UpdateAiInputsSheet extends StatelessWidget {
                           ),
                           GestureDetector(
                             onTap: () {
-                              item.isSelected = !item.isSelected;
-                              controller.dietOptions.refresh();
+                              controller.toggleDietOption(index);
                             },
                             child: AnimatedContainer(
                               duration: const Duration(milliseconds: 200),
@@ -271,16 +277,18 @@ class UpdateAiInputsSheet extends StatelessWidget {
                         item.isChecked = !item.isChecked;
                         controller.freeFromOptions.refresh();
                       },
-                      child: SizedBox(
-                        height: 30,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            CustomText(
-                              text: item.title,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w500,
-                              color: const Color(0xff384250),
+                            Expanded(
+                              child: CustomText(
+                                text: item.title,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w500,
+                                color: const Color(0xff384250),
+                              ),
                             ),
                             Container(
                               height: 40,

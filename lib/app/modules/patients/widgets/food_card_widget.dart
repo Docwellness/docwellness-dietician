@@ -15,9 +15,47 @@ class FoodCard extends StatelessWidget {
 
   final bool isSelected;
 
+  // Disables the checkbox (dimmed, non-tappable) without hiding the card -
+  // used for a supplement that's already selected via its own native slot
+  // (e.g. Night Drink): the Supplements tab still shows it as checked, but
+  // deselecting it can only happen from its native slot, so there's only
+  // ever one place that actually acts on it - see select_diet_sheet.dart.
+  final bool locked;
+
+  // Unit label for the `grams` badge (e.g. "g", "ml", "piece") - shown
+  // alongside the number so it's never a bare, ambiguous figure sitting
+  // next to the calorie text.
+  final String unit;
+
+  // Servings +/- stepper - optional (nullable callbacks), so callers that
+  // don't wire it (e.g. a read-only card) simply don't render it. Only
+  // shown while the card is selected, since adjusting servings for an
+  // unselected item has no effect on the plan.
+  final num? currentServings;
+  final VoidCallback? onIncrement;
+  final VoidCallback? onDecrement;
+
+  // Opens the recipe's full detail (ingredients/instructions) in a bottom
+  // sheet - optional, so callers that don't wire it just show a
+  // non-interactive image/name (tapping does nothing, same as before).
+  final VoidCallback? onTapDetails;
+
+  // A second, independent +/- stepper for compound snacks that combine a
+  // countable fruit with a scoopable mix-in (e.g. "Banana with Roasted
+  // Chana and Seeds" - the primary badge/stepper above is the banana, this
+  // is the seeds) - see Recipe.hasSecondaryComponent. Optional, same
+  // nullable-callback pattern as the primary stepper: only rendered when
+  // both callbacks and a label are provided.
+  final String? secondaryLabel;
+  final String secondaryUnit;
+  final num? secondaryCurrentServings;
+  final VoidCallback? onSecondaryIncrement;
+  final VoidCallback? onSecondaryDecrement;
+
   const FoodCard({
     super.key,
     required this.isSelected,
+    this.locked = false,
     required this.name,
     required this.grams,
     required this.calorie,
@@ -28,7 +66,70 @@ class FoodCard extends StatelessWidget {
     required this.onSelect,
     this.nextWeekTag,
     required this.image,
+    this.unit = '',
+    this.currentServings,
+    this.onIncrement,
+    this.onDecrement,
+    this.onTapDetails,
+    this.secondaryLabel,
+    this.secondaryUnit = '',
+    this.secondaryCurrentServings,
+    this.onSecondaryIncrement,
+    this.onSecondaryDecrement,
   });
+
+  // 15g ≈ 1 tbsp - the same approximation the source diet plans
+  // themselves use ("rice (10 tbsp)" ≈ 150g rice).
+  static const num _gramsPerTablespoon = 15;
+  // 250ml ≈ 1 cup (the standard metric/Indian recipe cup).
+  static const num _mlPerCup = 250;
+
+  /// Formats a raw numeric quantity string for display: piece-based units
+  /// get fraction notation (1/4, 1/2, 3/4, 1 1/2...) instead of a raw
+  /// decimal; ml-based units get an approximate cup count (also in fraction
+  /// notation); gram-based units get an approximate tablespoon count.
+  static String _formatQuantityLabel(String rawValue, String unit) {
+    final value = num.tryParse(rawValue);
+    if (value == null) {
+      return unit.isNotEmpty ? '$rawValue $unit' : rawValue;
+    }
+    if (unit == 'piece') {
+      return '${_formatPieceFraction(value)} $unit';
+    }
+    if (unit == 'ml') {
+      final cups = _formatPieceFraction(value / _mlPerCup);
+      return '$rawValue $unit (~$cups cup)';
+    }
+    // Already a spoon measure (e.g. a secondaryComponent like "Seeds &
+    // Chana" - see Recipe.hasSecondaryComponent) - no further conversion,
+    // converting it again as if it were grams would be wrong.
+    if (unit == 'tbsp' || unit == 'tsp') {
+      return '$rawValue $unit';
+    }
+    if (unit.isNotEmpty) {
+      final tbsp = (value / _gramsPerTablespoon).round();
+      return '$rawValue $unit (~$tbsp tbsp)';
+    }
+    return rawValue;
+  }
+
+  static String _formatPieceFraction(num value) {
+    final whole = value.floor();
+    final frac = value - whole;
+    String fracLabel = '';
+    if ((frac - 0.25).abs() < 0.01) {
+      fracLabel = '¼';
+    } else if ((frac - 0.5).abs() < 0.01) {
+      fracLabel = '½';
+    } else if ((frac - 0.75).abs() < 0.01) {
+      fracLabel = '¾';
+    } else if (frac > 0.01) {
+      fracLabel = frac.toStringAsFixed(2);
+    }
+    if (whole == 0 && fracLabel.isNotEmpty) return fracLabel;
+    if (fracLabel.isEmpty) return '$whole';
+    return '$whole $fracLabel';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -45,40 +146,46 @@ class FoodCard extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  image: image.isNotEmpty && image.startsWith('http')
-                      ? DecorationImage(
-                          image: NetworkImage(image),
-                          fit: BoxFit.cover,
+              GestureDetector(
+                onTap: onTapDetails,
+                child: Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    image: image.isNotEmpty && image.startsWith('http')
+                        ? DecorationImage(
+                            image: NetworkImage(image),
+                            fit: BoxFit.cover,
+                          )
+                        : null,
+                    color: (image.isEmpty || !image.startsWith('http'))
+                        ? const Color(0xffFDF2FA)
+                        : null,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: (image.isEmpty || !image.startsWith('http'))
+                      ? const Icon(
+                          Icons.restaurant,
+                          color: Color(0xffEF45B2),
+                          size: 24,
                         )
                       : null,
-                  color: (image.isEmpty || !image.startsWith('http'))
-                      ? const Color(0xffFDF2FA)
-                      : null,
-                  borderRadius: BorderRadius.circular(10),
                 ),
-                child: (image.isEmpty || !image.startsWith('http'))
-                    ? const Icon(
-                        Icons.restaurant,
-                        color: Color(0xffEF45B2),
-                        size: 24,
-                      )
-                    : null,
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    CustomText(
-                      text: name,
+                    GestureDetector(
+                      onTap: onTapDetails,
+                      child: CustomText(
+                        text: name,
 
-                      color: Color(0xff384250),
-                      fontWeight: FontWeight.w400,
-                      fontSize: 18,
+                        color: Color(0xff384250),
+                        fontWeight: FontWeight.w400,
+                        fontSize: 18,
+                      ),
                     ),
                     const SizedBox(height: 6),
                     Row(
@@ -94,7 +201,7 @@ class FoodCard extends StatelessWidget {
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: CustomText(
-                            text: grams,
+                            text: _formatQuantityLabel(grams, unit),
 
                             color: Color(0xff851653),
                             fontWeight: FontWeight.w500,
@@ -111,6 +218,79 @@ class FoodCard extends StatelessWidget {
                         ),
                       ],
                     ),
+                    if (isSelected &&
+                        onIncrement != null &&
+                        onDecrement != null) ...[
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          _ServingsStepButton(
+                            icon: Icons.remove,
+                            onTap: onDecrement!,
+                          ),
+                          Container(
+                            constraints: const BoxConstraints(minWidth: 48),
+                            alignment: Alignment.center,
+                            padding: const EdgeInsets.symmetric(horizontal: 6),
+                            child: CustomText(
+                              text: currentServings != null
+                                  ? _formatQuantityLabel(
+                                      '$currentServings',
+                                      unit,
+                                    )
+                                  : '',
+                              color: Color(0xff384250),
+                              fontWeight: FontWeight.w600,
+                              fontSize: 12,
+                            ),
+                          ),
+                          _ServingsStepButton(
+                            icon: Icons.add,
+                            onTap: onIncrement!,
+                          ),
+                        ],
+                      ),
+                    ],
+                    if (isSelected &&
+                        secondaryLabel != null &&
+                        onSecondaryIncrement != null &&
+                        onSecondaryDecrement != null) ...[
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          CustomText(
+                            text: '$secondaryLabel: ',
+                            color: Color(0xff6C737F),
+                            fontWeight: FontWeight.w400,
+                            fontSize: 12,
+                          ),
+                          _ServingsStepButton(
+                            icon: Icons.remove,
+                            onTap: onSecondaryDecrement!,
+                          ),
+                          Container(
+                            constraints: const BoxConstraints(minWidth: 48),
+                            alignment: Alignment.center,
+                            padding: const EdgeInsets.symmetric(horizontal: 6),
+                            child: CustomText(
+                              text: secondaryCurrentServings != null
+                                  ? _formatQuantityLabel(
+                                      '$secondaryCurrentServings',
+                                      secondaryUnit,
+                                    )
+                                  : '',
+                              color: Color(0xff384250),
+                              fontWeight: FontWeight.w600,
+                              fontSize: 12,
+                            ),
+                          ),
+                          _ServingsStepButton(
+                            icon: Icons.add,
+                            onTap: onSecondaryIncrement!,
+                          ),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -118,17 +298,20 @@ class FoodCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   GestureDetector(
-                    onTap: onSelect,
-                    child: Icon(
-                      isSelected
-                          ? Icons.check_box
-                          : Icons.check_box_outline_blank,
-                      color: nextWeekTag != null
-                          ? Color(0xff6C737F)
-                          : isSelected
-                          ? Color(0xff851653)
-                          : Color(0xff49454F),
-                      size: 25,
+                    onTap: locked ? null : onSelect,
+                    child: Opacity(
+                      opacity: locked ? 0.4 : 1,
+                      child: Icon(
+                        isSelected
+                            ? Icons.check_box
+                            : Icons.check_box_outline_blank,
+                        color: nextWeekTag != null
+                            ? Color(0xff6C737F)
+                            : isSelected
+                            ? Color(0xff851653)
+                            : Color(0xff49454F),
+                        size: 25,
+                      ),
                     ),
                   ),
                   SizedBox(height: 6),
@@ -194,6 +377,29 @@ class FoodCard extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ServingsStepButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _ServingsStepButton({required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 22,
+        height: 22,
+        decoration: BoxDecoration(
+          color: const Color(0xff851653),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Icon(icon, size: 14, color: Colors.white),
       ),
     );
   }

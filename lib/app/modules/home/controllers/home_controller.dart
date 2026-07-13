@@ -181,7 +181,13 @@ class HomeController extends GetxController {
         Get.put(PerformanceController());
         break;
       case 4:
-        Get.put(ChatController());
+        // Guarded for the same reason as patient_profile_view.dart's
+        // _openChatWithPatient - avoid leaking a new live socket
+        // subscription (and the resulting duplicate-message risk) every
+        // time this tab is reselected.
+        if (!Get.isRegistered<ChatController>()) {
+          Get.put(ChatController());
+        }
         break;
     }
   }

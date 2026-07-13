@@ -126,6 +126,20 @@ class ConsultationFormBuilderView extends StatelessWidget {
                 const Spacer(),
                 IconButton(
                   visualDensity: VisualDensity.compact,
+                  icon: const Icon(Icons.arrow_upward, color: _accent),
+                  onPressed: index == 0
+                      ? null
+                      : () => controller.reorder(index, index - 1),
+                ),
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  icon: const Icon(Icons.arrow_downward, color: _accent),
+                  onPressed: index == controller.drafts.length - 1
+                      ? null
+                      : () => controller.reorder(index, index + 2),
+                ),
+                IconButton(
+                  visualDensity: VisualDensity.compact,
                   icon: const Icon(Icons.delete_outline, color: _accent),
                   onPressed: () => controller.removeField(index),
                 ),
@@ -229,6 +243,32 @@ class ConsultationFormBuilderView extends StatelessWidget {
                 ),
               ],
             ),
+            const SizedBox(height: 10),
+
+            // Who this question applies to
+            Row(
+              children: [
+                const Text(
+                  'Visible to:',
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: _text),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      _genderScopeChip(draft, 'general', 'General'),
+                      _genderScopeChip(draft, 'female', 'Female only'),
+                      _genderScopeChip(draft, 'male', 'Male only'),
+                    ],
+                  ),
+                ),
+              ],
+            ),
 
             // Options editor (only for choice types)
             if (draft.type.value.hasOptions) ...[
@@ -319,6 +359,30 @@ class ConsultationFormBuilderView extends StatelessWidget {
         ),
       );
     });
+  }
+
+  Widget _genderScopeChip(
+      ConsultationFieldDraft draft, String value, String label) {
+    final selected = draft.genderScope.value == value;
+    return GestureDetector(
+      onTap: () => draft.genderScope.value = value,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected ? _accent : Colors.white,
+          border: Border.all(color: selected ? _accent : _border),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: selected ? Colors.white : _text,
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildBottomBar(BuildContext context) {
@@ -418,15 +482,20 @@ class ConsultationFormBuilderView extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 8),
-              ...ConsultationFieldType.values.map(
-                (t) => ListTile(
-                  leading: Icon(_iconForType(t), color: _accent),
-                  title: Text(t.displayName,
-                      style: const TextStyle(
-                          fontSize: 14, fontWeight: FontWeight.w500)),
-                  onTap: () => Navigator.of(context).pop(t),
-                ),
-              ),
+              // 'file' (lab report upload) is a built-in field seeded with
+              // the standard questionnaire - not offered as a type a
+              // dietician can hand-author here.
+              ...ConsultationFieldType.values
+                  .where((t) => t != ConsultationFieldType.file)
+                  .map(
+                    (t) => ListTile(
+                      leading: Icon(_iconForType(t), color: _accent),
+                      title: Text(t.displayName,
+                          style: const TextStyle(
+                              fontSize: 14, fontWeight: FontWeight.w500)),
+                      onTap: () => Navigator.of(context).pop(t),
+                    ),
+                  ),
             ],
           ),
         ),
@@ -457,6 +526,8 @@ class ConsultationFormBuilderView extends StatelessWidget {
         return Icons.radio_button_checked;
       case ConsultationFieldType.multiChoice:
         return Icons.check_box_outlined;
+      case ConsultationFieldType.file:
+        return Icons.attach_file;
     }
   }
 }

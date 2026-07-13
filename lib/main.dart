@@ -3,13 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'app/utils/theme/app_date_picker_theme.dart';
 import 'app/routes/app_pages.dart';
 import 'app/services/notification_service.dart';
 import 'app/services/socket_service.dart';
 
 String? token;
 String? userId;
-const String apiBaseUrl = 'http://65.20.81.44:5001/api/dietician';
+const String apiBaseUrl = 'http://localhost:5000/api/dietician';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -29,13 +30,13 @@ Future<void> main() async {
     }
   }
 
-  // Token valid until May 20, 2026 (30 days from Apr 20, 2026)
-
+  // Local dev token for the seeded local dietician account (backend: mongodb://localhost:27017/docwellness).
+  // Valid ~365 days from 2026-07-06.
   token =
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5Mjk2MDFiMTJiZDlmODllZGI3ZTY5NyIsImlhdCI6MTc3NjY3NDM2MywiZXhwIjoxNzc5MjY2MzYzfQ.E2REMPHMqPD-wV3FuW-hZOD72JJmQkOglLq2bigZh08';
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhNGI3ZWVlMmI0OTBiYjYxODkyYTc1NiIsImlhdCI6MTc4MzMzMjU5MCwiZXhwIjoxODE0ODY4NTkwfQ.I-lh9w8bXHXsxy6NOvHpWLqGyHyN99UNjN6axnqycug';
 
   // User ID for the dietician (extracted from token)
-  userId = '6929601b12bd9f89edb7e697';
+  userId = '6a4b7eee2b490bb61892a756';
 
   // Initialize Socket Service
   await Get.putAsync(() => SocketService().init());
@@ -55,6 +56,13 @@ class MyApp extends StatelessWidget {
       getPages: AppPages.routes,
       theme: ThemeData(
         textTheme: GoogleFonts.robotoTextTheme(),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xff851653),
+          primary: const Color(0xff851653),
+          onPrimary: Colors.white,
+          surface: const Color(0xffFEF6FB),
+        ),
+        datePickerTheme: brandDatePickerTheme,
         dialogTheme: DialogThemeData(
           backgroundColor: const Color(0xffFEF6FB),
           surfaceTintColor: Colors.transparent,

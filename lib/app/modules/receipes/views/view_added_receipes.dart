@@ -30,7 +30,12 @@ class _ViewAddedReceipesState extends State<ViewAddedReceipes> {
       Get.put(ReceipesController());
     }
     controller = Get.find<ReceipesController>();
-    // Filter recipes by category
+    // Filter recipes by exact category. selectedTopCategory is a separate
+    // filter the shared ReceipesController also carries (for the Recipes
+    // tab's landing grid) - reset it here so a stale value left over from
+    // that screen doesn't silently combine with this exact-category filter
+    // and return zero results.
+    controller.selectedTopCategory.value = 'All';
     controller.selectedCategory.value = widget.categoryName;
     controller.fetchRecipes(refresh: true);
   }

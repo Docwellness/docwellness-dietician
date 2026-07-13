@@ -306,24 +306,13 @@ class DoctorProfileController extends GetxController {
   }
 
   Future<void> pickDate(BuildContext context) async {
+    // Branding comes from ThemeData.datePickerTheme (main.dart) - no local
+    // override needed.
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: profile.value?.dateOfBirth ?? DateTime(1990),
       firstDate: DateTime(1940),
       lastDate: DateTime.now(),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: Color(0xff851653),
-              onPrimary: Colors.white,
-              surface: Colors.white,
-              onSurface: Colors.black,
-            ),
-          ),
-          child: child!,
-        );
-      },
     );
 
     if (picked != null) {

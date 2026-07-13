@@ -15,6 +15,7 @@ migrate_working_dir/
 # Documentation files (stored in separate repo)
 *.md
 *.txt
+!CMakeLists.txt
 
 # Environment files
 .env

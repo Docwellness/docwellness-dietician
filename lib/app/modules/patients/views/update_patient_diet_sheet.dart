@@ -1,4 +1,5 @@
 import 'package:buttons_tabbar/buttons_tabbar.dart';
+import 'package:docwellnesdoc/app/models/ai_diet_plain_model.dart';
 import 'package:docwellnesdoc/app/modules/patients/controllers/patients_controller.dart';
 import 'package:docwellnesdoc/app/modules/patients/widgets/food_card_widget.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_button.dart';
@@ -97,6 +98,62 @@ class _SelectDietSheetState extends State<UpdatePatientDietSheet> {
                   const SizedBox(height: 5),
                   const Divider(color: Color(0xff9DA4AE)),
                   const SizedBox(height: 10),
+
+                  Obx(() {
+                    final plan = controller.dietPlanData.value;
+                    final messages = [
+                      ...?plan?.riskFlags.map(describeRiskFlag),
+                      ...?plan?.validationWarnings,
+                    ];
+                    if (messages.isEmpty) return const SizedBox.shrink();
+
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          color: const Color(0xffFFF4E5),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xffF0B429)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(
+                                  Icons.warning_amber_rounded,
+                                  color: Color(0xffB54708),
+                                  size: 18,
+                                ),
+                                const SizedBox(width: 8),
+                                CustomText(
+                                  text: 'Please review before finalizing',
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
+                                  color: const Color(0xffB54708),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            ...messages.map(
+                              (message) => Padding(
+                                padding: const EdgeInsets.only(top: 2),
+                                child: CustomText(
+                                  text: '• $message',
+                                  fontWeight: FontWeight.w400,
+                                  fontSize: 12,
+                                  color: const Color(0xff92400E),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }),
 
                   PreferredSize(
                     preferredSize: const Size.fromHeight(60),

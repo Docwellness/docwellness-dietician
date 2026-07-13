@@ -781,24 +781,13 @@ class _ChatLogsScreenState extends State<ChatLogsScreen>
   // ==================== DIALOGS ====================
 
   Future<void> _showDatePicker() async {
+    // Branding comes from ThemeData.datePickerTheme (main.dart) - no local
+    // override needed.
     final date = await showDatePicker(
       context: context,
       initialDate: controller.selectedDate.value,
       firstDate: DateTime(2020),
       lastDate: DateTime.now(),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: Color(0xff851653),
-              onPrimary: Colors.white,
-              surface: Colors.white,
-              onSurface: Color(0xff1F2A37),
-            ),
-          ),
-          child: child!,
-        );
-      },
     );
 
     if (date != null) {

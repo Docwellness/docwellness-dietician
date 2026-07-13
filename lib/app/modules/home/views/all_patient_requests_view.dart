@@ -1,6 +1,5 @@
 import 'package:docwellnesdoc/app/modules/home/controllers/home_controller.dart';
 import 'package:docwellnesdoc/app/modules/home/widgets/patient_request_container.dart';
-import 'package:docwellnesdoc/app/modules/patients/views/patient_profile_view.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -51,9 +50,7 @@ class AllPatientRequestsView extends GetView<HomeController> {
                   goal: data.primaryGoal ?? "",
                   title: data.patientName ?? "",
                   onTap: () {
-                    Get.to(
-                      () => PatientProfileView(patientId: data.patientId ?? ''),
-                    );
+                    Get.toNamed('/patient-profile/${data.patientId ?? ''}');
                   },
                   status: data.status ?? 'Unpaid',
                   avatarUrl: data.avatarUrl,

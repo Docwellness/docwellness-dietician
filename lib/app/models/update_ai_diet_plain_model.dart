@@ -2,13 +2,28 @@ class DietPlanWeekData {
   final String dietPlanId;
   final int week;
   final WeekSummary summary;
-  final List<ServingTimeModel> servingTimes;
+  // One entry per day-group (Monday/Tuesday/Wednesday/Thursday - Monday's
+  // meals repeat on Friday, Tuesday's on Saturday, Wednesday's on Sunday,
+  // Thursday is unique). All 4 are bundled in this single response so
+  // switching day-group tabs in the UI is a pure client-side filter, no
+  // re-fetch needed - see buildDayGroupsOptions in dietPlanOptions.js.
+  final List<DayGroupOptions> dayGroups;
+  final List<String> riskFlags;
+  final List<String> validationWarnings;
+  // 'loss' or 'gain' - derived server-side from the patient's primaryGoal
+  // (see resolveWeightTrend in dietPlanController.js). Drives the trend-
+  // aware sabji/side/salad default quantities and stepper clamps. Defaults
+  // to 'gain' (the less-restrictive behavior) if ever missing.
+  final String weightTrend;
 
   DietPlanWeekData({
     required this.dietPlanId,
     required this.week,
     required this.summary,
-    required this.servingTimes,
+    required this.dayGroups,
+    this.riskFlags = const [],
+    this.validationWarnings = const [],
+    this.weightTrend = 'gain',
   });
 
   factory DietPlanWeekData.fromJson(Map<String, dynamic> json) {
@@ -16,6 +31,31 @@ class DietPlanWeekData {
       dietPlanId: json['dietPlanId'] ?? '',
       week: json['week'] ?? 0,
       summary: WeekSummary.fromJson(json['summary'] ?? {}),
+      dayGroups: (json['dayGroups'] as List<dynamic>? ?? [])
+          .map((e) => DayGroupOptions.fromJson(e))
+          .toList(),
+      riskFlags:
+          (json['riskFlags'] as List?)?.map((e) => e.toString()).toList() ??
+          const [],
+      validationWarnings:
+          (json['validationWarnings'] as List?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const [],
+      weightTrend: json['weightTrend'] ?? 'gain',
+    );
+  }
+}
+
+class DayGroupOptions {
+  final String dayGroup;
+  final List<ServingTimeModel> servingTimes;
+
+  DayGroupOptions({required this.dayGroup, required this.servingTimes});
+
+  factory DayGroupOptions.fromJson(Map<String, dynamic> json) {
+    return DayGroupOptions(
+      dayGroup: json['dayGroup'] ?? 'Monday',
       servingTimes: (json['servingTimes'] as List<dynamic>? ?? [])
           .map((e) => ServingTimeModel.fromJson(e))
           .toList(),
@@ -24,13 +64,17 @@ class DietPlanWeekData {
 }
 
 class WeekSummary {
-  final int totalCalories;
-  final int fatPercent;
-  final int fatGrams;
-  final int carbPercent;
-  final int carbGrams;
-  final int proteinPercent;
-  final int proteinGrams;
+  // num, not int - these are sums of real recipe nutrition (see
+  // NutritionModel's comment) and can be fractional; the draft-options
+  // endpoint's summary is a live sum of selected recipes' macros, already
+  // confirmed to return decimals (e.g. fatGrams: 55.3) for real data.
+  final num totalCalories;
+  final num fatPercent;
+  final num fatGrams;
+  final num carbPercent;
+  final num carbGrams;
+  final num proteinPercent;
+  final num proteinGrams;
 
   WeekSummary({
     required this.totalCalories,
@@ -44,13 +88,13 @@ class WeekSummary {
 
   factory WeekSummary.fromJson(Map<String, dynamic> json) {
     return WeekSummary(
-      totalCalories: json['totalCalories'] ?? 0,
-      fatPercent: json['fatPercent'] ?? 0,
-      fatGrams: json['fatGrams'] ?? 0,
-      carbPercent: json['carbPercent'] ?? 0,
-      carbGrams: json['carbGrams'] ?? 0,
-      proteinPercent: json['proteinPercent'] ?? 0,
-      proteinGrams: json['proteinGrams'] ?? 0,
+      totalCalories: (json['totalCalories'] as num?) ?? 0,
+      fatPercent: (json['fatPercent'] as num?) ?? 0,
+      fatGrams: (json['fatGrams'] as num?) ?? 0,
+      carbPercent: (json['carbPercent'] as num?) ?? 0,
+      carbGrams: (json['carbGrams'] as num?) ?? 0,
+      proteinPercent: (json['proteinPercent'] as num?) ?? 0,
+      proteinGrams: (json['proteinGrams'] as num?) ?? 0,
     );
   }
 }
@@ -86,6 +130,18 @@ class RecipeModel {
   bool isSelected;
   final String? nextWeekTag;
   final ServingSizeModel servingSize;
+  // How many servings the dietician already set for this slot (only
+  // meaningful when isSelected - defaults to 1, matching cleanSelectedMeals'
+  // backend default for a not-yet-adjusted selection).
+  final num servings;
+  final List<String> tags;
+  // For a handful of compound snacks (e.g. "Banana with Roasted Chana and
+  // Seeds") that combine a countable fruit (servingSize/servings) with a
+  // scoopable mix-in - null for every ordinary single-quantity recipe.
+  final SecondaryComponentModel? secondaryComponent;
+  // The persisted quantity for secondaryComponent - same "only meaningful
+  // when isSelected" semantics as servings.
+  final num secondaryServings;
 
   RecipeModel({
     required this.id,
@@ -96,6 +152,10 @@ class RecipeModel {
     required this.isSelected,
     required this.nextWeekTag,
     required this.servingSize,
+    this.servings = 1,
+    this.tags = const [],
+    this.secondaryComponent,
+    this.secondaryServings = 1,
   });
 
   factory RecipeModel.fromJson(Map<String, dynamic> json) {
@@ -108,19 +168,52 @@ class RecipeModel {
       isSelected: json['isSelected'] ?? false,
       nextWeekTag: json['nextWeekTag'],
       servingSize: ServingSizeModel.fromJson(json['servingSize'] ?? {}),
+      servings: (json['servings'] as num?) ?? 1,
+      tags:
+          (json['tags'] as List?)?.map((e) => e.toString()).toList() ??
+          const [],
+      secondaryComponent: json['secondaryComponent'] != null
+          ? SecondaryComponentModel.fromJson(json['secondaryComponent'])
+          : null,
+      secondaryServings: (json['secondaryServings'] as num?) ?? 1,
+    );
+  }
+}
+
+/// The second independently-adjustable component of a compound snack (e.g.
+/// the seeds/chikki mix-in alongside a fruit) - see RecipeModel.secondaryComponent.
+class SecondaryComponentModel {
+  final String label;
+  final num quantity;
+  final String unit;
+
+  SecondaryComponentModel({
+    required this.label,
+    required this.quantity,
+    required this.unit,
+  });
+
+  factory SecondaryComponentModel.fromJson(Map<String, dynamic> json) {
+    return SecondaryComponentModel(
+      label: json['label'] ?? '',
+      quantity: (json['quantity'] as num?) ?? 1,
+      unit: json['unit'] ?? '',
     );
   }
 }
 
 class ServingSizeModel {
-  final int quantity;
+  // num, not int - same reasoning as NutritionModel's toInt() below: a
+  // fractional servingSize (e.g. 0.5 cup) would otherwise throw a runtime
+  // TypeError assigning a double JSON value into an int field.
+  final num quantity;
   final String unit;
 
   ServingSizeModel({required this.quantity, required this.unit});
 
   factory ServingSizeModel.fromJson(Map<String, dynamic> json) {
     return ServingSizeModel(
-      quantity: json['quantity'] ?? 0,
+      quantity: (json['quantity'] as num?) ?? 0,
       unit: json['unit'] ?? '',
     );
   }
