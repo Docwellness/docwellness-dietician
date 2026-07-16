@@ -23,18 +23,24 @@ jobs:
           if [ "${{ github.ref_name }}" = "main" ]; then
             echo "vercel_project_id=${{ secrets.VERCEL_PROJECT_ID_PROD }}" >> "$GITHUB_OUTPUT"
             echo "api_base_url=${{ secrets.PROD_API_BASE_URL }}" >> "$GITHUB_OUTPUT"
+            echo "app_env=production" >> "$GITHUB_OUTPUT"
           else
             echo "vercel_project_id=${{ secrets.VERCEL_PROJECT_ID_DEV }}" >> "$GITHUB_OUTPUT"
             echo "api_base_url=${{ secrets.DEV_API_BASE_URL }}" >> "$GITHUB_OUTPUT"
+            echo "app_env=development" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Build web
         run: |
           flutter build web --release \
-            --dart-define=API_BASE_URL=${{ steps.env.outputs.api_base_url }}
-        # Add more --dart-define flags here as Supabase/Sentry/PostHog land,
-        # e.g. --dart-define=SUPABASE_URL=... --dart-define=SUPABASE_ANON_KEY=...
-        # --dart-define=SENTRY_DSN=... --dart-define=POSTHOG_API_KEY=...
+            --dart-define=API_BASE_URL=${{ steps.env.outputs.api_base_url }} \
+            --dart-define=ENV=${{ steps.env.outputs.app_env }} \
+            --dart-define=SENTRY_DSN=${{ secrets.SENTRY_DSN }} \
+            --dart-define=POSTHOG_API_KEY=${{ secrets.POSTHOG_API_KEY }} \
+            --dart-define=POSTHOG_HOST=${{ secrets.POSTHOG_HOST }}
+        # SENTRY_DSN/POSTHOG_API_KEY/POSTHOG_HOST secrets can stay unset until
+        # those accounts exist - the app treats empty values as "disabled".
+        # Add SUPABASE_URL / SUPABASE_ANON_KEY defines here once Supabase Auth lands.
 
       - name: Deploy to Vercel
         env:
