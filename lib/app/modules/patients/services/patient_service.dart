@@ -224,6 +224,23 @@ class PatientService {
     return null;
   }
 
+  Future<dynamic> confirmRenewalPayment(String patientId, String proofId) async {
+    try {
+      final response = await service.request(
+        endPoint: '/patients/$patientId/payments/manual-proofs/$proofId/confirm',
+        method: 'PUT',
+        headers: {'Authorization': "Bearer $token"},
+      );
+
+      if (response != null) {
+        return response.data;
+      }
+    } catch (e) {
+      debugPrint('-----------------------> Confirm renewal payment error: $e');
+    }
+    return null;
+  }
+
   Future<dynamic> finalizeWeek(
     Map<String, dynamic> data,
     String patientId,

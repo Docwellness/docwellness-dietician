@@ -114,6 +114,14 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
 
   Nutrition get nutrition => recipe?.nutrition ?? Nutrition();
 
+  // A supplement has no "cooking method" - its "Cooking steps" tab is
+  // really dosage/timing guidance (e.g. "Take one tablet with breakfast"),
+  // and its real active-ingredient facts (supplementFacts) replace the
+  // ordinary macro/DV nutrition view. Mirrors the same check added to the
+  // patient app's RecipeDetailsScreen.
+  bool get _isSupplement =>
+      recipe?.supplementFacts != null && recipe!.supplementFacts!.nutrients.isNotEmpty;
+
   List<String> get availableLanguages {
     final langs = recipe?.languages ?? ['English'];
     if (!langs.contains('English')) return ['English', ...langs];
@@ -482,7 +490,7 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
                 _verticalDivider(),
                 _buildTab(1, "Nutrition value"),
                 _verticalDivider(),
-                _buildTab(2, "Cooking steps"),
+                _buildTab(2, _isSupplement ? "Dosage" : "Cooking steps"),
               ],
             ),
           ),
@@ -633,7 +641,10 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
                   ],
                 ),
               ),
-              NutritionDetailsWidget(nutrition: nutrition),
+              NutritionDetailsWidget(
+                nutrition: nutrition,
+                supplementFacts: recipe?.supplementFacts,
+              ),
               CookingStepsTab(cookingSteps: cookingSteps),
             ],
           ),
@@ -773,7 +784,8 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
                             // doesn't consult the shared controller, only
                             // _editableRecipe then the original prop.
                             setState(() {
-                              _editableRecipe = controller.generatedRecipe.value;
+                              _editableRecipe =
+                                  controller.generatedRecipe.value;
                             });
                           },
                         );

@@ -189,6 +189,7 @@ class ActionDetailsView extends StatelessWidget {
                             goal: p.primaryGoal ?? '',
                             status: p.status ?? 'Unpaid',
                             avatarUrl: p.avatarUrl,
+                            membershipPlan: p.membershipPlan,
                             onTap: () {
                               Get.toNamed(
                                 '/patient-profile/${p.patientId ?? ''}',

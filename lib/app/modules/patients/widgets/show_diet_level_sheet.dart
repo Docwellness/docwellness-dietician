@@ -1,5 +1,4 @@
 import 'package:docwellnesdoc/app/modules/patients/controllers/patients_controller.dart';
-import 'package:docwellnesdoc/app/modules/patients/views/select_diet_sheet.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_button.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
 import 'package:flutter/material.dart';
@@ -52,6 +51,13 @@ class _CreateDietPlanScreenState extends State<CreateDietPlanScreen> {
 
   String selectedMacros = "";
 
+  // The strategy names actually seeded from the existing plan (see
+  // initState) - captured once and never mutated, so comparing against the
+  // live selectedCalories/selectedMacros detects whether the dietician
+  // changed anything on an already-generated week (see hasChanges in build).
+  String? _originalCalorieStrategyName;
+  String? _originalMacroStrategyName;
+
   List<String> selectedList = [];
   final PatientsController controller = Get.find<PatientsController>();
 
@@ -59,6 +65,11 @@ class _CreateDietPlanScreenState extends State<CreateDietPlanScreen> {
   // patient's latest known weight (kept in sync with their logged progress).
   final TextEditingController _weightController = TextEditingController();
   double? _enteredWeight;
+  // The weight this screen was seeded with (see initState) - captured once,
+  // compared against the live _enteredWeight in hasChanges. Starting Date
+  // is deliberately excluded from change detection - only weight and the
+  // Calorie/Macro strategy cards should trigger a regenerate.
+  double? _originalWeight;
 
   DateTime _selectedStartDate = DateTime.now();
 
@@ -69,10 +80,38 @@ class _CreateDietPlanScreenState extends State<CreateDietPlanScreen> {
     final initialWeight =
         widget.currentWeightOverride ?? (health?.weight ?? 0).toDouble();
     _enteredWeight = initialWeight;
+    _originalWeight = initialWeight;
     _weightController.text = initialWeight > 0 ? initialWeight.toString() : '';
 
     final parsedStart = _parseDdMmYyyy(health?.startDateForDiet ?? '');
     if (parsedStart != null) _selectedStartDate = parsedStart;
+
+    // Re-opening an already-generated/finalized week (see
+    // patient_profile_view.dart's Week card taps) should show what was
+    // actually chosen last time instead of a blank form the dietician has
+    // to re-fill every time. The calorie card's budget/deficit/duration
+    // numbers are recomputed live from the patient's current weight/height
+    // in build() below (see the `plans.map` loop), so only the *name* needs
+    // seeding here - macros percentages are fixed per title, so that
+    // strategy map can be seeded outright.
+    final strategy = controller.patientProfileModel.value?.activePlanStrategy;
+    final calorieStrategyName = strategy?.calorieStrategy?.name;
+    if (calorieStrategyName != null && calorieStrategyName.isNotEmpty) {
+      selectedCalories = calorieStrategyName;
+      _originalCalorieStrategyName = calorieStrategyName;
+    }
+    final macroStrategy = strategy?.macroStrategy;
+    if (macroStrategy?.name != null && macroStrategy!.name!.isNotEmpty) {
+      selectedMacros = macroStrategy.name!;
+      _originalMacroStrategyName = macroStrategy.name;
+      controller.selectedMacroStrategy = {
+        "name": macroStrategy.name,
+        "fatPercent": macroStrategy.fatPercent ?? 0,
+        "carbsPercent": macroStrategy.carbsPercent ?? 0,
+        "proteinPercent": macroStrategy.proteinPercent ?? 0,
+        "fiberGrams": macroStrategy.fiberGrams ?? 0,
+      };
+    }
   }
 
   DateTime? _parseDdMmYyyy(String s) {
@@ -564,6 +603,23 @@ class _CreateDietPlanScreenState extends State<CreateDietPlanScreen> {
                       ? '${weeks.round()} Weeks'
                       : '${weeks.floor()} - ${weeks.ceil()} Weeks';
 
+                  // Re-opening an already-generated week seeds
+                  // selectedCalories to the previously-chosen plan's title
+                  // (see initState) - keep controller.selectedCalorieStrategy
+                  // and _selectedWeeks in sync with that card's live-computed
+                  // numbers (same shape calorieBox's onTap writes) so
+                  // submitting without re-tapping still sends correct data.
+                  if (plan["title"] == selectedCalories) {
+                    _selectedWeeks = weeks;
+                    controller.selectedCalorieStrategy = {
+                      "name": plan["title"],
+                      "calorieBudget": calorieBudget.round(),
+                      "calorieDeficit": deficit,
+                      "weeklyWeightChangeKg": weeklyChange,
+                      "durationWeeks": weeks <= 0 ? 0 : weeks.floor(),
+                    };
+                  }
+
                   return Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: calorieBox(
@@ -632,8 +688,29 @@ class _CreateDietPlanScreenState extends State<CreateDietPlanScreen> {
               // ACTION BUTTON — Week 1: generate AI plan | Week 2/3/4: use existing plan
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Obx(
-                  () => CustomButton(
+                child: Obx(() {
+                  final hasExistingPlan =
+                      (controller
+                                  .patientProfileModel
+                                  .value
+                                  ?.status
+                                  ?.activeDietPlanId ??
+                              '')
+                          .isNotEmpty;
+                  // Only Week 1 supports in-place regeneration today (see
+                  // membershipTiers.js's validateRegenerateRequest) - weeks
+                  // 2-4's "already generated" card always reuses (its
+                  // dedicated regenerate path is the separate "eligible"
+                  // card state, gated by tier cadence).
+                  final hasChanges =
+                      widget.targetWeek == 1 &&
+                      hasExistingPlan &&
+                      (selectedCalories !=
+                              (_originalCalorieStrategyName ?? '') ||
+                          selectedMacros !=
+                              (_originalMacroStrategyName ?? '') ||
+                          _enteredWeight != _originalWeight);
+                  return CustomButton(
                     isLoading: controller.generateDietPlanLoading.value,
                     onTap: () async {
                       // ── Validate weight (every week) ──
@@ -723,15 +800,17 @@ class _CreateDietPlanScreenState extends State<CreateDietPlanScreen> {
                             widget.weeksToGenerate!.first,
                           );
                           if (!context.mounted) return;
-                          Get.to(
-                            () => SelectDietSheet(
-                              dietPlanId: targetDietPlanId,
-                              patientId: widget.patientId,
-                            ),
+                          Get.toNamed(
+                            '/select-diet-sheet/${widget.patientId}/$targetDietPlanId/${widget.weeksToGenerate!.first}',
                           );
                         }
-                      } else if (widget.targetWeek == 1) {
-                        // ── Week 1: original AI-generate flow ──
+                      } else if (widget.targetWeek == 1 &&
+                          activeDietPlanId.isEmpty) {
+                        // ── Week 1, no diet plan yet: original AI-generate
+                        // flow ── (once a plan exists - generated or
+                        // finalized - tapping Week 1 again falls through to
+                        // the reuse branch below instead of re-running AI
+                        // generation from scratch).
                         if (widget.firstConsultationId.isEmpty) {
                           Get.snackbar(
                             'Error',
@@ -767,15 +846,57 @@ class _CreateDietPlanScreenState extends State<CreateDietPlanScreen> {
                             1,
                           );
                           if (!context.mounted) return;
-                          Get.to(
-                            () => SelectDietSheet(
-                              dietPlanId: newDietPlanId,
-                              patientId: widget.patientId,
-                            ),
+                          Get.toNamed(
+                            '/select-diet-sheet/${widget.patientId}/$newDietPlanId/1',
                           );
                         }
+                      } else if (widget.targetWeek == 1 && hasChanges) {
+                        // ── Week 1, plan exists but the dietician changed
+                        // the Calorie/Macro strategy: regenerate in place
+                        // (same endpoint as the eligible-week path above) -
+                        // finalizedPlan/weeksSummary for weeks 2-4 are
+                        // separate fields, untouched by this ──
+                        if (activeDietPlanId.isEmpty) {
+                          Get.snackbar(
+                            'Error',
+                            'No diet plan found for this patient.',
+                            backgroundColor: Colors.red,
+                            colorText: Colors.white,
+                            snackPosition: SnackPosition.TOP,
+                          );
+                          return;
+                        }
+                        final response = await controller.regenerateWeek(
+                          widget.patientId,
+                          activeDietPlanId,
+                          [1],
+                          currentWeight: w,
+                        );
+                        if (response == null || response['success'] != true) {
+                          Get.snackbar(
+                            'Could not generate',
+                            response?['message']?.toString() ??
+                                'Please try again.',
+                            backgroundColor: Colors.red,
+                            colorText: Colors.white,
+                            snackPosition: SnackPosition.TOP,
+                            duration: const Duration(seconds: 4),
+                          );
+                          return;
+                        }
+                        await controller.getDraftDietOptions(
+                          widget.patientId,
+                          activeDietPlanId,
+                          1,
+                        );
+                        if (!context.mounted) return;
+                        Get.toNamed(
+                          '/select-diet-sheet/${widget.patientId}/$activeDietPlanId/1',
+                        );
                       } else {
-                        // ── Week 2/3/4: reuse existing diet plan, skip AI generation ──
+                        // ── Week 1 (already generated/finalized, unchanged)
+                        // or Week 2/3/4: reuse existing diet plan, skip AI
+                        // generation ──
                         if (activeDietPlanId.isEmpty) {
                           Get.snackbar(
                             'Error',
@@ -794,11 +915,8 @@ class _CreateDietPlanScreenState extends State<CreateDietPlanScreen> {
 
                         if (!context.mounted) return;
                         // Open SelectDietSheet as its own screen
-                        Get.to(
-                          () => SelectDietSheet(
-                            dietPlanId: activeDietPlanId,
-                            patientId: widget.patientId,
-                          ),
+                        Get.toNamed(
+                          '/select-diet-sheet/${widget.patientId}/$activeDietPlanId/${widget.targetWeek}',
                         );
                       }
                     },
@@ -806,13 +924,16 @@ class _CreateDietPlanScreenState extends State<CreateDietPlanScreen> {
                         ? (widget.weeksToGenerate!.length > 1
                               ? 'Generate Weeks ${widget.weeksToGenerate!.join('-')}'
                               : 'Generate Week ${widget.weeksToGenerate!.first}')
-                        : widget.targetWeek == 1
+                        : widget.targetWeek == 1 &&
+                              (!hasExistingPlan || hasChanges)
                         ? 'Generate Diet Plan'
+                        : hasExistingPlan
+                        ? 'Update Diet Plan'
                         : 'Select Meals for Week ${widget.targetWeek}',
                     isOutline: false,
                     fontSize: 14,
-                  ),
-                ),
+                  );
+                }),
               ),
               const SizedBox(height: 30),
             ],

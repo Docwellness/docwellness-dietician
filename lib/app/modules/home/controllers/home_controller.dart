@@ -28,10 +28,15 @@ class HomeController extends GetxController {
   RxList<RecipeCategory> recipeCategories = <RecipeCategory>[].obs;
   RxBool isLoadingCategories = false.obs;
 
-  // Filtered list: only Unpaid and Paid for dashboard display
+  // Filtered list: resting states only (not mid-workflow) for dashboard display
   List<PatientRequestModel> get filteredPatientRequests =>
       allRequestedPatientList
-          .where((e) => e.status == 'Unpaid' || e.status == 'Paid')
+          .where(
+            (e) =>
+                e.status == 'Unpaid' ||
+                e.status == 'Paid' ||
+                e.status == 'PartiallyPaid',
+          )
           .toList();
 
   List<PatientRequestModel> get pendingPaymentRequests =>

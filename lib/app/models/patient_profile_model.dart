@@ -8,6 +8,11 @@ class PatientProfileModel {
   // finalization (weeklyDietPlans only reflects finalized weeks) - drives
   // the tier-gated weekly-card states (generated / eligible / locked).
   List<int> generatedWeekNumbers = [];
+  // The Calorie/Macro strategy actually used for the patient's active diet
+  // plan (see DietPlan.js's calorieStrategy/macroStrategy) - null until a
+  // plan exists. Lets CreateDietPlanScreen re-open with the dietician's
+  // prior selection pre-filled instead of a blank form.
+  ActivePlanStrategy? activePlanStrategy;
 
   PatientProfileModel({
     this.id,
@@ -16,6 +21,7 @@ class PatientProfileModel {
     this.status,
     this.weeklyDietPlans,
     List<int>? generatedWeekNumbers,
+    this.activePlanStrategy,
   }) : generatedWeekNumbers = generatedWeekNumbers ?? [];
 
   PatientProfileModel.fromJson(Map<String, dynamic> json) {
@@ -35,6 +41,77 @@ class PatientProfileModel {
     generatedWeekNumbers = json['generatedWeekNumbers'] != null
         ? List<int>.from(json['generatedWeekNumbers'])
         : [];
+
+    activePlanStrategy = json['activePlanStrategy'] != null
+        ? ActivePlanStrategy.fromJson(json['activePlanStrategy'])
+        : null;
+  }
+}
+
+class ActivePlanStrategy {
+  CalorieStrategy? calorieStrategy;
+  MacroStrategy? macroStrategy;
+
+  ActivePlanStrategy({this.calorieStrategy, this.macroStrategy});
+
+  ActivePlanStrategy.fromJson(Map<String, dynamic> json) {
+    calorieStrategy = json['calorieStrategy'] != null
+        ? CalorieStrategy.fromJson(json['calorieStrategy'])
+        : null;
+    macroStrategy = json['macroStrategy'] != null
+        ? MacroStrategy.fromJson(json['macroStrategy'])
+        : null;
+  }
+}
+
+class CalorieStrategy {
+  // 'Gentle' | 'Steady' | 'Accelerated' | 'Extreme' - matches a
+  // CreateDietPlanScreen plan card's title exactly.
+  String? name;
+  num? calorieBudget;
+  num? calorieDeficit;
+  num? weeklyWeightLossKg;
+  num? durationWeeks;
+
+  CalorieStrategy({
+    this.name,
+    this.calorieBudget,
+    this.calorieDeficit,
+    this.weeklyWeightLossKg,
+    this.durationWeeks,
+  });
+
+  CalorieStrategy.fromJson(Map<String, dynamic> json) {
+    name = json['name'];
+    calorieBudget = json['calorieBudget'] as num?;
+    calorieDeficit = json['calorieDeficit'] as num?;
+    weeklyWeightLossKg = json['weeklyWeightLossKg'] as num?;
+    durationWeeks = json['durationWeeks'] as num?;
+  }
+}
+
+class MacroStrategy {
+  // 'Balanced' | 'Low-Carb' - matches a macrosBox's title exactly.
+  String? name;
+  num? fatPercent;
+  num? carbsPercent;
+  num? proteinPercent;
+  num? fiberGrams;
+
+  MacroStrategy({
+    this.name,
+    this.fatPercent,
+    this.carbsPercent,
+    this.proteinPercent,
+    this.fiberGrams,
+  });
+
+  MacroStrategy.fromJson(Map<String, dynamic> json) {
+    name = json['name'];
+    fatPercent = json['fatPercent'] as num?;
+    carbsPercent = json['carbsPercent'] as num?;
+    proteinPercent = json['proteinPercent'] as num?;
+    fiberGrams = json['fiberGrams'] as num?;
   }
 }
 
@@ -115,6 +192,10 @@ class Status {
   // "Create Diet Plan" unlocks.
   bool? patientConsented;
   String? activeDietPlanId;
+  // Status of the plan activeDietPlanId points at right now - 'Active' means
+  // a PaymentSubmitted request is a renewal (plan already usable, payment
+  // just needs settling); 'Finalized' means it's a genuine first activation.
+  String? activeDietPlanStatus;
   String? requestId;
   String? requestStatus;
   String? membershipPlan;
@@ -132,6 +213,7 @@ class Status {
     this.firstConsultationId,
     this.patientConsented,
     this.activeDietPlanId,
+    this.activeDietPlanStatus,
     this.requestId,
     this.requestStatus,
     this.membershipPlan,
@@ -148,6 +230,7 @@ class Status {
     firstConsultationId = json['firstConsultationId'];
     patientConsented = json['patientConsented'] == true;
     activeDietPlanId = json['activeDietPlanId'];
+    activeDietPlanStatus = json['activeDietPlanStatus'];
     requestId = json['requestId'];
     requestStatus = json['requestStatus'];
     membershipPlan = json['membershipPlan'];
@@ -167,12 +250,25 @@ class PaymentSummary {
   double? amountPending;
   double? totalAmount;
   String? proofStatus;
+  String? couponCode;
+  double? discountPercentage;
+  double? originalAmount;
+  DateTime? pendingPaymentDate;
+  // Set once a previously-outstanding balance is fully cleared - the date
+  // the clearing payment was approved, replacing the now-resolved promise
+  // date as the relevant "when" to show.
+  DateTime? balanceClearedAt;
 
   PaymentSummary({
     this.amountReceived,
     this.amountPending,
     this.totalAmount,
     this.proofStatus,
+    this.couponCode,
+    this.discountPercentage,
+    this.originalAmount,
+    this.pendingPaymentDate,
+    this.balanceClearedAt,
   });
 
   PaymentSummary.fromJson(Map<String, dynamic> json) {
@@ -180,6 +276,15 @@ class PaymentSummary {
     amountPending = (json['amountPending'] as num?)?.toDouble();
     totalAmount = (json['totalAmount'] as num?)?.toDouble();
     proofStatus = json['proofStatus'];
+    couponCode = json['couponCode'];
+    discountPercentage = (json['discountPercentage'] as num?)?.toDouble();
+    originalAmount = (json['originalAmount'] as num?)?.toDouble();
+    pendingPaymentDate = json['pendingPaymentDate'] != null
+        ? DateTime.tryParse(json['pendingPaymentDate'].toString())
+        : null;
+    balanceClearedAt = json['balanceClearedAt'] != null
+        ? DateTime.tryParse(json['balanceClearedAt'].toString())
+        : null;
   }
 }
 

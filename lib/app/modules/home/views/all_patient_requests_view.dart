@@ -54,6 +54,7 @@ class AllPatientRequestsView extends GetView<HomeController> {
                   },
                   status: data.status ?? 'Unpaid',
                   avatarUrl: data.avatarUrl,
+                  membershipPlan: data.membershipPlan,
                 ),
               );
             },

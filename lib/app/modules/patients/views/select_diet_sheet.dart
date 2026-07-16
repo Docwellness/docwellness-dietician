@@ -13,10 +13,16 @@ import 'package:google_fonts/google_fonts.dart';
 class SelectDietSheet extends StatefulWidget {
   final String patientId;
   final String dietPlanId;
+  // Which week of the plan this screen reviews - needed so a cold load (see
+  // initState) can re-fetch the right week's draft options; normal in-app
+  // navigation already has this implicitly via controller.selectedWeek, but
+  // that's exactly the in-memory state a browser refresh wipes out.
+  final int week;
   const SelectDietSheet({
     super.key,
     required this.dietPlanId,
     required this.patientId,
+    required this.week,
   });
 
   @override
@@ -25,7 +31,16 @@ class SelectDietSheet extends StatefulWidget {
 
 class _SelectDietSheetState extends State<SelectDietSheet>
     with SingleTickerProviderStateMixin {
-  final PatientsController controller = Get.find<PatientsController>();
+  // Get.find alone would throw "PatientsController not found" whenever this
+  // screen is the very first thing built - e.g. a browser refresh landing
+  // directly on this route, with no prior screen having Get.put() it. Get.put
+  // otherwise would blow away the already-populated controller (selections,
+  // draft options) on every *normal* navigation into this screen, since
+  // Get.put always registers a fresh instance - so only fall back to it when
+  // nothing is registered yet.
+  final PatientsController controller = Get.isRegistered<PatientsController>()
+      ? Get.find<PatientsController>()
+      : Get.put(PatientsController());
 
   late final TabController _tabController;
 
@@ -55,6 +70,23 @@ class _SelectDietSheetState extends State<SelectDietSheet>
   void initState() {
     super.initState();
     _tabController = TabController(length: _shifts.length, vsync: this);
+
+    // Normal navigation here already ran getDraftDietOptions right before
+    // Get.toNamed (see show_diet_level_sheet.dart), so draftDietOptions is
+    // already the right plan/week - don't discard that in-memory state (and
+    // any selections already applied from it) with a redundant refetch. Only
+    // a cold load (e.g. browser refresh landing directly on this route, with
+    // no prior screen's fetch) needs this.
+    final existing = controller.draftDietOptions.value;
+    if (existing == null ||
+        existing.dietPlanId != widget.dietPlanId ||
+        existing.week != widget.week) {
+      controller.getDraftDietOptions(
+        widget.patientId,
+        widget.dietPlanId,
+        widget.week,
+      );
+    }
 
     // set initial selectedShift from default
     controller.updateShiftOptions(_shifts[0]);
@@ -271,7 +303,9 @@ class _SelectDietSheetState extends State<SelectDietSheet>
                       final plan = controller.draftDietOptions.value;
                       final messages = [
                         ...?plan?.riskFlags.map(describeRiskFlag),
-                        ...?plan?.validationWarnings,
+                        ...controller.filterStaleCalorieWarnings(
+                          plan?.validationWarnings ?? const [],
+                        ),
                       ];
                       if (messages.isEmpty) return const SizedBox.shrink();
 
@@ -329,7 +363,28 @@ class _SelectDietSheetState extends State<SelectDietSheet>
                     // add more than just the AI's single choice, e.g. a
                     // Chapati + salad alongside the main dish for Lunch).
                     Obx(() {
-                      final options = controller.shiftOptions;
+                      final rawOptions = controller.shiftOptions;
+
+                      int currentWeekNumber = int.parse(
+                        controller.selectedWeek.value.split(" ").last,
+                      );
+
+                      final selectedRecipesForWeek =
+                          controller.weekSelectedRecipes[currentWeekNumber] ??
+                          [];
+                      final shift = controller.selectedShift.value;
+
+                      // A selected supplement used to be filtered OUT of this
+                      // pseudo-slot's list entirely (the idea being it should
+                      // only be toggled from its native real slot, e.g. Night
+                      // Drink) - but since toggling happens in this exact Obx,
+                      // that made the card vanish the instant it was tapped
+                      // instead of showing a checked state, which read as
+                      // "selecting it does nothing"/"it reverts". Keep it
+                      // visible here too - toggling from either place still
+                      // updates the same whole-week selection (see
+                      // toggleMealSelection's supplement branch).
+                      final options = rawOptions;
 
                       if (options.isEmpty) {
                         return Padding(
@@ -341,14 +396,6 @@ class _SelectDietSheetState extends State<SelectDietSheet>
                         );
                       }
 
-                      int currentWeekNumber = int.parse(
-                        controller.selectedWeek.value.split(" ").last,
-                      );
-
-                      final selectedRecipesForWeek =
-                          controller.weekSelectedRecipes[currentWeekNumber] ??
-                          [];
-                      final shift = controller.selectedShift.value;
                       final visibleOptions = controller.visibleShiftOptions(
                         options,
                         selectedRecipesForWeek,
@@ -428,17 +475,12 @@ class _SelectDietSheetState extends State<SelectDietSheet>
                                     .toStringAsFixed(0),
                                 fat: (recipe.nutrition.fats * combinedRatio)
                                     .toStringAsFixed(0),
+                                supplementNutrientLabels: recipe
+                                    .supplementFacts
+                                    ?.nutrients
+                                    .map((n) => n.displayLabel)
+                                    .toList(),
                                 isSelected: isSelected,
-                                // The Supplements tab is a browsing convenience
-                                // (see buildServingTimeOptionsFromDocs) - once
-                                // a supplement is selected, deselecting it can
-                                // only happen from its own native slot tab
-                                // (e.g. Night Drink), so the Supplements-tab
-                                // card just shows the checked state, locked.
-                                locked:
-                                    isSelected &&
-                                    shift == 'Supplements' &&
-                                    recipe.tags.contains('supplement'),
                                 currentServings: liveServings,
                                 onSelect: () =>
                                     controller.toggleMealSelection(recipe),
@@ -531,17 +573,29 @@ class _SelectDietSheetState extends State<SelectDietSheet>
                               Divider(color: Color(0xffFCCEEF)),
                               SizedBox(height: 8),
 
-                              infoRow("Calorie Budget", () {
-                                final selected = controller.totalCalories.value
-                                    .toStringAsFixed(0);
+                              ...(() {
+                                final selected = controller.totalCalories.value;
                                 final target =
                                     (controller.selectedCalorieStrategy['calorieBudget']
                                             as num?)
-                                        ?.toStringAsFixed(0);
-                                return target == null
-                                    ? "$selected Cal"
-                                    : "$selected Cal (Target: $target Cal)";
-                              }(), 'assets/icons/diet_icon_1.png'),
+                                        ?.toDouble();
+                                return [
+                                  infoRow(
+                                    "Selected Calories",
+                                    "${selected.toStringAsFixed(0)} Cal",
+                                    'assets/icons/diet_icon_1.png',
+                                  ),
+                                  if (target != null)
+                                    infoRow(
+                                      "Required Calories",
+                                      "${target.toStringAsFixed(0)} Cal",
+                                      'assets/icons/diet_icon_1.png',
+                                    ),
+                                  SizedBox(height: 4),
+                                  Divider(color: Color(0xffFCCEEF), height: 1),
+                                  SizedBox(height: 8),
+                                ];
+                              }()),
 
                               infoRow(
                                 "Fat",
@@ -559,6 +613,12 @@ class _SelectDietSheetState extends State<SelectDietSheet>
                                 "Protein",
                                 "${controller.totalProtein.value.toStringAsFixed(0)} g",
                                 'assets/icons/diet_icon_7.png',
+                              ),
+
+                              infoRow(
+                                "Fiber",
+                                "${controller.totalFiber.value.toStringAsFixed(0)} g",
+                                'assets/icons/diet2.png',
                               ),
                             ],
                           ),

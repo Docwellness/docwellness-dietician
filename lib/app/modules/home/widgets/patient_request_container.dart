@@ -8,6 +8,7 @@ class PatientRequestContainer extends StatelessWidget {
   final String status;
   final String? avatarUrl;
   final String goal;
+  final String? membershipPlan;
   const PatientRequestContainer({
     super.key,
     required this.title,
@@ -15,6 +16,7 @@ class PatientRequestContainer extends StatelessWidget {
     required this.status,
     this.avatarUrl,
     required this.goal,
+    this.membershipPlan,
   });
 
   // Get status label based on status
@@ -22,6 +24,8 @@ class PatientRequestContainer extends StatelessWidget {
     switch (status) {
       case 'Paid':
         return 'PAID';
+      case 'PartiallyPaid':
+        return 'PARTIALLY PAID';
       case 'PaymentSubmitted':
         return 'PENDING REVIEW';
       case 'PaymentRequested':
@@ -40,6 +44,12 @@ class PatientRequestContainer extends StatelessWidget {
           'bg': Color(0xffD1FAE5),
           'border': Color(0xff10B981),
           'text': Color(0xff059669),
+        };
+      case 'PartiallyPaid':
+        return {
+          'bg': Color(0xffFFEDD5),
+          'border': Color(0xffFB923C),
+          'text': Color(0xffC2410C),
         };
       case 'PaymentSubmitted':
         return {
@@ -195,19 +205,54 @@ class PatientRequestContainer extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                   SizedBox(height: 8),
-                  Container(
-                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(8),
-                      color: colors['bg'],
-                      border: Border.all(color: colors['border']!, width: 1.3),
-                    ),
-                    child: CustomText(
-                      text: _getStatusLabel(),
-                      fontWeight: FontWeight.w500,
-                      fontSize: 12,
-                      color: colors['text']!,
-                    ),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Container(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(8),
+                          color: colors['bg'],
+                          border: Border.all(
+                            color: colors['border']!,
+                            width: 1.3,
+                          ),
+                        ),
+                        child: CustomText(
+                          text: _getStatusLabel(),
+                          fontWeight: FontWeight.w500,
+                          fontSize: 12,
+                          color: colors['text']!,
+                        ),
+                      ),
+                      if (membershipPlan != null &&
+                          membershipPlan!.isNotEmpty)
+                        Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(8),
+                            color: Color(0xffF3F4F6),
+                            border: Border.all(
+                              color: Color(0xffD1D5DB),
+                              width: 1.3,
+                            ),
+                          ),
+                          child: CustomText(
+                            text: membershipPlan!,
+                            fontWeight: FontWeight.w500,
+                            fontSize: 12,
+                            color: Color(0xff4D5761),
+                          ),
+                        ),
+                    ],
                   ),
                 ],
               ),

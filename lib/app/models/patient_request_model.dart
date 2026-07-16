@@ -6,6 +6,7 @@ class PatientRequestModel {
   String? primaryGoal;
   String? startDateForDiet;
   String? status;
+  String? membershipPlan;
   DateTime? createdAt;
   DateTime? updatedAt;
 
@@ -17,6 +18,7 @@ class PatientRequestModel {
     this.primaryGoal,
     this.startDateForDiet,
     this.status,
+    this.membershipPlan,
     this.createdAt,
     this.updatedAt,
   });
@@ -29,6 +31,7 @@ class PatientRequestModel {
     primaryGoal = json['primaryGoal'];
     startDateForDiet = json['startDateForDiet'];
     status = json['status'];
+    membershipPlan = json['membershipPlan'];
     createdAt = DateTime.tryParse((json['createdAt'] ?? '').toString());
     updatedAt = DateTime.tryParse((json['updatedAt'] ?? '').toString());
   }

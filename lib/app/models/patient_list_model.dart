@@ -10,6 +10,8 @@ class OngoingPatientModel {
   double? adherencePercent;
   double? bmiValue;
   bool isActive;
+  String? status;
+  String? membershipPlan;
 
   OngoingPatientModel({
     this.patientId,
@@ -22,6 +24,8 @@ class OngoingPatientModel {
     this.adherencePercent,
     this.bmiValue,
     this.isActive = true,
+    this.status,
+    this.membershipPlan,
   });
 
   factory OngoingPatientModel.fromJson(Map<String, dynamic> json) {
@@ -36,6 +40,8 @@ class OngoingPatientModel {
       adherencePercent: (json['adherencePercent'] as num?)?.toDouble(),
       bmiValue: (json['bmiValue'] as num?)?.toDouble(),
       isActive: json['isActive'] != false,
+      status: json['status']?.toString(),
+      membershipPlan: json['membershipPlan']?.toString(),
     );
   }
 }
@@ -51,6 +57,7 @@ class NewPatientModel {
   double? tdee;
   String? statusCode;
   String? statusLabel;
+  String? membershipPlan;
 
   NewPatientModel({
     this.patientId,
@@ -62,6 +69,7 @@ class NewPatientModel {
     this.tdee,
     this.statusCode,
     this.statusLabel,
+    this.membershipPlan,
   });
 
   factory NewPatientModel.fromJson(Map<String, dynamic> json) {
@@ -75,6 +83,7 @@ class NewPatientModel {
       tdee: (json['tdee'] as num?)?.toDouble(),
       statusCode: json['statusCode']?.toString(),
       statusLabel: json['statusLabel']?.toString(),
+      membershipPlan: json['membershipPlan']?.toString(),
     );
   }
 }

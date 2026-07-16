@@ -15,13 +15,6 @@ class FoodCard extends StatelessWidget {
 
   final bool isSelected;
 
-  // Disables the checkbox (dimmed, non-tappable) without hiding the card -
-  // used for a supplement that's already selected via its own native slot
-  // (e.g. Night Drink): the Supplements tab still shows it as checked, but
-  // deselecting it can only happen from its native slot, so there's only
-  // ever one place that actually acts on it - see select_diet_sheet.dart.
-  final bool locked;
-
   // Unit label for the `grams` badge (e.g. "g", "ml", "piece") - shown
   // alongside the number so it's never a bare, ambiguous figure sitting
   // next to the calorie text.
@@ -52,10 +45,16 @@ class FoodCard extends StatelessWidget {
   final VoidCallback? onSecondaryIncrement;
   final VoidCallback? onSecondaryDecrement;
 
+  // Pre-formatted "name amount unit · x% NRV" labels (see
+  // SupplementNutrient.displayLabel) for a supplement recipe - when
+  // non-null and non-empty, these replace the calorie text and the
+  // Protein/Fiber/Carbs/Fat row below, since those macro numbers are
+  // meaningless (zeroed) for a vitamin/mineral tablet.
+  final List<String>? supplementNutrientLabels;
+
   const FoodCard({
     super.key,
     required this.isSelected,
-    this.locked = false,
     required this.name,
     required this.grams,
     required this.calorie,
@@ -76,7 +75,11 @@ class FoodCard extends StatelessWidget {
     this.secondaryCurrentServings,
     this.onSecondaryIncrement,
     this.onSecondaryDecrement,
+    this.supplementNutrientLabels,
   });
+
+  bool get _isSupplement =>
+      supplementNutrientLabels != null && supplementNutrientLabels!.isNotEmpty;
 
   // 15g ≈ 1 tbsp - the same approximation the source diet plans
   // themselves use ("rice (10 tbsp)" ≈ 150g rice).
@@ -208,14 +211,16 @@ class FoodCard extends StatelessWidget {
                             fontSize: 12,
                           ),
                         ),
-                        const SizedBox(width: 5),
-                        CustomText(
-                          text: "$calorie calorie",
+                        if (!_isSupplement) ...[
+                          const SizedBox(width: 5),
+                          CustomText(
+                            text: "$calorie calorie",
 
-                          fontWeight: FontWeight.w400,
-                          color: Color(0xff6C737F),
-                          fontSize: 12,
-                        ),
+                            fontWeight: FontWeight.w400,
+                            color: Color(0xff6C737F),
+                            fontSize: 12,
+                          ),
+                        ],
                       ],
                     ),
                     if (isSelected &&
@@ -298,20 +303,17 @@ class FoodCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   GestureDetector(
-                    onTap: locked ? null : onSelect,
-                    child: Opacity(
-                      opacity: locked ? 0.4 : 1,
-                      child: Icon(
-                        isSelected
-                            ? Icons.check_box
-                            : Icons.check_box_outline_blank,
-                        color: nextWeekTag != null
-                            ? Color(0xff6C737F)
-                            : isSelected
-                            ? Color(0xff851653)
-                            : Color(0xff49454F),
-                        size: 25,
-                      ),
+                    onTap: onSelect,
+                    child: Icon(
+                      isSelected
+                          ? Icons.check_box
+                          : Icons.check_box_outline_blank,
+                      color: nextWeekTag != null
+                          ? Color(0xff6C737F)
+                          : isSelected
+                          ? Color(0xff851653)
+                          : Color(0xff49454F),
+                      size: 25,
                     ),
                   ),
                   SizedBox(height: 6),
@@ -350,32 +352,62 @@ class FoodCard extends StatelessWidget {
           ),
           const SizedBox(height: 16),
 
-          // Reusable bottom indicators
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              FoodInfoIndicator(
-                value: "${protein}g",
-                label: "Protein",
-                icon: 'assets/icons/diet1.png',
+          // Reusable bottom indicators - a supplement shows its real
+          // active-ingredient facts (horizontally scrollable, since e.g. a
+          // multivitamin can list 20+ nutrients) instead of the macro
+          // pills, which are meaningless (zeroed) for it.
+          if (_isSupplement)
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  for (final label in supplementNutrientLabels!)
+                    Container(
+                      margin: const EdgeInsets.only(right: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xffFDF2FA),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: CustomText(
+                        text: label,
+                        fontWeight: FontWeight.w500,
+                        fontSize: 11,
+                        color: const Color(0xff851653),
+                      ),
+                    ),
+                ],
               ),
-              FoodInfoIndicator(
-                value: "${fiber}g",
-                label: "Fiber",
-                icon: 'assets/icons/diet2.png',
-              ),
-              FoodInfoIndicator(
-                value: "${carbs}g",
-                label: "Carbs",
-                icon: 'assets/icons/diet3.png',
-              ),
-              FoodInfoIndicator(
-                value: "${fat}g",
-                label: "Fat",
-                icon: 'assets/icons/diet4.png',
-              ),
-            ],
-          ),
+            )
+          else
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                FoodInfoIndicator(
+                  value: "${protein}g",
+                  label: "Protein",
+                  icon: 'assets/icons/diet1.png',
+                ),
+                FoodInfoIndicator(
+                  value: "${fiber}g",
+                  label: "Fiber",
+                  icon: 'assets/icons/diet2.png',
+                ),
+                FoodInfoIndicator(
+                  value: "${carbs}g",
+                  label: "Carbs",
+                  icon: 'assets/icons/diet3.png',
+                ),
+                FoodInfoIndicator(
+                  value: "${fat}g",
+                  label: "Fat",
+                  icon: 'assets/icons/diet4.png',
+                ),
+              ],
+            ),
         ],
       ),
     );

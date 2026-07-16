@@ -103,8 +103,9 @@ class _OngoingWidgetState extends State<OngoingWidget> {
                     progressFromKg: patient.progressFromKg,
                     progressToKg: patient.progressToKg,
                     adherencePercent: patient.adherencePercent,
-                    bmiValue: patient.bmiValue,
                     isActive: patient.isActive,
+                    status: patient.status,
+                    membershipPlan: patient.membershipPlan,
                   );
                 },
               ),

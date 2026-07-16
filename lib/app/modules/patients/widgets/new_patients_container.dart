@@ -12,6 +12,7 @@ class NewPatientsContainer extends StatelessWidget {
   final double? bmr;
   final double? tdee;
   final String? statusLabel;
+  final String? membershipPlan;
 
   const NewPatientsContainer({
     super.key,
@@ -23,6 +24,7 @@ class NewPatientsContainer extends StatelessWidget {
     this.bmr,
     this.tdee,
     this.statusLabel,
+    this.membershipPlan,
   });
 
   @override
@@ -149,6 +151,29 @@ class NewPatientsContainer extends StatelessWidget {
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
+                                if (membershipPlan != null &&
+                                    membershipPlan!.isNotEmpty) ...[
+                                  SizedBox(width: 5),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 5,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xffF3F4F6),
+                                      borderRadius: BorderRadius.circular(11),
+                                      border: Border.all(
+                                        color: const Color(0xffD1D5DB),
+                                      ),
+                                    ),
+                                    child: CustomText(
+                                      text: membershipPlan!,
+                                      color: const Color(0xff4D5761),
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
                               ],
                             ),
                           ),

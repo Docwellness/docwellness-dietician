@@ -1,3 +1,6 @@
+import 'package:docwellnesdoc/app/models/ai_diet_plain_model.dart'
+    show SupplementFacts;
+
 class DietPlanWeekData {
   final String dietPlanId;
   final int week;
@@ -15,6 +18,12 @@ class DietPlanWeekData {
   // aware sabji/side/salad default quantities and stepper clamps. Defaults
   // to 'gain' (the less-restrictive behavior) if ever missing.
   final String weightTrend;
+  // True when this week's options were built from finalizedPlan (real,
+  // dietician-set servings) rather than the AI's raw generatedPlan draft
+  // (which has no `servings` field at all - see dietPlanJsonSchema.js).
+  // Needed to tell a genuine explicit "1" apart from the "not yet set"
+  // placeholder default - see isUnexplicitDefault in patients_controller.dart.
+  final bool isFinalized;
 
   DietPlanWeekData({
     required this.dietPlanId,
@@ -24,6 +33,7 @@ class DietPlanWeekData {
     this.riskFlags = const [],
     this.validationWarnings = const [],
     this.weightTrend = 'gain',
+    this.isFinalized = false,
   });
 
   factory DietPlanWeekData.fromJson(Map<String, dynamic> json) {
@@ -43,6 +53,7 @@ class DietPlanWeekData {
               .toList() ??
           const [],
       weightTrend: json['weightTrend'] ?? 'gain',
+      isFinalized: json['isFinalized'] == true,
     );
   }
 }
@@ -142,6 +153,9 @@ class RecipeModel {
   // The persisted quantity for secondaryComponent - same "only meaningful
   // when isSelected" semantics as servings.
   final num secondaryServings;
+  // Real active-ingredient facts for a supplement - see SupplementFacts in
+  // ai_diet_plain_model.dart (same shape); null for ordinary food recipes.
+  final SupplementFacts? supplementFacts;
 
   RecipeModel({
     required this.id,
@@ -156,6 +170,7 @@ class RecipeModel {
     this.tags = const [],
     this.secondaryComponent,
     this.secondaryServings = 1,
+    this.supplementFacts,
   });
 
   factory RecipeModel.fromJson(Map<String, dynamic> json) {
@@ -176,6 +191,9 @@ class RecipeModel {
           ? SecondaryComponentModel.fromJson(json['secondaryComponent'])
           : null,
       secondaryServings: (json['secondaryServings'] as num?) ?? 1,
+      supplementFacts: json['supplementFacts'] != null
+          ? SupplementFacts.fromJson(json['supplementFacts'])
+          : null,
     );
   }
 }

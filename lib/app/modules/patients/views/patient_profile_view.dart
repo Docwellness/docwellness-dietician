@@ -45,6 +45,7 @@ class _PatientProfileViewState extends State<PatientProfileView> {
     // patient's profile would otherwise carry over when navigating to
     // another.
     controller.showFirstConsultationiInfo.value = false;
+    controller.showPaymentInfo.value = false;
     controller.getPatientProfile(widget.patientId);
     controller.fetchTrackingData(widget.patientId, 'week');
     controller.fetchJourneyImages(widget.patientId);
@@ -136,7 +137,8 @@ class _PatientProfileViewState extends State<PatientProfileView> {
           Obx(() {
             final status = controller.patientProfileModel.value?.status;
             final isOngoing =
-                status?.requestStatus == 'Paid' &&
+                (status?.requestStatus == 'Paid' ||
+                    status?.requestStatus == 'PartiallyPaid') &&
                 status?.activeDietPlanId != null;
             if (!isOngoing) return const SizedBox.shrink();
             return IconButton(
@@ -901,6 +903,84 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                         ),
                       ),
                     ],
+                    // Payment Information option - only once a payment
+                    // request has actually gone out (requestStatus moves
+                    // off 'Unpaid'/null the moment sendPaymentRequest or the
+                    // Week 1 auto-send fires). Mirrors the First
+                    // Consultation information accordion immediately above
+                    // it, so the two informational sections in this card
+                    // read consistently.
+                    if (_paymentInfoVisible(status)) ...[
+                      Divider(color: Color(0xffFAA7E0)),
+                      Obx(
+                        () => InkWell(
+                          onTap: () => controller.showPaymentInfo.value =
+                              !controller.showPaymentInfo.value,
+                          borderRadius: BorderRadius.circular(8),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 34,
+                                  height: 34,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xffFCE7F6),
+                                    borderRadius: BorderRadius.circular(9),
+                                  ),
+                                  child: const Icon(
+                                    Icons.payments_outlined,
+                                    color: Color(0xff851653),
+                                    size: 18,
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: CustomText(
+                                    text: 'Payment Information',
+                                    fontWeight: FontWeight.w500,
+                                    fontSize: 17,
+                                    color: Color(0xff530630),
+                                  ),
+                                ),
+                                _paymentStatusChip(
+                                  _resolvedPaymentState(status),
+                                ),
+                                const SizedBox(width: 8),
+                                AnimatedRotation(
+                                  turns: controller.showPaymentInfo.value
+                                      ? 0.5
+                                      : 0,
+                                  duration: const Duration(milliseconds: 280),
+                                  child: const Icon(
+                                    Icons.keyboard_arrow_down_rounded,
+                                    color: Color(0xff530630),
+                                    size: 24,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      Obx(
+                        () => Visibility(
+                          visible: controller.showPaymentInfo.value,
+                          child: Padding(
+                            padding: const EdgeInsets.only(
+                              left: 16,
+                              top: 4,
+                              right: 16,
+                              bottom: 20,
+                            ),
+                            child: _paymentInfoBody(status),
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ), // Column
               ), // ClipRRect
@@ -1019,6 +1099,13 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                         .where((w) => (w.totalCalories ?? 0) > 0)
                         .map((w) => w.week!)
                         .toSet();
+                    // The week the patient is actually living through right
+                    // now is the latest *finalized* one - not whichever week
+                    // happens to be eligible/pre-generated, which may well
+                    // be a future week the dietician got a head start on.
+                    final latestFinalizedWeek = finalizedWeeks.isEmpty
+                        ? 0
+                        : finalizedWeeks.reduce((a, b) => a > b ? a : b);
                     final cardState = _weekCardState(
                       weekNum,
                       tier,
@@ -1083,10 +1170,16 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                     }
 
                     // ── FILLED CARD ────────────────────────────────────
+                    // Same centered icon-badge template every other week
+                    // card (eligible/generated/locked, below) uses - a
+                    // finalized week is just that same template with a food
+                    // icon (it has real content, not a "+") and its actual
+                    // Cal/day in primary color standing in for the generic
+                    // "Generate plan"/"Pick meals" subtitle.
                     if (isFinalized) {
                       final colors = controller.getColor(
                         weekNum,
-                        controller.getCurrentWeek(),
+                        latestFinalizedWeek,
                       );
                       return Padding(
                         padding: const EdgeInsets.only(right: 12),
@@ -1101,45 +1194,46 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                           child: Container(
                             width: 120,
                             height: 130,
-                            padding: const EdgeInsets.only(top: 16, left: 14),
                             decoration: BoxDecoration(
                               color: colors['bg'],
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: colors['border']!),
+                              border: Border.all(
+                                color: colors['border']!,
+                                width: 1.5,
+                              ),
                             ),
                             child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                CustomText(
-                                  text: data!.totalCalories.toString(),
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 16,
-                                  color: const Color(0xff1F2A37),
-                                ),
-                                const CustomText(
-                                  text: 'Cal / day',
-                                  fontWeight: FontWeight.w400,
-                                  fontSize: 12,
-                                  color: Color(0xff6C737F),
+                                Container(
+                                  width: 36,
+                                  height: 36,
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xffFCE7F6),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.restaurant_menu,
+                                    color: Color(0xff851653),
+                                    size: 22,
+                                  ),
                                 ),
                                 const SizedBox(height: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xffFDF2FA),
-                                    border: Border.all(
-                                      color: const Color(0xffFCE7F6),
-                                    ),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: CustomText(
-                                    text: 'Week $weekNum ✓',
+                                Text(
+                                  'Week $weekNum',
+                                  style: TextStyle(
+                                    fontSize: 12,
                                     fontWeight: FontWeight.w600,
-                                    fontSize: 11,
-                                    color: const Color(0xffEF45B2),
+                                    color: colors['text'],
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  '${data!.totalCalories} Cal/day',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                    color: colors['text'],
                                   ),
                                 ),
                               ],
@@ -1158,6 +1252,12 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                     // - opens the new generate flow scoped to this week
                     // (or, for Golden's weeks 3-4, both together).
                     final isEligible = cardState == _WeekCardState.eligible;
+                    // Nothing here is finalized yet - whether it's eligible
+                    // to generate now or already has a draft picked, the
+                    // patient hasn't started this week, so it always reads
+                    // as "future" (pink, no border) until it's finalized and
+                    // takes over the "active" slot above.
+                    final colors = controller.getColor(weekNum, 0);
                     return Padding(
                       padding: const EdgeInsets.only(right: 12),
                       child: GestureDetector(
@@ -1174,12 +1274,11 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                           width: 120,
                           height: 130,
                           decoration: BoxDecoration(
-                            color: const Color(0xffFAFAFB),
+                            color: colors['bg'],
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                              color: const Color(0xffFAA7E0),
+                              color: colors['border']!,
                               width: 1.5,
-                              // dashed look via custom paint is complex; border color conveys the idea
                             ),
                           ),
                           child: Column(
@@ -1203,18 +1302,18 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                               const SizedBox(height: 8),
                               Text(
                                 'Week $weekNum',
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
-                                  color: Color(0xff851653),
+                                  color: colors['text'],
                                 ),
                               ),
                               const SizedBox(height: 2),
                               Text(
                                 isEligible ? 'Generate plan' : 'Pick meals',
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 10,
-                                  color: Color(0xff9DA4AE),
+                                  color: colors['text'],
                                 ),
                               ),
                             ],
@@ -1227,8 +1326,11 @@ class _PatientProfileViewState extends State<PatientProfileView> {
               ),
             ),
 
-          // Send Payment Request button — shown when diet plan exists but payment not yet requested
-          if (status.requestStatus == 'Unpaid' &&
+          // Send Payment Request button — shown when diet plan exists but
+          // payment not yet requested, or when the patient was activated
+          // with an outstanding balance still owed (PartiallyPaid).
+          if ((status.requestStatus == 'Unpaid' ||
+                  status.requestStatus == 'PartiallyPaid') &&
               status.activeDietPlanId != null &&
               controller.hasFinalizedWeeks)
             Padding(
@@ -1250,7 +1352,9 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                   );
                   await controller.getPatientProfile(widget.patientId);
                 },
-                text: 'Send Payment Request',
+                text: status.requestStatus == 'PartiallyPaid'
+                    ? 'Send Payment Request (Balance Due)'
+                    : 'Send Payment Request',
                 isOutline: false,
                 fontSize: 14,
               ),
@@ -1286,6 +1390,8 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                                   scrollController: scrollController,
                                   patientId: widget.patientId,
                                   dietPlanId: status.activeDietPlanId ?? '',
+                                  isRenewal:
+                                      status.activeDietPlanStatus == 'Active',
                                 );
                               },
                             );
@@ -2693,6 +2799,258 @@ class _PatientProfileViewState extends State<PatientProfileView> {
     final v = value ?? 0;
     if (v % 1 == 0) return v.toStringAsFixed(0);
     return v.toStringAsFixed(2);
+  }
+
+  // Only surface Payment Information once a request has actually gone out -
+  // 'Unpaid'/null means the dietician hasn't sent one yet, so there's
+  // nothing to report on.
+  bool _paymentInfoVisible(Status status) {
+    final s = status.requestStatus;
+    return s != null && s != 'Unpaid';
+  }
+
+  // Ground truth for "fully paid" vs. "partially paid" is the actual
+  // received/pending amounts, not just the resting requestStatus label -
+  // that label is set once at activation time and can go stale if amounts
+  // are corrected afterward, while amountPending is always the current
+  // truth. Only falls back to the raw requestStatus for the two in-flight
+  // states (request sent / proof submitted) where "paid" isn't decided yet.
+  String _resolvedPaymentState(Status status) {
+    final requestStatus = status.requestStatus;
+    if (requestStatus == 'PaymentRequested' ||
+        requestStatus == 'PaymentSubmitted') {
+      return requestStatus!;
+    }
+    final summary = status.paymentSummary;
+    if (summary != null) {
+      return (summary.amountPending ?? 0) > 0 ? 'PartiallyPaid' : 'Paid';
+    }
+    return requestStatus ?? 'Unpaid';
+  }
+
+  // Same semantic palette as the dashboard's patient-request badge
+  // (patient_request_container.dart) - kept identical so "Fully Paid" /
+  // "Partially Paid" / etc. mean the same color everywhere in the app.
+  Widget _paymentStatusChip(String? status) {
+    late final String label;
+    late final Color bg;
+    late final Color border;
+    late final Color text;
+    switch (status) {
+      case 'Paid':
+        label = 'FULLY PAID';
+        bg = const Color(0xffD1FAE5);
+        border = const Color(0xff10B981);
+        text = const Color(0xff059669);
+        break;
+      case 'PartiallyPaid':
+        label = 'PARTIALLY PAID';
+        bg = const Color(0xffFFEDD5);
+        border = const Color(0xffFB923C);
+        text = const Color(0xffC2410C);
+        break;
+      case 'PaymentSubmitted':
+        label = 'UNDER REVIEW';
+        bg = const Color(0xffFEF3C7);
+        border = const Color(0xffF59E0B);
+        text = const Color(0xffD97706);
+        break;
+      case 'PaymentRequested':
+      default:
+        label = 'AWAITING PAYMENT';
+        bg = const Color(0xffFDF2FA);
+        border = const Color(0xffFCE7F6);
+        text = const Color(0xffEF45B2);
+        break;
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: border, width: 1.2),
+      ),
+      child: CustomText(
+        text: label,
+        fontWeight: FontWeight.w600,
+        fontSize: 10.5,
+        color: text,
+      ),
+    );
+  }
+
+  Widget _paymentInfoRow(
+    String label,
+    String value, {
+    Color? valueColor,
+    bool isBold = false,
+  }) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        CustomText(
+          text: label,
+          fontWeight: FontWeight.w400,
+          fontSize: 13,
+          color: Color(0xff6C737F),
+        ),
+        CustomText(
+          text: value,
+          fontWeight: isBold ? FontWeight.w700 : FontWeight.w500,
+          fontSize: 13,
+          color: valueColor ?? Color(0xff1F2A37),
+        ),
+      ],
+    );
+  }
+
+  // Decides Fully Paid vs. Partially Paid (and the two earlier workflow
+  // states) purely from requestStatus/paymentSummary already on Status -
+  // both are already resolved server-side (see backend activateDietPlan),
+  // so this is just presentation, not a new decision.
+  Widget _paymentInfoBody(Status status) {
+    final summary = status.paymentSummary;
+    final rows = <Widget>[];
+
+    if (status.membershipPlan != null && status.membershipPlan!.isNotEmpty) {
+      rows.add(_paymentInfoRow('Plan', status.membershipPlan!));
+    }
+
+    if (summary != null) {
+      if ((summary.originalAmount ?? 0) > 0) {
+        rows.add(
+          _paymentInfoRow(
+            'Subscription Amount',
+            '₹${_money(summary.originalAmount)}',
+          ),
+        );
+      }
+      if (summary.couponCode != null && summary.couponCode!.isNotEmpty) {
+        rows.add(
+          _paymentInfoRow(
+            'Coupon Applied',
+            summary.couponCode!,
+            valueColor: const Color(0xff851653),
+            isBold: true,
+          ),
+        );
+      }
+      if ((summary.discountPercentage ?? 0) > 0) {
+        rows.add(
+          _paymentInfoRow(
+            'Discount (${summary.discountPercentage!.toInt()}%)',
+            '-₹${_money((summary.originalAmount ?? 0) * summary.discountPercentage! / 100)}',
+            valueColor: const Color(0xff16A34A),
+          ),
+        );
+      }
+      rows.add(
+        _paymentInfoRow(
+          'Amount Received',
+          '₹${_money(summary.amountReceived)}',
+          valueColor: const Color(0xff059669),
+        ),
+      );
+      if ((summary.amountPending ?? 0) > 0) {
+        rows.add(
+          _paymentInfoRow(
+            'Amount Pending',
+            '₹${_money(summary.amountPending)}',
+            valueColor: const Color(0xffC2410C),
+          ),
+        );
+        if (summary.pendingPaymentDate != null) {
+          rows.add(
+            _paymentInfoRow(
+              'Promised By',
+              DateFormat('dd MMM yyyy').format(summary.pendingPaymentDate!),
+              valueColor: const Color(0xffC2410C),
+              isBold: true,
+            ),
+          );
+        }
+      }
+      if ((summary.totalAmount ?? 0) > 0) {
+        rows.add(
+          _paymentInfoRow(
+            'Total Amount',
+            '₹${_money(summary.totalAmount)}',
+            isBold: true,
+          ),
+        );
+      }
+      if (summary.balanceClearedAt != null) {
+        rows.add(
+          _paymentInfoRow(
+            'Balance Paid On',
+            DateFormat('dd MMM yyyy').format(summary.balanceClearedAt!),
+            valueColor: const Color(0xff059669),
+            isBold: true,
+          ),
+        );
+      }
+    }
+
+    String note;
+    switch (_resolvedPaymentState(status)) {
+      case 'PaymentRequested':
+        note =
+            'Payment request sent. Waiting for the patient to submit proof of payment.';
+        break;
+      case 'PaymentSubmitted':
+        note =
+            'The patient submitted a payment update - review it below to confirm or activate.';
+        break;
+      case 'PartiallyPaid':
+        note = 'Plan activated with an outstanding balance still owed.';
+        break;
+      case 'Paid':
+        note = 'Payment received in full.';
+        break;
+      default:
+        note = '';
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xffFEF6FB),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xffFDF2FA)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (rows.isEmpty)
+            CustomText(
+              text: note,
+              fontWeight: FontWeight.w400,
+              fontSize: 13,
+              color: Color(0xff6C737F),
+              height: 1.4,
+            )
+          else ...[
+            for (int i = 0; i < rows.length; i++) ...[
+              if (i > 0) const SizedBox(height: 8),
+              rows[i],
+            ],
+            if (note.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Divider(color: Color(0xffFCCEEF), height: 1),
+              const SizedBox(height: 10),
+              CustomText(
+                text: note,
+                fontWeight: FontWeight.w400,
+                fontSize: 12.5,
+                color: Color(0xff6C737F),
+                height: 1.4,
+              ),
+            ],
+          ],
+        ],
+      ),
+    );
   }
 
   Widget _buildSubscriptionBanner(Status status) {

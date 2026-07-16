@@ -11,6 +11,7 @@ abstract class Routes {
   static const PERFORMANCE = _Paths.PERFORMANCE;
   static const NOTIFICATIONS = _Paths.NOTIFICATIONS;
   static const PATIENT_PROFILE = _Paths.PATIENT_PROFILE;
+  static const SELECT_DIET_SHEET = _Paths.SELECT_DIET_SHEET;
 }
 
 abstract class _Paths {
@@ -23,4 +24,6 @@ abstract class _Paths {
   static const PERFORMANCE = '/performance';
   static const NOTIFICATIONS = '/notifications';
   static const PATIENT_PROFILE = '/patient-profile/:patientId';
+  static const SELECT_DIET_SHEET =
+      '/select-diet-sheet/:patientId/:dietPlanId/:week';
 }

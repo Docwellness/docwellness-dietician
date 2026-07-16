@@ -11,11 +11,15 @@ class PaymentStatusSheet extends StatelessWidget {
   final ScrollController scrollController;
   final String patientId;
   final String dietPlanId;
+  // True when dietPlanId already points at an Active plan (a renewal
+  // payment) rather than one still awaiting first activation.
+  final bool isRenewal;
   PaymentStatusSheet({
     super.key,
     required this.scrollController,
     required this.patientId,
     required this.dietPlanId,
+    this.isRenewal = false,
   }) {
     debugPrint('🔍 PaymentStatusSheet initialized with:');
     debugPrint('   patientId: $patientId');
@@ -446,24 +450,43 @@ class PaymentStatusSheet extends StatelessWidget {
                     )
                   : Column(
                       children: [
-                        // Accept & Activate button
-                        Obx(
-                          () => CustomButton(
-                            isLoading: controller.activateDietPlanLoading.value,
-                            onTap: () async {
-                              debugPrint('🔘 Accept button tapped!');
-                              debugPrint('   patientId: $patientId');
-                              debugPrint('   dietPlanId: $dietPlanId');
-                              await controller.activateDietPlan(
-                                patientId,
-                                dietPlanId,
-                              );
-                            },
-                            text: 'Confirm & Activate Diet Plan',
-                            fontSize: 14,
-                            isOutline: false,
+                        // Renewal: the plan is already active and doesn't
+                        // need to change, so just settle the bill. First
+                        // activation: the plan is only Finalized so far and
+                        // needs the full activate flow to go Active.
+                        if (isRenewal)
+                          Obx(
+                            () => CustomButton(
+                              isLoading:
+                                  controller.confirmRenewalPaymentLoading.value,
+                              onTap: () async {
+                                await controller.confirmRenewalPayment(
+                                  patientId,
+                                );
+                              },
+                              text: 'Confirm Payment',
+                              fontSize: 14,
+                              isOutline: false,
+                            ),
+                          )
+                        else
+                          Obx(
+                            () => CustomButton(
+                              isLoading: controller.activateDietPlanLoading.value,
+                              onTap: () async {
+                                debugPrint('🔘 Accept button tapped!');
+                                debugPrint('   patientId: $patientId');
+                                debugPrint('   dietPlanId: $dietPlanId');
+                                await controller.activateDietPlan(
+                                  patientId,
+                                  dietPlanId,
+                                );
+                              },
+                              text: 'Confirm & Activate Diet Plan',
+                              fontSize: 14,
+                              isOutline: false,
+                            ),
                           ),
-                        ),
                         // SizedBox(height: 12),
                         // // Reject button
                         // Obx(

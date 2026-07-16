@@ -1,3 +1,6 @@
+import 'package:docwellnesdoc/app/models/ai_diet_plain_model.dart'
+    show SupplementFacts;
+
 /// Recipe model for AI-generated recipe preview response
 class RecipePreview {
   final String? id;
@@ -19,6 +22,10 @@ class RecipePreview {
   final List<String> warnings;
   final List<String> languages;
   final Map<String, RecipeTranslation> translations;
+  // Real active-ingredient facts for a category:'Supplements' recipe - see
+  // SupplementFacts (shared with the diet-plan selection flow). Null for
+  // every ordinary food recipe.
+  final SupplementFacts? supplementFacts;
 
   RecipePreview({
     this.id,
@@ -40,6 +47,7 @@ class RecipePreview {
     required this.warnings,
     this.languages = const ['English'],
     this.translations = const {},
+    this.supplementFacts,
   });
 
   factory RecipePreview.fromJson(Map<String, dynamic> json) {
@@ -92,6 +100,9 @@ class RecipePreview {
       warnings: List<String>.from(json['warnings'] ?? []),
       languages: parsedLanguages,
       translations: parsedTranslations,
+      supplementFacts: json['supplementFacts'] != null
+          ? SupplementFacts.fromJson(json['supplementFacts'])
+          : null,
     );
   }
 
@@ -119,6 +130,7 @@ class RecipePreview {
       warnings: warnings,
       languages: languages,
       translations: translations,
+      supplementFacts: supplementFacts,
     );
   }
 
@@ -145,6 +157,7 @@ class RecipePreview {
       'translations': translations.map(
         (key, value) => MapEntry(key, value.toJson()),
       ),
+      if (supplementFacts != null) 'supplementFacts': supplementFacts!.toJson(),
     };
   }
 }

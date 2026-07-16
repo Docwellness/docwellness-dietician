@@ -11,6 +11,7 @@ import '../modules/notifications/views/notification_view.dart';
 import '../modules/patients/bindings/patients_binding.dart';
 import '../modules/patients/views/patient_profile_view.dart';
 import '../modules/patients/views/patients_view.dart';
+import '../modules/patients/views/select_diet_sheet.dart';
 import '../modules/performance/bindings/performance_binding.dart';
 import '../modules/performance/views/performance_view.dart';
 import '../modules/receipes/bindings/receipes_binding.dart';
@@ -67,6 +68,18 @@ class AppPages {
       // crashing with no way to recover which patient was being viewed.
       page: () =>
           PatientProfileView(patientId: Get.parameters['patientId'] ?? ''),
+    ),
+    GetPage(
+      name: _Paths.SELECT_DIET_SHEET,
+      // Same reasoning as PATIENT_PROFILE above: patientId/dietPlanId/week
+      // used to only live as constructor args on an anonymous Get.to() push,
+      // so a browser refresh here had no way to reconstruct them (or even
+      // find a previously-registered PatientsController) and crashed instead.
+      page: () => SelectDietSheet(
+        patientId: Get.parameters['patientId'] ?? '',
+        dietPlanId: Get.parameters['dietPlanId'] ?? '',
+        week: int.tryParse(Get.parameters['week'] ?? '') ?? 1,
+      ),
     ),
   ];
 }

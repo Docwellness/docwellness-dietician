@@ -151,6 +151,11 @@ class Recipe {
   final String secondaryLabel;
   final num secondaryBaseQuantity;
   final String secondaryUnit;
+  // Real active-ingredient facts for a supplement (see SupplementFacts) -
+  // null for every ordinary food recipe. When present, the dietician app
+  // shows these instead of the (zeroed, meaningless) calorie/protein/
+  // fiber/carbs/fat numbers - see FoodCard.supplementNutrientLabels.
+  final SupplementFacts? supplementFacts;
 
   Recipe({
     required this.id,
@@ -166,6 +171,7 @@ class Recipe {
     this.secondaryLabel = '',
     this.secondaryBaseQuantity = 1,
     this.secondaryUnit = '',
+    this.supplementFacts,
   });
 
   factory Recipe.fromJson(Map<String, dynamic> json) {
@@ -186,6 +192,9 @@ class Recipe {
       secondaryLabel: secondary?["label"] ?? '',
       secondaryBaseQuantity: (secondary?["quantity"] as num?) ?? 1,
       secondaryUnit: secondary?["unit"] ?? '',
+      supplementFacts: json["supplementFacts"] != null
+          ? SupplementFacts.fromJson(json["supplementFacts"])
+          : null,
     );
   }
 
@@ -206,6 +215,7 @@ class Recipe {
         "quantity": secondaryBaseQuantity,
         "unit": secondaryUnit,
       },
+    if (supplementFacts != null) "supplementFacts": supplementFacts!.toJson(),
   };
 
   bool get hasSecondaryComponent => secondaryLabel.isNotEmpty;
@@ -228,6 +238,7 @@ class Recipe {
     secondaryLabel: secondaryLabel,
     secondaryBaseQuantity: secondaryBaseQuantity,
     secondaryUnit: secondaryUnit,
+    supplementFacts: supplementFacts,
   );
 
   // Identity by id + servingTime + dayGroup - callers (e.g.
@@ -295,4 +306,100 @@ class Nutrition {
     "fats": fats,
     "fiber": fiber,
   };
+}
+
+// ---------------------------
+// SupplementFacts
+// ---------------------------
+/// Real per-serving active-ingredient facts for a supplement recipe (see
+/// models/Recipe.js's `supplementFacts`) - a vitamin/mineral tablet's
+/// meaningful numbers are its ingredient amounts and %NRV, not
+/// calories/protein/carbs/fats.
+class SupplementFacts {
+  final String brand;
+  final num servingQuantity;
+  final String servingUnit;
+  final String servingLabel;
+  final num? servingsPerContainer;
+  final List<SupplementNutrient> nutrients;
+
+  SupplementFacts({
+    required this.brand,
+    required this.servingQuantity,
+    required this.servingUnit,
+    required this.servingLabel,
+    required this.servingsPerContainer,
+    required this.nutrients,
+  });
+
+  factory SupplementFacts.fromJson(Map<String, dynamic> json) {
+    final servingSize = json["servingSize"] as Map<String, dynamic>?;
+    return SupplementFacts(
+      brand: json["brand"] ?? '',
+      servingQuantity: (servingSize?["quantity"] as num?) ?? 1,
+      servingUnit: servingSize?["unit"] ?? '',
+      servingLabel: servingSize?["label"] ?? '',
+      servingsPerContainer: json["servingsPerContainer"] as num?,
+      nutrients:
+          (json["nutrients"] as List?)
+              ?.map((e) => SupplementNutrient.fromJson(e))
+              .toList() ??
+          const [],
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    "brand": brand,
+    "servingSize": {
+      "quantity": servingQuantity,
+      "unit": servingUnit,
+      "label": servingLabel,
+    },
+    "servingsPerContainer": servingsPerContainer,
+    "nutrients": nutrients.map((n) => n.toJson()).toList(),
+  };
+}
+
+class SupplementNutrient {
+  final String name;
+  final num amount;
+  final String unit;
+  final num? percentNRV;
+
+  SupplementNutrient({
+    required this.name,
+    required this.amount,
+    required this.unit,
+    required this.percentNRV,
+  });
+
+  factory SupplementNutrient.fromJson(Map<String, dynamic> json) {
+    return SupplementNutrient(
+      name: json["name"] ?? '',
+      amount: (json["amount"] as num?) ?? 0,
+      unit: json["unit"] ?? '',
+      percentNRV: json["percentNRV"] as num?,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    "name": name,
+    "amount": amount,
+    "unit": unit,
+    "percentNRV": percentNRV,
+  };
+
+  /// e.g. "Zinc 15mg · 150% NRV", or "Lutein 1500µg" when the label has no
+  /// %NRV for this nutrient.
+  String get displayLabel {
+    final amountLabel = amount == amount.roundToDouble()
+        ? amount.toInt().toString()
+        : amount.toString();
+    final base = '$name $amountLabel$unit';
+    if (percentNRV == null) return base;
+    final nrvLabel = percentNRV == percentNRV!.roundToDouble()
+        ? percentNRV!.toInt().toString()
+        : percentNRV.toString();
+    return '$base · $nrvLabel% NRV';
+  }
 }

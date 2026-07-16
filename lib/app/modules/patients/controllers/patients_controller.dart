@@ -54,6 +54,7 @@ class PatientsController extends GetxController {
   RxBool showWeekDietSendingLoading = false.obs;
 
   RxBool showFirstConsultationiInfo = false.obs;
+  RxBool showPaymentInfo = false.obs;
   RxBool isPaymentRequestSending = false.obs;
   RxBool showSelectedDeitLoading = false.obs;
   RxBool updatingWeekItem = false.obs;
@@ -61,6 +62,7 @@ class PatientsController extends GetxController {
   RxBool generateDietPlanLoading = false.obs;
   RxBool activateDietPlanLoading = false.obs;
   RxBool rejectPaymentLoading = false.obs;
+  RxBool confirmRenewalPaymentLoading = false.obs;
   RxBool isProofLoading = false.obs;
   RxBool showGenerateDietPlanSheet = false.obs;
   RxBool showGeneratedDietPlanLoading = false.obs;
@@ -81,6 +83,7 @@ class PatientsController extends GetxController {
   RxDouble totalProtein = 0.0.obs;
   RxDouble totalFat = 0.0.obs;
   RxDouble totalCarbs = 0.0.obs;
+  RxDouble totalFiber = 0.0.obs;
 
   RxList<Recipe> selectedRecipes = <Recipe>[].obs;
 
@@ -262,27 +265,30 @@ class PatientsController extends GetxController {
     return weeklyDietPlans.where((w) => (w.totalCalories ?? 0) == 0).length;
   }
 
-  int getCurrentWeek() {
-    final now = DateTime.now();
-    return ((now.day - 1) / 7).floor() + 1;
-  }
-
   Map<String, Color> getColor(int backendWeek, int currentWeek) {
     Color containerColor;
     Color containerBorderColor;
+    Color textColor;
 
     if (backendWeek < currentWeek) {
-      containerColor = const Color(0xffFCFCFD);
-      containerBorderColor = const Color(0xff9DA4AE);
+      // Past week - neutral/completed, no longer needs attention.
+      containerColor = const Color(0xffF9FAFB);
+      containerBorderColor = const Color(0xffE5E7EB);
+      textColor = const Color(0xff6C737F);
     } else if (backendWeek == currentWeek) {
-      containerColor = const Color(0xffFEF6FB);
-      containerBorderColor = const Color(0xff9F1561);
+      // Active week - white card with a bold brand-color border so it
+      // stands out as "this is the one happening right now".
+      containerColor = const Color(0xffFFFFFF);
+      containerBorderColor = const Color(0xff851653);
+      textColor = const Color(0xff851653);
     } else {
-      containerColor = const Color(0xffFEF6FB);
-      containerBorderColor = const Color(0xffFEF6FB);
+      // Future week - soft pink, no border, reads as "coming up".
+      containerColor = const Color(0xffFDF2FA);
+      containerBorderColor = const Color(0xffFDF2FA);
+      textColor = const Color(0xffEF45B2);
     }
 
-    return {"bg": containerColor, "border": containerBorderColor};
+    return {"bg": containerColor, "border": containerBorderColor, "text": textColor};
   }
 
   RxList<DietOption> allergiesOrIntolerances = <DietOption>[
@@ -1456,12 +1462,19 @@ class PatientsController extends GetxController {
           // default instead. Piece-based items need this too now: a
           // weight-loss default is 1/4, not 1, so "1" can no longer be
           // trusted as the piece baseline the way it was before this phase.
-          final isUnexplicitDefault = r.servings == 1;
+          // Only applies to a not-yet-finalized week though - once
+          // data.isFinalized is true, `servings` came from the dietician's
+          // actual finalizeWeekPlan save (see getDraftWeekOptions' finalized-
+          // Plan preference), so an explicit "1" must be trusted as-is or
+          // "Update Diet Plan" would silently reset it back to the trend
+          // default on every re-open.
+          final isUnexplicitDefault = r.servings == 1 && !data.isFinalized;
           selectedServings[servingsKey(recipe)] = isUnexplicitDefault
               ? _defaultServingsForTrend(recipe)
               : r.servings;
           if (recipe.hasSecondaryComponent) {
-            final isUnexplicitSecondaryDefault = r.secondaryServings == 1;
+            final isUnexplicitSecondaryDefault =
+                r.secondaryServings == 1 && !data.isFinalized;
             selectedSecondaryServings[servingsKey(
               recipe,
             )] = isUnexplicitSecondaryDefault
@@ -1625,6 +1638,7 @@ class PatientsController extends GetxController {
       secondaryLabel: m.secondaryComponent?.label ?? '',
       secondaryBaseQuantity: m.secondaryComponent?.quantity ?? 1,
       secondaryUnit: m.secondaryComponent?.unit ?? '',
+      supplementFacts: m.supplementFacts,
     );
   }
 
@@ -1890,42 +1904,159 @@ class PatientsController extends GetxController {
     return (_servingsRatio(r) + _secondaryServingsRatio(r)) / 2;
   }
 
-  // CALCULATE TOTAL NUTRITION
-  void calculateTotalsForWeek(int weekNumber) {
-    // weekSelectedRecipes holds every day-group's selections mixed
-    // together (see _applyDraftOptionsForWeek) - "Total Budget" is scoped
-    // to whichever day-group is currently active, otherwise it would sum
-    // all 4 groups' calories at once.
-    final selectedRecipesForWeek = (weekSelectedRecipes[weekNumber] ?? [])
-        .where((r) => r.dayGroup == selectedDayGroup.value)
-        .toList();
+  // Monday's meals repeat on Friday, Tuesday's on Saturday, Wednesday's on
+  // Sunday - Thursday is unique (see backend utils/dayGroups.js). Shared by
+  // both calculateTotalsForWeek ("Total Budget" live preview) and
+  // buildFinalizeWeekPayload (what's actually submitted/stored) so the
+  // dietician always sees, while editing, exactly the numbers that end up
+  // saved and later shown to the patient - previously calculateTotalsForWeek
+  // only summed whichever single day-group tab was active (e.g. just
+  // Monday's plan) while the finalize payload computed a real 7-day
+  // weighted average, so the two could show different numbers for the
+  // same week.
+  static const _daysRepresentedByDayGroup = {
+    'Monday': 2, // + Friday
+    'Tuesday': 2, // + Saturday
+    'Wednesday': 2, // + Sunday
+    'Thursday': 1,
+  };
 
-    // If user has manually selected recipes, use those
-    if (selectedRecipesForWeek.isNotEmpty) {
-      totalCalories.value = selectedRecipesForWeek.fold(
-        0.0,
-        (sum, r) => sum + r.nutrition.calories * _nutritionScaleRatio(r),
-      );
-      totalProtein.value = selectedRecipesForWeek.fold(
-        0.0,
-        (sum, r) => sum + r.nutrition.protein * _nutritionScaleRatio(r),
-      );
-      totalFat.value = selectedRecipesForWeek.fold(
-        0.0,
-        (sum, r) => sum + r.nutrition.fats * _nutritionScaleRatio(r),
-      );
-      totalCarbs.value = selectedRecipesForWeek.fold(
-        0.0,
-        (sum, r) => sum + r.nutrition.carbs * _nutritionScaleRatio(r),
-      );
-      return;
+  /// Day-group-weighted 7-day average of calories/protein/fat/carbs/fiber
+  /// across every non-supplement recipe currently selected for [weekNumber].
+  Map<String, double> _weightedWeekTotals(int weekNumber) {
+    // weekSelectedRecipes mixes all 4 day-groups' selections together (see
+    // _applyDraftOptionsForWeek) - accumulate per day-group first, then
+    // weight by how many real days that group represents, so a group with
+    // more/less expensive meals doesn't just get summed flat (which would
+    // double-count a 2-day group's impact once but not the other, or ignore
+    // that Thursday is only 1 day vs the other groups' 2). Supplements carry
+    // real supplementFacts now, not meaningful calorie/macro numbers (their
+    // `nutrition` is intentionally zeroed server-side) - excluded so the
+    // budget reflects food only, by construction rather than by coincidence
+    // of zeroed data.
+    final selectedRecipes = (weekSelectedRecipes[weekNumber] ?? [])
+        .where((r) => !r.tags.contains('supplement'));
+
+    final caloriesByDayGroup = <String, double>{};
+    final fatByDayGroup = <String, double>{};
+    final carbsByDayGroup = <String, double>{};
+    final proteinByDayGroup = <String, double>{};
+    final fiberByDayGroup = <String, double>{};
+
+    for (final r in selectedRecipes) {
+      final ratio = _nutritionScaleRatio(r);
+      final dg = r.dayGroup;
+      caloriesByDayGroup[dg] =
+          (caloriesByDayGroup[dg] ?? 0) + r.nutrition.calories * ratio;
+      fatByDayGroup[dg] = (fatByDayGroup[dg] ?? 0) + r.nutrition.fats * ratio;
+      carbsByDayGroup[dg] =
+          (carbsByDayGroup[dg] ?? 0) + r.nutrition.carbs * ratio;
+      proteinByDayGroup[dg] =
+          (proteinByDayGroup[dg] ?? 0) + r.nutrition.protein * ratio;
+      fiberByDayGroup[dg] =
+          (fiberByDayGroup[dg] ?? 0) + r.nutrition.fiber * ratio;
     }
 
-    // Nothing selected → show 0
-    totalCalories.value = 0;
-    totalProtein.value = 0;
-    totalFat.value = 0;
-    totalCarbs.value = 0;
+    double weekCalories = 0, weekFat = 0, weekCarbs = 0, weekProtein = 0;
+    double weekFiber = 0;
+    _daysRepresentedByDayGroup.forEach((dayGroup, days) {
+      weekCalories += (caloriesByDayGroup[dayGroup] ?? 0) * days;
+      weekFat += (fatByDayGroup[dayGroup] ?? 0) * days;
+      weekCarbs += (carbsByDayGroup[dayGroup] ?? 0) * days;
+      weekProtein += (proteinByDayGroup[dayGroup] ?? 0) * days;
+      weekFiber += (fiberByDayGroup[dayGroup] ?? 0) * days;
+    });
+
+    return {
+      'calories': weekCalories / 7,
+      'fat': weekFat / 7,
+      'carbs': weekCarbs / 7,
+      'protein': weekProtein / 7,
+      'fiber': weekFiber / 7,
+    };
+  }
+
+  // CALCULATE TOTAL NUTRITION ("Total Budget" card)
+  void calculateTotalsForWeek(int weekNumber) {
+    final totals = _weightedWeekTotals(weekNumber);
+    totalCalories.value = totals['calories']!;
+    totalProtein.value = totals['protein']!;
+    totalFat.value = totals['fat']!;
+    totalCarbs.value = totals['carbs']!;
+    totalFiber.value = totals['fiber']!;
+  }
+
+  // Mirrors dietPlanValidator.js's calorie-deviation message shape exactly:
+  // "Week {week}, {dayGroup}: total daily calories ({n}) deviate more than
+  // {pct}% from the target budget ({budget})."
+  static final RegExp _calorieDeviationWarningPattern = RegExp(
+    r'^Week (\d+), (\w+): total daily calories \([\d.]+\) deviate more than \d+% from the target budget \(([\d.]+)\)\.$',
+  );
+  static const num _calorieDeviationTolerance = 0.1; // ±10%, matches backend
+
+  // Mirrors dietPlanValidator.js's closed-world-check message shape exactly:
+  // "Week {week}: {servingTime} references recipe "{id}" which is not in
+  // the allowed recipe pool - please reselect it manually." The referenced
+  // id was never real (never in recipePool), so it never became a Recipe
+  // object/selection in the app - the slot just sits unselected until the
+  // dietician picks a real one, exactly as the message instructs.
+  static final RegExp _missingRecipeWarningPattern = RegExp(
+    r'^Week (\d+): (.+) references recipe "[^"]*" which is not in the allowed recipe pool - please reselect it manually\.$',
+  );
+
+  /// validationWarnings is computed once on the backend from the AI's raw
+  /// proposal, before the dietician touches anything - a warning that was
+  /// true then goes stale the moment the dietician actually acts on it
+  /// (nudges a serving back toward budget, or reselects a bad recipe
+  /// reference). Re-checking both warning shapes here against
+  /// weekSelectedRecipes/selectedServings (the dietician's live picture,
+  /// same one calculateTotalsForWeek/"Total Budget" already shows) lets a
+  /// resolved warning drop out of the review box immediately instead of
+  /// sitting there stale until the plan is re-fetched. Every other warning
+  /// (risk flags, servingTime/slot mismatches, etc.) is untouched - those
+  /// aren't things a dietician resolves by editing servings/selections.
+  List<String> filterStaleCalorieWarnings(List<String> warnings) {
+    return warnings.where((message) {
+      final calorieMatch = _calorieDeviationWarningPattern.firstMatch(
+        message,
+      );
+      if (calorieMatch != null) {
+        final week = int.tryParse(calorieMatch.group(1)!);
+        final dayGroup = calorieMatch.group(2)!;
+        final budget = double.tryParse(calorieMatch.group(3)!);
+        if (week == null || budget == null || budget <= 0) return true;
+
+        final liveCalories = (weekSelectedRecipes[week] ?? [])
+            .where(
+              (r) => r.dayGroup == dayGroup && !r.tags.contains('supplement'),
+            )
+            .fold<double>(
+              0.0,
+              (sum, r) =>
+                  sum + r.nutrition.calories * _nutritionScaleRatio(r),
+            );
+        // Nothing selected for this day-group yet - not resolved, still warn.
+        if (liveCalories <= 0) return true;
+
+        final deviation = (liveCalories - budget).abs() / budget;
+        return deviation > _calorieDeviationTolerance;
+      }
+
+      final missingMatch = _missingRecipeWarningPattern.firstMatch(message);
+      if (missingMatch != null) {
+        final week = int.tryParse(missingMatch.group(1)!);
+        final servingTime = missingMatch.group(2)!;
+        if (week == null) return true;
+
+        final hasRealSelection = (weekSelectedRecipes[week] ?? []).any(
+          (r) =>
+              r.servingTime == servingTime && !r.tags.contains('supplement'),
+        );
+        return !hasRealSelection;
+      }
+
+      return true;
+    }).toList();
   }
 
   // --------------------------
@@ -2414,6 +2545,87 @@ class PatientsController extends GetxController {
     rejectPaymentLoading.value = false;
   }
 
+  // Settles a renewal payment directly (patient already has an active
+  // plan - nothing about the plan itself needs to change), skipping the
+  // build/finalize/activate ceremony that activateDietPlan() requires.
+  Future<void> confirmRenewalPayment(String patientId) async {
+    if (paymentProofId.value.isEmpty) {
+      Get.snackbar(
+        "Error",
+        "No payment proof found for this patient.",
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red.withValues(alpha: 0.9),
+        colorText: Colors.white,
+        margin: const EdgeInsets.all(12),
+        borderRadius: 8,
+        duration: const Duration(seconds: 3),
+      );
+      return;
+    }
+
+    confirmRenewalPaymentLoading.value = true;
+
+    try {
+      final response = await service.confirmRenewalPayment(
+        patientId,
+        paymentProofId.value,
+      );
+
+      if (response != null) {
+        if (response['success'] == true) {
+          await getPatientProfile(patientId);
+          Get.back();
+          Get.snackbar(
+            "Success",
+            "${response['message']}",
+            snackPosition: SnackPosition.BOTTOM,
+            backgroundColor: Colors.green.withValues(alpha: 0.9),
+            colorText: Colors.white,
+            margin: const EdgeInsets.all(12),
+            borderRadius: 8,
+            duration: const Duration(seconds: 2),
+          );
+        } else {
+          Get.snackbar(
+            "Error",
+            response['message'] ?? "Failed to confirm payment",
+            snackPosition: SnackPosition.BOTTOM,
+            backgroundColor: Colors.red.withValues(alpha: 0.9),
+            colorText: Colors.white,
+            margin: const EdgeInsets.all(12),
+            borderRadius: 8,
+            duration: const Duration(seconds: 3),
+          );
+        }
+      } else {
+        Get.snackbar(
+          "Error",
+          "Failed to confirm payment. Please try again.",
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.red.withValues(alpha: 0.9),
+          colorText: Colors.white,
+          margin: const EdgeInsets.all(12),
+          borderRadius: 8,
+          duration: const Duration(seconds: 3),
+        );
+      }
+    } catch (e) {
+      debugPrint('---------------$e');
+      Get.snackbar(
+        "Error",
+        "An error occurred while confirming the payment",
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red.withValues(alpha: 0.9),
+        colorText: Colors.white,
+        margin: const EdgeInsets.all(12),
+        borderRadius: 8,
+        duration: const Duration(seconds: 3),
+      );
+    }
+
+    confirmRenewalPaymentLoading.value = false;
+  }
+
   Map<String, dynamic> buildFinalizeWeekPayload() {
     int weekNumber = int.parse(selectedWeek.value.split(" ").last);
 
@@ -2427,14 +2639,7 @@ class PatientsController extends GetxController {
     // survive finalize.
     final selectedRecipes = weekSelectedRecipes[weekNumber] ?? [];
 
-    double weekCalories = 0, weekFat = 0, weekCarbs = 0, weekProtein = 0;
     final selectedMeals = selectedRecipes.map((selected) {
-      final ratio = _nutritionScaleRatio(selected);
-      weekCalories += selected.nutrition.calories * ratio;
-      weekFat += selected.nutrition.fats * ratio;
-      weekCarbs += selected.nutrition.carbs * ratio;
-      weekProtein += selected.nutrition.protein * ratio;
-
       return {
         "dayGroup": selected.dayGroup,
         "servingTime": selected.servingTime,
@@ -2449,18 +2654,25 @@ class PatientsController extends GetxController {
       };
     }).toList();
 
+    // Same weighted 7-day-average formula as calculateTotalsForWeek's "Total
+    // Budget" preview (see _weightedWeekTotals) - guarantees this submitted
+    // summary matches exactly what the dietician was just looking at, and
+    // what the patient app will later read back from weeksSummary.
+    final totals = _weightedWeekTotals(weekNumber);
+
     // backend requires summary values as **strings**
     final payload = {
       "week": weekNumber,
       "selectedMeals": selectedMeals,
       "summary": {
-        "totalCalories": weekCalories.toStringAsFixed(0),
+        "totalCalories": totals['calories']!.toStringAsFixed(0),
         "fatPercent": "0",
-        "fatGrams": weekFat.toStringAsFixed(0),
+        "fatGrams": totals['fat']!.toStringAsFixed(0),
         "carbPercent": "0",
-        "carbGrams": weekCarbs.toStringAsFixed(0),
+        "carbGrams": totals['carbs']!.toStringAsFixed(0),
         "proteinPercent": "0",
-        "proteinGrams": weekProtein.toStringAsFixed(0),
+        "proteinGrams": totals['protein']!.toStringAsFixed(0),
+        "fiberGrams": totals['fiber']!.toStringAsFixed(0),
       },
     };
 
@@ -2500,14 +2712,23 @@ class PatientsController extends GetxController {
           borderRadius: 8,
           duration: const Duration(seconds: 2),
         );
-        await getPatientProfile(patientId);
         // Reset weight override
         currentWeightForWeek.value = 0.0;
         // Pop both SelectDietSheet and CreateDietPlanScreen (now pushed
-        // full screens, not bottom sheets) to return to the patient
-        // profile screen.
+        // full screens, not bottom sheets), then land explicitly on the
+        // patient profile route - same belt-and-suspenders pattern as
+        // finalizeAll below, so the dietician always exits to the profile
+        // screen regardless of exactly how they navigated in.
         Get.back();
         Get.back();
+        Get.offNamed('/patient-profile/$patientId');
+        // Navigate first, refresh after - PatientProfileView.initState()
+        // already re-fetches this same profile the instant it mounts, so
+        // awaiting this call *before* navigating (the old order) just made
+        // the Finalize button's spinner sit through a second full network
+        // round-trip whose result gets thrown away and immediately
+        // re-fetched anyway. Matches finalizeAll's ordering below.
+        await getPatientProfile(patientId);
       }
     } catch (e) {
       debugPrint("Finalize Week Error: $e");
