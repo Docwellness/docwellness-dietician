@@ -10,7 +10,14 @@ import 'app/services/socket_service.dart';
 
 String? token;
 String? userId;
-const String apiBaseUrl = 'http://localhost:5000/api/dietician';
+
+/// Backend base URL. Override at build time with:
+///   flutter build web --dart-define=API_BASE_URL=https://api-dev.example.com
+const String _apiHost = String.fromEnvironment(
+  'API_BASE_URL',
+  defaultValue: 'http://localhost:5000',
+);
+const String apiBaseUrl = '$_apiHost/api/dietician';
 
 // Dev-only auto-login. Must stay false outside local development — there is
 // no login screen in this app yet, so leaving this on would ship a real,
