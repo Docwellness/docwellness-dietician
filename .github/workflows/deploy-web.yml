@@ -1,0 +1,43 @@
+name: Deploy Flutter web (Vercel)
+
+on:
+  push:
+    branches: [dev, main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      - name: Select environment
+        id: env
+        run: |
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            echo "vercel_project_id=${{ secrets.VERCEL_PROJECT_ID_PROD }}" >> "$GITHUB_OUTPUT"
+            echo "api_base_url=${{ secrets.PROD_API_BASE_URL }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "vercel_project_id=${{ secrets.VERCEL_PROJECT_ID_DEV }}" >> "$GITHUB_OUTPUT"
+            echo "api_base_url=${{ secrets.DEV_API_BASE_URL }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build web
+        run: |
+          flutter build web --release \
+            --dart-define=API_BASE_URL=${{ steps.env.outputs.api_base_url }}
+        # Add more --dart-define flags here as Supabase/Sentry/PostHog land,
+        # e.g. --dart-define=SUPABASE_URL=... --dart-define=SUPABASE_ANON_KEY=...
+        # --dart-define=SENTRY_DSN=... --dart-define=POSTHOG_API_KEY=...
+
+      - name: Deploy to Vercel
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ steps.env.outputs.vercel_project_id }}
+        run: npx vercel deploy build/web --prod --token=${{ secrets.VERCEL_TOKEN }} --yes
