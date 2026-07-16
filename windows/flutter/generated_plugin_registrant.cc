@@ -11,6 +11,7 @@
 #include <firebase_core/firebase_core_plugin_c_api.h>
 #include <flutter_inappwebview_windows/flutter_inappwebview_windows_plugin_c_api.h>
 #include <record_windows/record_windows_plugin_c_api.h>
+#include <sentry_flutter/sentry_flutter_plugin.h>
 #include <speech_to_text_windows/speech_to_text_windows.h>
 
 void RegisterPlugins(flutter::PluginRegistry* registry) {
@@ -24,6 +25,8 @@ void RegisterPlugins(flutter::PluginRegistry* registry) {
       registry->GetRegistrarForPlugin("FlutterInappwebviewWindowsPluginCApi"));
   RecordWindowsPluginCApiRegisterWithRegistrar(
       registry->GetRegistrarForPlugin("RecordWindowsPluginCApi"));
+  SentryFlutterPluginRegisterWithRegistrar(
+      registry->GetRegistrarForPlugin("SentryFlutterPlugin"));
   SpeechToTextWindowsRegisterWithRegistrar(
       registry->GetRegistrarForPlugin("SpeechToTextWindows"));
 }

@@ -2,6 +2,8 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:posthog_flutter/posthog_flutter.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 
 import 'app/utils/theme/app_date_picker_theme.dart';
 import 'app/routes/app_pages.dart';
@@ -26,6 +28,20 @@ const bool testMode = false;
 const String testDieticianId = '6a4b7eee2b490bb61892a756';
 const String testDieticianToken =
     'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhNGI3ZWVlMmI0OTBiYjYxODkyYTc1NiIsImlhdCI6MTc4MzMzMjU5MCwiZXhwIjoxODE0ODY4NTkwfQ.I-lh9w8bXHXsxy6NOvHpWLqGyHyN99UNjN6axnqycug';
+
+// Sentry/PostHog are only enabled once a real DSN/API key is supplied via
+// --dart-define at build time; empty defaults keep both no-ops so local runs
+// without those defines behave exactly as before.
+const String _sentryDsn = String.fromEnvironment('SENTRY_DSN', defaultValue: '');
+const String _appEnv = String.fromEnvironment('ENV', defaultValue: 'development');
+const String _posthogApiKey = String.fromEnvironment(
+  'POSTHOG_API_KEY',
+  defaultValue: '',
+);
+const String _posthogHost = String.fromEnvironment(
+  'POSTHOG_HOST',
+  defaultValue: 'https://us.i.posthog.com',
+);
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -57,7 +73,23 @@ Future<void> main() async {
   // Initialize Socket Service
   await Get.putAsync(() => SocketService().init());
 
-  runApp(MyApp());
+  await _initPostHog();
+
+  if (_sentryDsn.isEmpty) {
+    runApp(MyApp());
+  } else {
+    await SentryFlutter.init((options) {
+      options.dsn = _sentryDsn;
+      options.environment = _appEnv;
+      options.tracesSampleRate = 0.0;
+    }, appRunner: () => runApp(MyApp()));
+  }
+}
+
+Future<void> _initPostHog() async {
+  if (_posthogApiKey.isEmpty) return;
+  final config = PostHogConfig(_posthogApiKey)..host = _posthogHost;
+  await Posthog().setup(config);
 }
 
 class MyApp extends StatelessWidget {

@@ -54,6 +54,8 @@ dependencies:
   flutter_local_notifications: ^21.0.0
   record: ^6.2.0
   audioplayers: ^6.6.0
+  sentry_flutter: ^8.14.2
+  posthog_flutter: ^5.31.0
 
 dev_dependencies:
   flutter_test:
