@@ -12,6 +12,14 @@ String? token;
 String? userId;
 const String apiBaseUrl = 'http://localhost:5000/api/dietician';
 
+// Dev-only auto-login. Must stay false outside local development — there is
+// no login screen in this app yet, so leaving this on would ship a real,
+// long-lived auth token in every build, including production.
+const bool testMode = false;
+const String testDieticianId = '6a4b7eee2b490bb61892a756';
+const String testDieticianToken =
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhNGI3ZWVlMmI0OTBiYjYxODkyYTc1NiIsImlhdCI6MTc4MzMzMjU5MCwiZXhwIjoxODE0ODY4NTkwfQ.I-lh9w8bXHXsxy6NOvHpWLqGyHyN99UNjN6axnqycug';
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -30,13 +38,14 @@ Future<void> main() async {
     }
   }
 
-  // Local dev token for the seeded local dietician account (backend: mongodb://localhost:27017/docwellness).
-  // Valid ~365 days from 2026-07-06.
-  token =
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhNGI3ZWVlMmI0OTBiYjYxODkyYTc1NiIsImlhdCI6MTc4MzMzMjU5MCwiZXhwIjoxODE0ODY4NTkwfQ.I-lh9w8bXHXsxy6NOvHpWLqGyHyN99UNjN6axnqycug';
-
-  // User ID for the dietician (extracted from token)
-  userId = '6a4b7eee2b490bb61892a756';
+  // For local development only: auto-login as the seeded local dietician
+  // account (backend: mongodb://localhost:27017/docwellness) since there is
+  // no login screen yet.
+  if (testMode) {
+    userId = testDieticianId;
+    token = testDieticianToken;
+    debugPrint('🧪 TEST MODE: userId=$userId');
+  }
 
   // Initialize Socket Service
   await Get.putAsync(() => SocketService().init());
