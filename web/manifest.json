@@ -1,6 +1,6 @@
 {
-    "name": "docwellnesdoc",
-    "short_name": "docwellnesdoc",
+    "name": "DocDesk",
+    "short_name": "DocDesk",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

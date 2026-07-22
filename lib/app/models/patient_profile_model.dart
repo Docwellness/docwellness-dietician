@@ -13,6 +13,11 @@ class PatientProfileModel {
   // plan exists. Lets CreateDietPlanScreen re-open with the dietician's
   // prior selection pre-filled instead of a blank form.
   ActivePlanStrategy? activePlanStrategy;
+  // Per-week date ranges for the active plan's cycle (see
+  // utils/weekSchedule.js on the backend) - internal week numbers 1-4
+  // regardless of cycle; combine with status.cycleNumber via displayWeek()
+  // to show "Week 5" etc. for a renewed patient's second cycle onward.
+  List<WeekScheduleEntry> weekSchedule = [];
 
   PatientProfileModel({
     this.id,
@@ -22,7 +27,9 @@ class PatientProfileModel {
     this.weeklyDietPlans,
     List<int>? generatedWeekNumbers,
     this.activePlanStrategy,
-  }) : generatedWeekNumbers = generatedWeekNumbers ?? [];
+    List<WeekScheduleEntry>? weekSchedule,
+  }) : generatedWeekNumbers = generatedWeekNumbers ?? [],
+       weekSchedule = weekSchedule ?? [];
 
   PatientProfileModel.fromJson(Map<String, dynamic> json) {
     id = json['id'];
@@ -44,6 +51,42 @@ class PatientProfileModel {
 
     activePlanStrategy = json['activePlanStrategy'] != null
         ? ActivePlanStrategy.fromJson(json['activePlanStrategy'])
+        : null;
+
+    weekSchedule = json['weekSchedule'] != null
+        ? List<WeekScheduleEntry>.from(
+            json['weekSchedule'].map((x) => WeekScheduleEntry.fromJson(x)),
+          )
+        : [];
+  }
+
+  /// Converts an internal 1-4 week number into the display number a renewed
+  /// patient should see (Week 5-8 for cycle 2, 9-12 for cycle 3, etc.).
+  int displayWeek(int internalWeek) =>
+      ((status?.cycleNumber ?? 1) - 1) * 4 + internalWeek;
+
+  WeekScheduleEntry? scheduleFor(int internalWeek) {
+    for (final entry in weekSchedule) {
+      if (entry.week == internalWeek) return entry;
+    }
+    return null;
+  }
+}
+
+class WeekScheduleEntry {
+  int? week;
+  DateTime? startDate;
+  DateTime? endDate;
+
+  WeekScheduleEntry({this.week, this.startDate, this.endDate});
+
+  WeekScheduleEntry.fromJson(Map<String, dynamic> json) {
+    week = json['week'];
+    startDate = json['startDate'] != null
+        ? DateTime.tryParse(json['startDate'].toString())
+        : null;
+    endDate = json['endDate'] != null
+        ? DateTime.tryParse(json['endDate'].toString())
         : null;
   }
 }
@@ -189,10 +232,13 @@ class Status {
   // "Create Diet Plan" unlocks.
   bool? patientConsented;
   String? activeDietPlanId;
-  // Status of the plan activeDietPlanId points at right now - 'Active' means
-  // a PaymentSubmitted request is a renewal (plan already usable, payment
-  // just needs settling); 'Finalized' means it's a genuine first activation.
+  // Status of the plan activeDietPlanId points at right now - 'Finalized'
+  // means it needs Confirm & Activate, 'Active' means it's already live.
   String? activeDietPlanStatus;
+  // Which renewal cycle the active plan belongs to (1 = first plan ever
+  // built for this patient, incremented per renewal) - see
+  // PatientProfileModel.displayWeek().
+  int? cycleNumber;
   String? requestId;
   String? requestStatus;
   String? membershipPlan;
@@ -211,6 +257,7 @@ class Status {
     this.patientConsented,
     this.activeDietPlanId,
     this.activeDietPlanStatus,
+    this.cycleNumber,
     this.requestId,
     this.requestStatus,
     this.membershipPlan,
@@ -228,6 +275,7 @@ class Status {
     patientConsented = json['patientConsented'] == true;
     activeDietPlanId = json['activeDietPlanId'];
     activeDietPlanStatus = json['activeDietPlanStatus'];
+    cycleNumber = json['cycleNumber'];
     requestId = json['requestId'];
     requestStatus = json['requestStatus'];
     membershipPlan = json['membershipPlan'];

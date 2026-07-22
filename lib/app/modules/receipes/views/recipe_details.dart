@@ -6,6 +6,7 @@ import 'package:docwellnesdoc/app/modules/receipes/widgets/cooking_steps_tab.dar
 import 'package:docwellnesdoc/app/modules/receipes/widgets/ingredient_tile.dart';
 import 'package:docwellnesdoc/app/modules/receipes/widgets/nutrition_details_widget.dart';
 import 'package:docwellnesdoc/app/modules/receipes/widgets/update_ai_inputs_sheet.dart';
+import 'package:docwellnesdoc/app/utils/common_widgets/app_toast.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_button.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
 import 'package:flutter/material.dart';
@@ -163,10 +164,10 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
     try {
       final imageUrl = await _recipeService.uploadRecipeImage(file.path);
       if (imageUrl == null || imageUrl.isEmpty) {
-        Get.snackbar(
-          'Error',
-          'Failed to upload recipe image. Please try again.',
-          snackPosition: SnackPosition.TOP,
+        showAppToast(
+          Get.overlayContext!,
+          message: 'Failed to upload recipe image. Please try again.',
+          type: AppToastType.error,
         );
         return;
       }
@@ -184,10 +185,10 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
             image: imageUrl,
           );
           if (!ok) {
-            Get.snackbar(
-              'Error',
-              'Uploaded image but failed to save it on the recipe.',
-              snackPosition: SnackPosition.TOP,
+            showAppToast(
+              Get.overlayContext!,
+              message: 'Uploaded image but failed to save it on the recipe.',
+              type: AppToastType.error,
             );
           } else {
             // Refresh the list so the grid picks up the new image.
@@ -201,10 +202,10 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
       _mainImageUrl = imageUrl;
       setState(() {});
 
-      Get.snackbar(
-        'Success',
-        'Recipe image uploaded successfully.',
-        snackPosition: SnackPosition.TOP,
+      showAppToast(
+        Get.overlayContext!,
+        message: 'Recipe image uploaded successfully.',
+        type: AppToastType.success,
       );
     } finally {
       if (mounted) {
@@ -237,10 +238,11 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
         current.name,
       );
       if (imageUrl == null || imageUrl.isEmpty || recipe == null) {
-        Get.snackbar(
-          'Error',
-          "Couldn't find an image for this ingredient. Please try again.",
-          snackPosition: SnackPosition.TOP,
+        showAppToast(
+          Get.overlayContext!,
+          message:
+              "Couldn't find an image for this ingredient. Please try again.",
+          type: AppToastType.error,
         );
         return;
       }
@@ -253,10 +255,10 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
           imageUrl: imageUrl,
         );
         if (!persisted) {
-          Get.snackbar(
-            'Error',
-            'Failed to save the new image. Please try again.',
-            snackPosition: SnackPosition.TOP,
+          showAppToast(
+            Get.overlayContext!,
+            message: 'Failed to save the new image. Please try again.',
+            type: AppToastType.error,
           );
           return;
         }
@@ -720,22 +722,16 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
                     controller.fetchRecipes(refresh: true);
 
                     // Show success message
-                    Get.snackbar(
-                      'Success',
-                      'Recipe "${result.name}" saved successfully!',
-                      snackPosition: SnackPosition.TOP,
-                      backgroundColor: Colors.green.shade100,
-                      colorText: Colors.green.shade900,
-                      duration: const Duration(seconds: 3),
+                    showAppToast(
+                      Get.overlayContext!,
+                      message: 'Recipe "${result.name}" saved successfully!',
+                      type: AppToastType.success,
                     );
                   } else {
-                    Get.snackbar(
-                      'Error',
-                      'Failed to save recipe. Please try again.',
-                      snackPosition: SnackPosition.TOP,
-                      backgroundColor: Colors.red.shade100,
-                      colorText: Colors.red.shade900,
-                      duration: const Duration(seconds: 3),
+                    showAppToast(
+                      Get.overlayContext!,
+                      message: 'Failed to save recipe. Please try again.',
+                      type: AppToastType.error,
                     );
                   }
                 },
@@ -824,22 +820,16 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
                   if (saved) {
                     // Close the modal bottom sheet
                     if (mounted) Navigator.of(context).pop();
-                    Get.snackbar(
-                      'Success',
-                      'Recipe saved successfully.',
-                      snackPosition: SnackPosition.TOP,
-                      backgroundColor: Colors.green.shade100,
-                      colorText: Colors.green.shade900,
-                      duration: const Duration(seconds: 3),
+                    showAppToast(
+                      Get.overlayContext!,
+                      message: 'Recipe saved successfully.',
+                      type: AppToastType.success,
                     );
                   } else {
-                    Get.snackbar(
-                      'Error',
-                      'Failed to save recipe. Please try again.',
-                      snackPosition: SnackPosition.TOP,
-                      backgroundColor: Colors.red.shade100,
-                      colorText: Colors.red.shade900,
-                      duration: const Duration(seconds: 3),
+                    showAppToast(
+                      Get.overlayContext!,
+                      message: 'Failed to save recipe. Please try again.',
+                      type: AppToastType.error,
                     );
                   }
                 } finally {

@@ -4,6 +4,7 @@ import 'package:docwellnesdoc/app/modules/chat/services/service.dart';
 import 'package:docwellnesdoc/app/modules/chat/views/chat_screen.dart';
 import 'package:docwellnesdoc/app/modules/home/controllers/home_controller.dart';
 import 'package:docwellnesdoc/app/modules/home/widgets/patient_request_container.dart';
+import 'package:docwellnesdoc/app/utils/common_widgets/app_toast.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -310,10 +311,10 @@ class ActionDetailsView extends StatelessWidget {
         );
       } catch (_) {}
     } else {
-      Get.snackbar(
-        'Error',
-        'Could not open chat. Please try again.',
-        snackPosition: SnackPosition.BOTTOM,
+      showAppToast(
+        Get.overlayContext!,
+        message: 'Could not open chat. Please try again.',
+        type: AppToastType.error,
       );
     }
   }

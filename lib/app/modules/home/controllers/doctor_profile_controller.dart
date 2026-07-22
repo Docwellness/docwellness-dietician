@@ -2,6 +2,7 @@ import 'dart:developer';
 
 import 'package:docwellnesdoc/app/models/doctor_profile_model.dart';
 import 'package:docwellnesdoc/app/modules/home/services/doctor_profile_service.dart';
+import 'package:docwellnesdoc/app/utils/common_widgets/app_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
@@ -108,32 +109,26 @@ class DoctorProfileController extends GetxController {
 
       final success = await _service.updateProfile(data);
       if (success) {
-        Get.snackbar(
-          'Success',
-          'Profile updated successfully',
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: const Color(0xff851653),
-          colorText: Colors.white,
+        showAppToast(
+          Get.overlayContext!,
+          message: 'Profile updated successfully',
+          type: AppToastType.success,
         );
         await loadProfile();
         await fetchPosts();
       } else {
-        Get.snackbar(
-          'Error',
-          'Failed to update profile',
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: Colors.red,
-          colorText: Colors.white,
+        showAppToast(
+          Get.overlayContext!,
+          message: 'Failed to update profile',
+          type: AppToastType.error,
         );
       }
     } catch (e) {
       log('❌ Error saving profile: $e');
-      Get.snackbar(
-        'Error',
-        'Something went wrong',
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
+      showAppToast(
+        Get.overlayContext!,
+        message: 'Something went wrong',
+        type: AppToastType.error,
       );
     } finally {
       isSaving.value = false;
@@ -173,10 +168,10 @@ class DoctorProfileController extends GetxController {
 
   Future<void> addPost() async {
     if (pickedPostImage.value == null) {
-      Get.snackbar(
-        'Image required',
-        'Please select an image for the post.',
-        snackPosition: SnackPosition.BOTTOM,
+      showAppToast(
+        Get.overlayContext!,
+        message: 'Image required: Please select an image for the post.',
+        type: AppToastType.warning,
       );
       return;
     }
@@ -192,30 +187,24 @@ class DoctorProfileController extends GetxController {
       if (result != null) {
         await fetchPosts();
         clearPostComposer();
-        Get.snackbar(
-          'Success',
-          'Post added successfully',
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: const Color(0xff851653),
-          colorText: Colors.white,
+        showAppToast(
+          Get.overlayContext!,
+          message: 'Post added successfully',
+          type: AppToastType.success,
         );
       } else {
-        Get.snackbar(
-          'Error',
-          'Failed to add post',
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: Colors.red,
-          colorText: Colors.white,
+        showAppToast(
+          Get.overlayContext!,
+          message: 'Failed to add post',
+          type: AppToastType.error,
         );
       }
     } catch (e) {
       log('❌ Error adding post: $e');
-      Get.snackbar(
-        'Error',
-        'Something went wrong while adding post',
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
+      showAppToast(
+        Get.overlayContext!,
+        message: 'Something went wrong while adding post',
+        type: AppToastType.error,
       );
     } finally {
       isPostSaving.value = false;
@@ -234,18 +223,18 @@ class DoctorProfileController extends GetxController {
 
       if (result != null) {
         await fetchPosts();
-        Get.snackbar(
-          'Success',
-          !currentIsActive
+        showAppToast(
+          Get.overlayContext!,
+          message: !currentIsActive
               ? 'Post is now visible to patients'
               : 'Post is now hidden from patients',
-          snackPosition: SnackPosition.BOTTOM,
+          type: AppToastType.success,
         );
       } else {
-        Get.snackbar(
-          'Error',
-          'Failed to update post visibility',
-          snackPosition: SnackPosition.BOTTOM,
+        showAppToast(
+          Get.overlayContext!,
+          message: 'Failed to update post visibility',
+          type: AppToastType.error,
         );
       }
     } catch (e) {
@@ -258,16 +247,16 @@ class DoctorProfileController extends GetxController {
       final success = await _service.deletePost(postId);
       if (success) {
         posts.removeWhere((p) => (p['_id']?.toString() ?? '') == postId);
-        Get.snackbar(
-          'Success',
-          'Post deleted successfully',
-          snackPosition: SnackPosition.BOTTOM,
+        showAppToast(
+          Get.overlayContext!,
+          message: 'Post deleted successfully',
+          type: AppToastType.success,
         );
       } else {
-        Get.snackbar(
-          'Error',
-          'Failed to delete post',
-          snackPosition: SnackPosition.BOTTOM,
+        showAppToast(
+          Get.overlayContext!,
+          message: 'Failed to delete post',
+          type: AppToastType.error,
         );
       }
     } catch (e) {
@@ -290,12 +279,10 @@ class DoctorProfileController extends GetxController {
       final imageUrl = await _service.uploadProfileImage(image.path);
       if (imageUrl != null) {
         profileImageUrl.value = imageUrl;
-        Get.snackbar(
-          'Success',
-          'Profile image updated',
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: const Color(0xff851653),
-          colorText: Colors.white,
+        showAppToast(
+          Get.overlayContext!,
+          message: 'Profile image updated',
+          type: AppToastType.success,
         );
       }
     } catch (e) {

@@ -1,5 +1,6 @@
 import 'package:docwellnesdoc/app/modules/performance/models/consultation_form_field.dart';
 import 'package:docwellnesdoc/app/modules/performance/services/consultation_form_service.dart';
+import 'package:docwellnesdoc/app/utils/common_widgets/app_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -169,10 +170,10 @@ class ConsultationFormController extends GetxController {
     for (int i = 0; i < drafts.length; i++) {
       final d = drafts[i];
       if (d.labelController.text.trim().isEmpty) {
-        Get.snackbar(
-          'Missing label',
-          'Field #${i + 1} needs a question label.',
-          snackPosition: SnackPosition.BOTTOM,
+        showAppToast(
+          Get.overlayContext!,
+          message: 'Missing label: Field #${i + 1} needs a question label.',
+          type: AppToastType.warning,
         );
         return false;
       }
@@ -182,10 +183,11 @@ class ConsultationFormController extends GetxController {
             .where((s) => s.isNotEmpty)
             .toList();
         if (opts.isEmpty) {
-          Get.snackbar(
-            'Missing options',
-            'Field "${d.labelController.text.trim()}" needs at least one option.',
-            snackPosition: SnackPosition.BOTTOM,
+          showAppToast(
+            Get.overlayContext!,
+            message:
+                'Missing options: Field "${d.labelController.text.trim()}" needs at least one option.',
+            type: AppToastType.warning,
           );
           return false;
         }
@@ -200,16 +202,16 @@ class ConsultationFormController extends GetxController {
       }
       final ok = await _service.upsertTemplate(fields);
       if (ok) {
-        Get.snackbar(
-          'Saved',
-          'Consultation form updated.',
-          snackPosition: SnackPosition.BOTTOM,
+        showAppToast(
+          Get.overlayContext!,
+          message: 'Consultation form updated.',
+          type: AppToastType.success,
         );
       } else {
-        Get.snackbar(
-          'Error',
-          'Could not save consultation form.',
-          snackPosition: SnackPosition.BOTTOM,
+        showAppToast(
+          Get.overlayContext!,
+          message: 'Could not save consultation form.',
+          type: AppToastType.error,
         );
       }
       return ok;

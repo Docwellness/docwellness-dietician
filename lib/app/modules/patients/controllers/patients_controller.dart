@@ -13,6 +13,7 @@ import 'package:docwellnesdoc/app/modules/patients/services/patient_service.dart
 import 'package:docwellnesdoc/app/modules/patients/views/questions_view.dart';
 import 'package:docwellnesdoc/app/modules/performance/models/consultation_form_field.dart';
 import 'package:docwellnesdoc/app/modules/performance/services/consultation_form_service.dart';
+import 'package:docwellnesdoc/app/utils/common_widgets/app_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
@@ -529,6 +530,15 @@ class PatientsController extends GetxController {
   StreamSubscription? _consultationDraftSub;
   Timer? _consultationDraftSaveTimer;
 
+  // Set by getConsultation() to the server record's updatedAt (or null for
+  // a brand-new consultation that's never been saved). Lets
+  // prepareConsultationDraft() tell a genuinely newer draft apart from a
+  // stale one saved before this consultation was last submitted - without
+  // this, restoring an old draft on top of a freshly-submitted one silently
+  // reverts fields the draft never touched to blank/default (observed: a
+  // draft from a previous test session wiping out real submitted answers).
+  DateTime? _consultationServerUpdatedAt;
+
   String _draftKey(String patientId) => 'consultation_draft_$patientId';
 
   /// Stop autosaving before touching [customAnswerValues] for a reload
@@ -551,22 +561,40 @@ class PatientsController extends GetxController {
 
   /// Call once the template (and, for edit mode, the server-saved answers)
   /// have finished loading into [customAnswerValues] - restores any locally
-  /// saved draft on top of that (a draft represents edits the dietician made
-  /// more recently than whatever's on the server) and starts autosaving
-  /// further edits for [patientId]. Callers must have already called
-  /// [stopConsultationDraftAutosave] before their reload sequence began.
+  /// saved draft on top of that *only if the draft is newer than the
+  /// server's last save* (a stale draft - e.g. from a session abandoned
+  /// before the dietician ever submitted, followed by someone else saving
+  /// a real consultation for this patient in the meantime - must lose to
+  /// the server, not silently overwrite it) and starts autosaving further
+  /// edits for [patientId]. Callers must have already called
+  /// [stopConsultationDraftAutosave] before their reload sequence began,
+  /// and (for edit mode) called getConsultation() so
+  /// [_consultationServerUpdatedAt] reflects this patient's record.
   Future<void> prepareConsultationDraft(String patientId) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(_draftKey(patientId));
       if (raw != null && raw.isNotEmpty) {
-        final saved = jsonDecode(raw) as Map<String, dynamic>;
-        saved.forEach((fieldId, value) {
-          customAnswerValues[fieldId] = value is List
-              ? List<String>.from(value.map((e) => e.toString()))
-              : value;
-        });
-        _ensureAnswerStateForTemplate();
+        final decoded = jsonDecode(raw);
+        final savedAt = decoded is Map
+            ? DateTime.tryParse((decoded['savedAt'] ?? '').toString())
+            : null;
+        final answers = decoded is Map ? decoded['answers'] : null;
+        final isNewerThanServer =
+            _consultationServerUpdatedAt == null ||
+            (savedAt != null && savedAt.isAfter(_consultationServerUpdatedAt!));
+        if (answers is Map && isNewerThanServer) {
+          answers.forEach((fieldId, value) {
+            customAnswerValues[fieldId.toString()] = value is List
+                ? List<String>.from(value.map((e) => e.toString()))
+                : value;
+          });
+          _ensureAnswerStateForTemplate();
+        } else if (!isNewerThanServer) {
+          // Superseded by a server save - discard so it can't resurface
+          // (e.g. on a later brand-new consultation for this same patient).
+          await prefs.remove(_draftKey(patientId));
+        }
       }
     } catch (e) {
       debugPrint('prepareConsultationDraft: failed to load draft: $e');
@@ -584,7 +612,11 @@ class PatientsController extends GetxController {
 
   Future<void> _saveConsultationDraft(String patientId) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_draftKey(patientId), jsonEncode(customAnswerValues));
+    final payload = {
+      'savedAt': DateTime.now().toUtc().toIso8601String(),
+      'answers': customAnswerValues,
+    };
+    await prefs.setString(_draftKey(patientId), jsonEncode(payload));
   }
 
   Future<void> _clearConsultationDraft(String patientId) async {
@@ -730,6 +762,10 @@ class PatientsController extends GetxController {
       c.dispose();
     }
     _customTextControllers.clear();
+    // No server consultation was fetched for this reset (new-consultation
+    // flow never calls getConsultation()), so there's nothing a draft could
+    // be stale relative to - see prepareConsultationDraft's doc comment.
+    _consultationServerUpdatedAt = null;
   }
 
   /// Whether [field] should be shown to the dietician right now, given the
@@ -793,10 +829,10 @@ class PatientsController extends GetxController {
     } else {
       // Revert on failure
       isProfileDeactivated.value = !isProfileDeactivated.value;
-      Get.snackbar(
-        'Error',
-        'Failed to update patient status',
-        snackPosition: SnackPosition.BOTTOM,
+      showAppToast(
+        Get.overlayContext!,
+        message: 'Failed to update patient status',
+        type: AppToastType.error,
       );
     }
   }
@@ -818,10 +854,10 @@ class PatientsController extends GetxController {
       fetchPastPatients();
       return true;
     }
-    Get.snackbar(
-      'Error',
-      data?['message'] ?? 'Failed to delete patient',
-      snackPosition: SnackPosition.BOTTOM,
+    showAppToast(
+      Get.overlayContext!,
+      message: data?['message'] ?? 'Failed to delete patient',
+      type: AppToastType.error,
     );
     return false;
   }
@@ -941,10 +977,10 @@ class PatientsController extends GetxController {
 
       final response = await service.uploadJourneyImage(patientId, formData);
       if (response != null && response['success'] == true) {
-        Get.snackbar(
-          'Success',
-          'Journey image uploaded!',
-          snackPosition: SnackPosition.BOTTOM,
+        showAppToast(
+          Get.overlayContext!,
+          message: 'Journey image uploaded!',
+          type: AppToastType.success,
         );
         await fetchJourneyImages(patientId);
         isJourneyUploading.value = false;
@@ -954,10 +990,10 @@ class PatientsController extends GetxController {
       debugPrint('uploadJourneyImage error: $e');
     }
     isJourneyUploading.value = false;
-    Get.snackbar(
-      'Error',
-      'Failed to upload image',
-      snackPosition: SnackPosition.BOTTOM,
+    showAppToast(
+      Get.overlayContext!,
+      message: 'Failed to upload image',
+      type: AppToastType.error,
     );
     return false;
   }
@@ -989,10 +1025,10 @@ class PatientsController extends GetxController {
         formData,
       );
       if (response != null && response['success'] == true) {
-        Get.snackbar(
-          'Success',
-          'Journey image updated!',
-          snackPosition: SnackPosition.BOTTOM,
+        showAppToast(
+          Get.overlayContext!,
+          message: 'Journey image updated!',
+          type: AppToastType.success,
         );
         await fetchJourneyImages(patientId);
         return true;
@@ -1000,10 +1036,10 @@ class PatientsController extends GetxController {
     } catch (e) {
       debugPrint('updateJourneyImage error: $e');
     }
-    Get.snackbar(
-      'Error',
-      'Failed to update',
-      snackPosition: SnackPosition.BOTTOM,
+    showAppToast(
+      Get.overlayContext!,
+      message: 'Failed to update',
+      type: AppToastType.error,
     );
     return false;
   }
@@ -1013,10 +1049,10 @@ class PatientsController extends GetxController {
     try {
       final response = await service.deleteJourneyImage(patientId, imageId);
       if (response != null && response['success'] == true) {
-        Get.snackbar(
-          'Success',
-          'Journey image deleted',
-          snackPosition: SnackPosition.BOTTOM,
+        showAppToast(
+          Get.overlayContext!,
+          message: 'Journey image deleted',
+          type: AppToastType.success,
         );
         await fetchJourneyImages(patientId);
         return true;
@@ -2409,6 +2445,13 @@ class PatientsController extends GetxController {
       }
       // Sync into TextEditingControllers if template already loaded.
       _ensureAnswerStateForTemplate();
+
+      // Used by prepareConsultationDraft() to tell a genuinely newer draft
+      // apart from a stale one left over from before this consultation was
+      // last saved (see that method's doc comment).
+      _consultationServerUpdatedAt = DateTime.tryParse(
+        (data["updatedAt"] ?? data["createdAt"] ?? '').toString(),
+      );
     } catch (e, st) {
       debugPrint("---- GET ERROR ---- $e");
       debugPrint(st.toString());
@@ -2461,15 +2504,11 @@ class PatientsController extends GetxController {
   Future<void> activateDietPlan(String patientId, String dietPlanId) async {
     // Check if dietPlanId is valid
     if (dietPlanId.isEmpty) {
-      Get.snackbar(
-        "Error",
-        "No finalized diet plan found. Please create and finalize a diet plan first.",
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red.withValues(alpha: 0.9),
-        colorText: Colors.white,
-        margin: const EdgeInsets.all(12),
-        borderRadius: 8,
-        duration: const Duration(seconds: 3),
+      showAppToast(
+        Get.overlayContext!,
+        message:
+            "No finalized diet plan found. Please create and finalize a diet plan first.",
+        type: AppToastType.warning,
       );
       return;
     }
@@ -2478,43 +2517,28 @@ class PatientsController extends GetxController {
     final amountPendingValue = double.tryParse(pendingAmount.text.trim());
 
     if (amountReceivedValue == null || amountReceivedValue < 0) {
-      Get.snackbar(
-        "Error",
-        "Please enter a valid Amount Received.",
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red.withValues(alpha: 0.9),
-        colorText: Colors.white,
-        margin: const EdgeInsets.all(12),
-        borderRadius: 8,
-        duration: const Duration(seconds: 3),
+      showAppToast(
+        Get.overlayContext!,
+        message: "Please enter a valid Amount Received.",
+        type: AppToastType.warning,
       );
       return;
     }
 
     if (amountPendingValue == null || amountPendingValue < 0) {
-      Get.snackbar(
-        "Error",
-        "Please enter a valid Amount Pending.",
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red.withValues(alpha: 0.9),
-        colorText: Colors.white,
-        margin: const EdgeInsets.all(12),
-        borderRadius: 8,
-        duration: const Duration(seconds: 3),
+      showAppToast(
+        Get.overlayContext!,
+        message: "Please enter a valid Amount Pending.",
+        type: AppToastType.warning,
       );
       return;
     }
 
     if (paymentProofId.value.isEmpty) {
-      Get.snackbar(
-        "Error",
-        "No payment proof found for this patient.",
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red.withValues(alpha: 0.9),
-        colorText: Colors.white,
-        margin: const EdgeInsets.all(12),
-        borderRadius: 8,
-        duration: const Duration(seconds: 3),
+      showAppToast(
+        Get.overlayContext!,
+        message: "No payment proof found for this patient.",
+        type: AppToastType.warning,
       );
       return;
     }
@@ -2536,51 +2560,32 @@ class PatientsController extends GetxController {
           // Refresh patient profile to update status
           await getPatientProfile(patientId);
           Get.back();
-          Get.snackbar(
-            "Success",
-            "${response['message']}",
-            snackPosition: SnackPosition.BOTTOM,
-            backgroundColor: Colors.green.withValues(alpha: 0.9),
-            colorText: Colors.white,
-            margin: const EdgeInsets.all(12),
-            borderRadius: 8,
-            duration: const Duration(seconds: 2),
+          showAppToast(
+            Get.overlayContext!,
+            message: "${response['message']}",
+            type: AppToastType.success,
           );
         } else {
-          Get.snackbar(
-            "Error",
-            response['message'] ?? "Failed to activate diet plan",
-            snackPosition: SnackPosition.BOTTOM,
-            backgroundColor: Colors.red.withValues(alpha: 0.9),
-            colorText: Colors.white,
-            margin: const EdgeInsets.all(12),
-            borderRadius: 8,
-            duration: const Duration(seconds: 3),
+          showAppToast(
+            Get.overlayContext!,
+            message: response['message'] ?? "Failed to activate diet plan",
+            type: AppToastType.error,
           );
         }
       } else {
-        Get.snackbar(
-          "Error",
-          "Failed to activate diet plan. Please ensure the diet plan is finalized first.",
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: Colors.red.withValues(alpha: 0.9),
-          colorText: Colors.white,
-          margin: const EdgeInsets.all(12),
-          borderRadius: 8,
-          duration: const Duration(seconds: 3),
+        showAppToast(
+          Get.overlayContext!,
+          message:
+              "Failed to activate diet plan. Please ensure the diet plan is finalized first.",
+          type: AppToastType.error,
         );
       }
     } catch (e) {
       debugPrint('---------------$e');
-      Get.snackbar(
-        "Error",
-        "An error occurred while activating the diet plan",
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red.withValues(alpha: 0.9),
-        colorText: Colors.white,
-        margin: const EdgeInsets.all(12),
-        borderRadius: 8,
-        duration: const Duration(seconds: 3),
+      showAppToast(
+        Get.overlayContext!,
+        message: "An error occurred while activating the diet plan",
+        type: AppToastType.error,
       );
     }
 
@@ -2589,15 +2594,10 @@ class PatientsController extends GetxController {
 
   Future<void> rejectPayment(String patientId) async {
     if (paymentProofId.value.isEmpty) {
-      Get.snackbar(
-        "Error",
-        "No payment proof found to reject.",
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red.withValues(alpha: 0.9),
-        colorText: Colors.white,
-        margin: const EdgeInsets.all(12),
-        borderRadius: 8,
-        duration: const Duration(seconds: 3),
+      showAppToast(
+        Get.overlayContext!,
+        message: "No payment proof found to reject.",
+        type: AppToastType.warning,
       );
       return;
     }
@@ -2619,40 +2619,25 @@ class PatientsController extends GetxController {
           await getPatientProfile(patientId);
           rejectionNoteController.clear();
           Get.back();
-          Get.snackbar(
-            "Success",
-            "${response['message']}",
-            snackPosition: SnackPosition.BOTTOM,
-            backgroundColor: Colors.green.withValues(alpha: 0.9),
-            colorText: Colors.white,
-            margin: const EdgeInsets.all(12),
-            borderRadius: 8,
-            duration: const Duration(seconds: 2),
+          showAppToast(
+            Get.overlayContext!,
+            message: "${response['message']}",
+            type: AppToastType.success,
           );
         } else {
-          Get.snackbar(
-            "Error",
-            response['message'] ?? "Failed to reject payment",
-            snackPosition: SnackPosition.BOTTOM,
-            backgroundColor: Colors.red.withValues(alpha: 0.9),
-            colorText: Colors.white,
-            margin: const EdgeInsets.all(12),
-            borderRadius: 8,
-            duration: const Duration(seconds: 3),
+          showAppToast(
+            Get.overlayContext!,
+            message: response['message'] ?? "Failed to reject payment",
+            type: AppToastType.error,
           );
         }
       }
     } catch (e) {
       debugPrint('---------------$e');
-      Get.snackbar(
-        "Error",
-        "An error occurred while rejecting the payment",
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red.withValues(alpha: 0.9),
-        colorText: Colors.white,
-        margin: const EdgeInsets.all(12),
-        borderRadius: 8,
-        duration: const Duration(seconds: 3),
+      showAppToast(
+        Get.overlayContext!,
+        message: "An error occurred while rejecting the payment",
+        type: AppToastType.error,
       );
     }
 
@@ -2664,15 +2649,10 @@ class PatientsController extends GetxController {
   // build/finalize/activate ceremony that activateDietPlan() requires.
   Future<void> confirmRenewalPayment(String patientId) async {
     if (paymentProofId.value.isEmpty) {
-      Get.snackbar(
-        "Error",
-        "No payment proof found for this patient.",
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red.withValues(alpha: 0.9),
-        colorText: Colors.white,
-        margin: const EdgeInsets.all(12),
-        borderRadius: 8,
-        duration: const Duration(seconds: 3),
+      showAppToast(
+        Get.overlayContext!,
+        message: "No payment proof found for this patient.",
+        type: AppToastType.warning,
       );
       return;
     }
@@ -2689,51 +2669,31 @@ class PatientsController extends GetxController {
         if (response['success'] == true) {
           await getPatientProfile(patientId);
           Get.back();
-          Get.snackbar(
-            "Success",
-            "${response['message']}",
-            snackPosition: SnackPosition.BOTTOM,
-            backgroundColor: Colors.green.withValues(alpha: 0.9),
-            colorText: Colors.white,
-            margin: const EdgeInsets.all(12),
-            borderRadius: 8,
-            duration: const Duration(seconds: 2),
+          showAppToast(
+            Get.overlayContext!,
+            message: "${response['message']}",
+            type: AppToastType.success,
           );
         } else {
-          Get.snackbar(
-            "Error",
-            response['message'] ?? "Failed to confirm payment",
-            snackPosition: SnackPosition.BOTTOM,
-            backgroundColor: Colors.red.withValues(alpha: 0.9),
-            colorText: Colors.white,
-            margin: const EdgeInsets.all(12),
-            borderRadius: 8,
-            duration: const Duration(seconds: 3),
+          showAppToast(
+            Get.overlayContext!,
+            message: response['message'] ?? "Failed to confirm payment",
+            type: AppToastType.error,
           );
         }
       } else {
-        Get.snackbar(
-          "Error",
-          "Failed to confirm payment. Please try again.",
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: Colors.red.withValues(alpha: 0.9),
-          colorText: Colors.white,
-          margin: const EdgeInsets.all(12),
-          borderRadius: 8,
-          duration: const Duration(seconds: 3),
+        showAppToast(
+          Get.overlayContext!,
+          message: "Failed to confirm payment. Please try again.",
+          type: AppToastType.error,
         );
       }
     } catch (e) {
       debugPrint('---------------$e');
-      Get.snackbar(
-        "Error",
-        "An error occurred while confirming the payment",
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red.withValues(alpha: 0.9),
-        colorText: Colors.white,
-        margin: const EdgeInsets.all(12),
-        borderRadius: 8,
-        duration: const Duration(seconds: 3),
+      showAppToast(
+        Get.overlayContext!,
+        message: "An error occurred while confirming the payment",
+        type: AppToastType.error,
       );
     }
 
@@ -2816,15 +2776,10 @@ class PatientsController extends GetxController {
 
       if (response != null && response['success'] == true) {
         debugPrint("Week finalized successfully");
-        Get.snackbar(
-          "Success",
-          "$selectedWeek finalized successfully",
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: Colors.green.withValues(alpha: 0.9),
-          colorText: Colors.white,
-          margin: const EdgeInsets.all(12),
-          borderRadius: 8,
-          duration: const Duration(seconds: 2),
+        showAppToast(
+          Get.overlayContext!,
+          message: "$selectedWeek finalized successfully",
+          type: AppToastType.success,
         );
         // Reset weight override
         currentWeightForWeek.value = 0.0;
@@ -2922,17 +2877,12 @@ class PatientsController extends GetxController {
         Get.back();
         Get.back();
         Get.offNamed('/patient-profile/$patientId');
-        Get.snackbar(
-          "Success",
-          paymentSent
+        showAppToast(
+          Get.overlayContext!,
+          message: paymentSent
               ? "All weeks finalized & payment request sent to patient!"
               : "All weeks finalized successfully!",
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: Colors.green.withValues(alpha: 0.9),
-          colorText: Colors.white,
-          margin: const EdgeInsets.all(12),
-          borderRadius: 8,
-          duration: const Duration(seconds: 2),
+          type: AppToastType.success,
         );
 
         // Update local status to reflect payment requested
@@ -2952,12 +2902,11 @@ class PatientsController extends GetxController {
   Future<void> sendPaymentRequest(String patientId, String requestId) async {
     // At least one week must be finalized before sending payment request
     if (!hasFinalizedWeeks) {
-      Get.snackbar(
-        'Cannot Send Payment',
-        'Please finalize at least one week before sending a payment request.',
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: const Color(0xffFEF3F2),
-        colorText: const Color(0xffB42318),
+      showAppToast(
+        Get.overlayContext!,
+        message:
+            'Cannot Send Payment: Please finalize at least one week before sending a payment request.',
+        type: AppToastType.warning,
       );
       return;
     }
@@ -3015,7 +2964,11 @@ class PatientsController extends GetxController {
         }
         updateGetShiftMeals();
       } else {
-        Get.snackbar("Error", "Failed to load week data");
+        showAppToast(
+          Get.overlayContext!,
+          message: "Failed to load week data",
+          type: AppToastType.error,
+        );
       }
     } catch (e) {
       debugPrint("---------------------> $e");
@@ -3167,15 +3120,10 @@ class PatientsController extends GetxController {
         // Refresh the patient profile data so the UI reflects changes
         await getPatientProfile(patientId);
         Get.back();
-        Get.snackbar(
-          "Success",
-          "Week $week updated successfully",
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: Colors.green.withValues(alpha: 0.9),
-          colorText: Colors.white,
-          margin: const EdgeInsets.all(12),
-          borderRadius: 8,
-          duration: const Duration(seconds: 2),
+        showAppToast(
+          Get.overlayContext!,
+          message: "Week $week updated successfully",
+          type: AppToastType.success,
         );
       }
     } catch (e) {

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:video_thumbnail/video_thumbnail.dart';
+import 'package:docwellnesdoc/app/utils/common_widgets/app_toast.dart';
 
 import '../../home/controllers/home_controller.dart' as home;
 import '../services/coupon_service.dart';
@@ -188,28 +189,28 @@ class PerformanceController extends GetxController {
   // ── Add video ─────────────────────────────────────────────────
   Future<void> addVideo() async {
     if (selectedSource.value.isEmpty) {
-      Get.snackbar(
-        'Error',
-        'Please select a source',
-        snackPosition: SnackPosition.BOTTOM,
+      showAppToast(
+        Get.overlayContext!,
+        message: 'Please select a source',
+        type: AppToastType.error,
       );
       return;
     }
 
     if (selectedSource.value == 'YouTube' && youtubeUrl.value.isEmpty) {
-      Get.snackbar(
-        'Error',
-        'Please enter a YouTube URL',
-        snackPosition: SnackPosition.BOTTOM,
+      showAppToast(
+        Get.overlayContext!,
+        message: 'Please enter a YouTube URL',
+        type: AppToastType.error,
       );
       return;
     }
 
     if (selectedSource.value == 'Device Storage' && pickedVideo.value == null) {
-      Get.snackbar(
-        'Error',
-        'Please pick a video',
-        snackPosition: SnackPosition.BOTTOM,
+      showAppToast(
+        Get.overlayContext!,
+        message: 'Please pick a video',
+        type: AppToastType.error,
       );
       return;
     }
@@ -232,25 +233,25 @@ class PerformanceController extends GetxController {
         resetUploadForm();
         Get.back();
         Future.delayed(const Duration(milliseconds: 300), () {
-          Get.snackbar(
-            'Success',
-            'Video added successfully',
-            snackPosition: SnackPosition.BOTTOM,
+          showAppToast(
+            Get.overlayContext!,
+            message: 'Video added successfully',
+            type: AppToastType.success,
           );
         });
       } else {
-        Get.snackbar(
-          'Error',
-          'Failed to add video',
-          snackPosition: SnackPosition.BOTTOM,
+        showAppToast(
+          Get.overlayContext!,
+          message: 'Failed to add video',
+          type: AppToastType.error,
         );
       }
     } catch (e) {
       log('addVideo error: $e');
-      Get.snackbar(
-        'Error',
-        'Something went wrong',
-        snackPosition: SnackPosition.BOTTOM,
+      showAppToast(
+        Get.overlayContext!,
+        message: 'Something went wrong',
+        type: AppToastType.error,
       );
     } finally {
       isVideoSaving.value = false;
@@ -264,24 +265,24 @@ class PerformanceController extends GetxController {
       final success = await _videoService.deleteVideo(videoId);
       if (success) {
         videosList.removeWhere((v) => v['_id'] == videoId);
-        Get.snackbar(
-          'Success',
-          'Video deleted successfully',
-          snackPosition: SnackPosition.BOTTOM,
+        showAppToast(
+          Get.overlayContext!,
+          message: 'Video deleted successfully',
+          type: AppToastType.success,
         );
       } else {
-        Get.snackbar(
-          'Error',
-          'Failed to delete video',
-          snackPosition: SnackPosition.BOTTOM,
+        showAppToast(
+          Get.overlayContext!,
+          message: 'Failed to delete video',
+          type: AppToastType.error,
         );
       }
     } catch (e) {
       log('deleteVideo error: $e');
-      Get.snackbar(
-        'Error',
-        'Something went wrong',
-        snackPosition: SnackPosition.BOTTOM,
+      showAppToast(
+        Get.overlayContext!,
+        message: 'Something went wrong',
+        type: AppToastType.error,
       );
     } finally {
       isVideoSaving.value = false;
@@ -315,25 +316,25 @@ class PerformanceController extends GetxController {
         resetUploadForm();
         Get.back();
         Future.delayed(const Duration(milliseconds: 300), () {
-          Get.snackbar(
-            'Success',
-            'Video updated successfully',
-            snackPosition: SnackPosition.BOTTOM,
+          showAppToast(
+            Get.overlayContext!,
+            message: 'Video updated successfully',
+            type: AppToastType.success,
           );
         });
       } else {
-        Get.snackbar(
-          'Error',
-          'Failed to update video',
-          snackPosition: SnackPosition.BOTTOM,
+        showAppToast(
+          Get.overlayContext!,
+          message: 'Failed to update video',
+          type: AppToastType.error,
         );
       }
     } catch (e) {
       log('updateVideo error: $e');
-      Get.snackbar(
-        'Error',
-        'Something went wrong',
-        snackPosition: SnackPosition.BOTTOM,
+      showAppToast(
+        Get.overlayContext!,
+        message: 'Something went wrong',
+        type: AppToastType.error,
       );
     } finally {
       isVideoSaving.value = false;
@@ -358,16 +359,18 @@ class PerformanceController extends GetxController {
             ..['visibleToUser'] = !currentVisibility;
           videosList.refresh();
         }
-        Get.snackbar(
-          'Success',
-          !currentVisibility ? 'Video is now visible' : 'Video is now hidden',
-          snackPosition: SnackPosition.BOTTOM,
+        showAppToast(
+          Get.overlayContext!,
+          message: !currentVisibility
+              ? 'Video is now visible'
+              : 'Video is now hidden',
+          type: AppToastType.success,
         );
       } else {
-        Get.snackbar(
-          'Error',
-          'Failed to update visibility',
-          snackPosition: SnackPosition.BOTTOM,
+        showAppToast(
+          Get.overlayContext!,
+          message: 'Failed to update visibility',
+          type: AppToastType.error,
         );
       }
     } catch (e) {
@@ -472,10 +475,10 @@ class PerformanceController extends GetxController {
   /// Add a new quote
   Future<void> addQuote() async {
     if (pickedQuoteImage.value == null) {
-      Get.snackbar(
-        'Error',
-        'Please select an image',
-        snackPosition: SnackPosition.BOTTOM,
+      showAppToast(
+        Get.overlayContext!,
+        message: 'Please select an image',
+        type: AppToastType.error,
       );
       return;
     }
@@ -493,25 +496,25 @@ class PerformanceController extends GetxController {
         resetQuoteForm();
         Get.back();
         Future.delayed(const Duration(milliseconds: 300), () {
-          Get.snackbar(
-            'Success',
-            'Quote added successfully',
-            snackPosition: SnackPosition.BOTTOM,
+          showAppToast(
+            Get.overlayContext!,
+            message: 'Quote added successfully',
+            type: AppToastType.success,
           );
         });
       } else {
-        Get.snackbar(
-          'Error',
-          'Failed to add quote',
-          snackPosition: SnackPosition.BOTTOM,
+        showAppToast(
+          Get.overlayContext!,
+          message: 'Failed to add quote',
+          type: AppToastType.error,
         );
       }
     } catch (e) {
       log('addQuote error: $e');
-      Get.snackbar(
-        'Error',
-        'Something went wrong',
-        snackPosition: SnackPosition.BOTTOM,
+      showAppToast(
+        Get.overlayContext!,
+        message: 'Something went wrong',
+        type: AppToastType.error,
       );
     } finally {
       isQuoteSaving.value = false;
@@ -536,25 +539,25 @@ class PerformanceController extends GetxController {
         resetQuoteForm();
         Get.back();
         Future.delayed(const Duration(milliseconds: 300), () {
-          Get.snackbar(
-            'Success',
-            'Quote updated successfully',
-            snackPosition: SnackPosition.BOTTOM,
+          showAppToast(
+            Get.overlayContext!,
+            message: 'Quote updated successfully',
+            type: AppToastType.success,
           );
         });
       } else {
-        Get.snackbar(
-          'Error',
-          'Failed to update quote',
-          snackPosition: SnackPosition.BOTTOM,
+        showAppToast(
+          Get.overlayContext!,
+          message: 'Failed to update quote',
+          type: AppToastType.error,
         );
       }
     } catch (e) {
       log('updateQuote error: $e');
-      Get.snackbar(
-        'Error',
-        'Something went wrong',
-        snackPosition: SnackPosition.BOTTOM,
+      showAppToast(
+        Get.overlayContext!,
+        message: 'Something went wrong',
+        type: AppToastType.error,
       );
     } finally {
       isQuoteSaving.value = false;
@@ -568,24 +571,24 @@ class PerformanceController extends GetxController {
       final success = await _quoteService.deleteQuote(quoteId);
       if (success) {
         quotesList.removeWhere((q) => q['_id'] == quoteId);
-        Get.snackbar(
-          'Success',
-          'Quote deleted successfully',
-          snackPosition: SnackPosition.BOTTOM,
+        showAppToast(
+          Get.overlayContext!,
+          message: 'Quote deleted successfully',
+          type: AppToastType.success,
         );
       } else {
-        Get.snackbar(
-          'Error',
-          'Failed to delete quote',
-          snackPosition: SnackPosition.BOTTOM,
+        showAppToast(
+          Get.overlayContext!,
+          message: 'Failed to delete quote',
+          type: AppToastType.error,
         );
       }
     } catch (e) {
       log('deleteQuote error: $e');
-      Get.snackbar(
-        'Error',
-        'Something went wrong',
-        snackPosition: SnackPosition.BOTTOM,
+      showAppToast(
+        Get.overlayContext!,
+        message: 'Something went wrong',
+        type: AppToastType.error,
       );
     } finally {
       isQuoteSaving.value = false;
@@ -603,16 +606,18 @@ class PerformanceController extends GetxController {
             ..['isActive'] = !currentActive;
           quotesList.refresh();
         }
-        Get.snackbar(
-          'Success',
-          !currentActive ? 'Quote is now active' : 'Quote is now hidden',
-          snackPosition: SnackPosition.BOTTOM,
+        showAppToast(
+          Get.overlayContext!,
+          message: !currentActive
+              ? 'Quote is now active'
+              : 'Quote is now hidden',
+          type: AppToastType.success,
         );
       } else {
-        Get.snackbar(
-          'Error',
-          'Failed to update status',
-          snackPosition: SnackPosition.BOTTOM,
+        showAppToast(
+          Get.overlayContext!,
+          message: 'Failed to update status',
+          type: AppToastType.error,
         );
       }
     } catch (e) {
@@ -687,20 +692,20 @@ class PerformanceController extends GetxController {
         couponCodeController.text.trim().isEmpty ||
         couponPercentageController.text.trim().isEmpty ||
         couponValidTillController.text.trim().isEmpty) {
-      Get.snackbar(
-        'Error',
-        'Please fill all fields',
-        snackPosition: SnackPosition.BOTTOM,
+      showAppToast(
+        Get.overlayContext!,
+        message: 'Please fill all fields',
+        type: AppToastType.warning,
       );
       return;
     }
 
     final percentage = int.tryParse(couponPercentageController.text.trim());
     if (percentage == null || percentage < 1 || percentage > 100) {
-      Get.snackbar(
-        'Error',
-        'Discount must be between 1 and 100',
-        snackPosition: SnackPosition.BOTTOM,
+      showAppToast(
+        Get.overlayContext!,
+        message: 'Discount must be between 1 and 100',
+        type: AppToastType.warning,
       );
       return;
     }
@@ -720,25 +725,25 @@ class PerformanceController extends GetxController {
         resetCouponForm();
         Get.back();
         Future.delayed(const Duration(milliseconds: 300), () {
-          Get.snackbar(
-            'Success',
-            'Coupon added successfully',
-            snackPosition: SnackPosition.BOTTOM,
+          showAppToast(
+            Get.overlayContext!,
+            message: 'Coupon added successfully',
+            type: AppToastType.success,
           );
         });
       } else {
-        Get.snackbar(
-          'Error',
-          'Failed to add coupon',
-          snackPosition: SnackPosition.BOTTOM,
+        showAppToast(
+          Get.overlayContext!,
+          message: 'Failed to add coupon',
+          type: AppToastType.error,
         );
       }
     } catch (e) {
       log('addCoupon error: $e');
-      Get.snackbar(
-        'Error',
-        'Something went wrong',
-        snackPosition: SnackPosition.BOTTOM,
+      showAppToast(
+        Get.overlayContext!,
+        message: 'Something went wrong',
+        type: AppToastType.error,
       );
     } finally {
       isCouponSaving.value = false;
@@ -750,10 +755,10 @@ class PerformanceController extends GetxController {
 
     final percentage = int.tryParse(couponPercentageController.text.trim());
     if (percentage != null && (percentage < 1 || percentage > 100)) {
-      Get.snackbar(
-        'Error',
-        'Discount must be between 1 and 100',
-        snackPosition: SnackPosition.BOTTOM,
+      showAppToast(
+        Get.overlayContext!,
+        message: 'Discount must be between 1 and 100',
+        type: AppToastType.warning,
       );
       return;
     }
@@ -774,25 +779,25 @@ class PerformanceController extends GetxController {
         resetCouponForm();
         Get.back();
         Future.delayed(const Duration(milliseconds: 300), () {
-          Get.snackbar(
-            'Success',
-            'Coupon updated successfully',
-            snackPosition: SnackPosition.BOTTOM,
+          showAppToast(
+            Get.overlayContext!,
+            message: 'Coupon updated successfully',
+            type: AppToastType.success,
           );
         });
       } else {
-        Get.snackbar(
-          'Error',
-          'Failed to update coupon',
-          snackPosition: SnackPosition.BOTTOM,
+        showAppToast(
+          Get.overlayContext!,
+          message: 'Failed to update coupon',
+          type: AppToastType.error,
         );
       }
     } catch (e) {
       log('updateCoupon error: $e');
-      Get.snackbar(
-        'Error',
-        'Something went wrong',
-        snackPosition: SnackPosition.BOTTOM,
+      showAppToast(
+        Get.overlayContext!,
+        message: 'Something went wrong',
+        type: AppToastType.error,
       );
     } finally {
       isCouponSaving.value = false;
@@ -807,25 +812,25 @@ class PerformanceController extends GetxController {
         couponsList.removeWhere((c) => c['_id'] == couponId);
         Get.back();
         Future.delayed(const Duration(milliseconds: 300), () {
-          Get.snackbar(
-            'Success',
-            'Coupon deleted successfully',
-            snackPosition: SnackPosition.BOTTOM,
+          showAppToast(
+            Get.overlayContext!,
+            message: 'Coupon deleted successfully',
+            type: AppToastType.success,
           );
         });
       } else {
-        Get.snackbar(
-          'Error',
-          'Failed to delete coupon',
-          snackPosition: SnackPosition.BOTTOM,
+        showAppToast(
+          Get.overlayContext!,
+          message: 'Failed to delete coupon',
+          type: AppToastType.error,
         );
       }
     } catch (e) {
       log('deleteCoupon error: $e');
-      Get.snackbar(
-        'Error',
-        'Something went wrong',
-        snackPosition: SnackPosition.BOTTOM,
+      showAppToast(
+        Get.overlayContext!,
+        message: 'Something went wrong',
+        type: AppToastType.error,
       );
     } finally {
       isCouponSaving.value = false;

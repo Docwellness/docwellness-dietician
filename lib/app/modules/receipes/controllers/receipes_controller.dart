@@ -1,6 +1,7 @@
 import 'package:docwellnesdoc/app/modules/receipes/models/recipe_model.dart';
 import 'package:docwellnesdoc/app/modules/receipes/services/recipe_service.dart';
 import 'package:docwellnesdoc/app/modules/receipes/utils/dietary_constraints.dart';
+import 'package:docwellnesdoc/app/utils/common_widgets/app_toast.dart';
 import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
 
@@ -380,7 +381,11 @@ class ReceipesController extends GetxController {
     final validationError = validateInputs();
     if (validationError != null) {
       errorMessage.value = validationError;
-      Get.snackbar('Validation Error', validationError);
+      showAppToast(
+        Get.overlayContext!,
+        message: validationError,
+        type: AppToastType.warning,
+      );
       return null;
     }
 
@@ -408,18 +413,30 @@ class ReceipesController extends GetxController {
         return result;
       } else {
         errorMessage.value = 'Failed to generate recipe. Please try again.';
-        Get.snackbar('Error', errorMessage.value);
+        showAppToast(
+          Get.overlayContext!,
+          message: errorMessage.value,
+          type: AppToastType.error,
+        );
         return null;
       }
     } on RecipeApiException catch (e) {
       debugPrint('❌ Recipe constraint conflict: ${e.displayMessage}');
       errorMessage.value = e.displayMessage;
-      Get.snackbar('Dietary Constraint Conflict', e.displayMessage);
+      showAppToast(
+        Get.overlayContext!,
+        message: 'Dietary Constraint Conflict: ${e.displayMessage}',
+        type: AppToastType.error,
+      );
       return null;
     } catch (e) {
       debugPrint('❌ Error generating recipe: $e');
       errorMessage.value = 'An error occurred. Please try again.';
-      Get.snackbar('Error', errorMessage.value);
+      showAppToast(
+        Get.overlayContext!,
+        message: errorMessage.value,
+        type: AppToastType.error,
+      );
       return null;
     } finally {
       isGenerating.value = false;
@@ -482,14 +499,22 @@ class ReceipesController extends GetxController {
 
   Future<RecipePreview?> updateAiInputs() async {
     if (generatedRecipe.value == null) {
-      Get.snackbar('Error', 'No recipe to update');
+      showAppToast(
+        Get.overlayContext!,
+        message: 'No recipe to update',
+        type: AppToastType.warning,
+      );
       return null;
     }
 
     final validationError = validateInputs();
     if (validationError != null) {
       errorMessage.value = validationError;
-      Get.snackbar('Validation Error', validationError);
+      showAppToast(
+        Get.overlayContext!,
+        message: validationError,
+        type: AppToastType.warning,
+      );
       return null;
     }
 
@@ -526,18 +551,30 @@ class ReceipesController extends GetxController {
         return resultWithId;
       } else {
         errorMessage.value = 'Failed to update recipe. Please try again.';
-        Get.snackbar('Error', errorMessage.value);
+        showAppToast(
+          Get.overlayContext!,
+          message: errorMessage.value,
+          type: AppToastType.error,
+        );
         return null;
       }
     } on RecipeApiException catch (e) {
       debugPrint('❌ Recipe constraint conflict: ${e.displayMessage}');
       errorMessage.value = e.displayMessage;
-      Get.snackbar('Dietary Constraint Conflict', e.displayMessage);
+      showAppToast(
+        Get.overlayContext!,
+        message: 'Dietary Constraint Conflict: ${e.displayMessage}',
+        type: AppToastType.error,
+      );
       return null;
     } catch (e) {
       debugPrint('❌ Error updating recipe: $e');
       errorMessage.value = 'An error occurred. Please try again.';
-      Get.snackbar('Error', errorMessage.value);
+      showAppToast(
+        Get.overlayContext!,
+        message: errorMessage.value,
+        type: AppToastType.error,
+      );
       return null;
     } finally {
       isUpdatingAi.value = false;

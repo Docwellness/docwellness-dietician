@@ -1,4 +1,5 @@
 import 'package:docwellnesdoc/app/modules/patients/controllers/patients_controller.dart';
+import 'package:docwellnesdoc/app/utils/common_widgets/app_toast.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_button.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
 import 'package:flutter/material.dart';
@@ -85,6 +86,21 @@ class _CreateDietPlanScreenState extends State<CreateDietPlanScreen> {
 
     final parsedStart = _parseDdMmYyyy(health?.startDateForDiet ?? '');
     if (parsedStart != null) _selectedStartDate = parsedStart;
+
+    // Week 2+ dates are derived (week1Start + (week-1)*7 days - see
+    // utils/weekSchedule.js on the backend), not independently pickable -
+    // seed from the plan's own weekSchedule so the (now read-only) date
+    // shown matches what's actually scheduled, instead of the week-1 date
+    // above. A cycle's own week 1 (including a renewal's) keeps the normal
+    // editable flow further down.
+    if (widget.targetWeek != 1) {
+      final scheduled = controller.patientProfileModel.value?.scheduleFor(
+        widget.targetWeek,
+      );
+      if (scheduled?.startDate != null) {
+        _selectedStartDate = scheduled!.startDate!;
+      }
+    }
 
     // Re-opening an already-generated/finalized week (see
     // patient_profile_view.dart's Week card taps) should show what was
@@ -342,41 +358,53 @@ class _CreateDietPlanScreenState extends State<CreateDietPlanScreen> {
                     const SizedBox(height: 8),
                     InkWell(
                       borderRadius: BorderRadius.circular(12),
-                      onTap: () async {
-                        final today = DateTime.now();
-                        // _selectedStartDate may be seeded from the patient's
-                        // existing startDateForDiet, which can predate "today" -
-                        // showDatePicker asserts initialDate >= firstDate, so
-                        // the floor must never be later than the seeded value.
-                        final firstDate = _selectedStartDate.isBefore(today)
-                            ? _selectedStartDate
-                            : today;
-                        final lastDate = today.add(const Duration(days: 60));
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: _selectedStartDate,
-                          firstDate: firstDate,
-                          lastDate: _selectedStartDate.isAfter(lastDate)
-                              ? _selectedStartDate
-                              : lastDate,
-                        );
-                        if (picked != null) {
-                          setState(() => _selectedStartDate = picked);
-                        }
-                      },
+                      // Only a cycle's own week 1 has an independently
+                      // pickable start date - week 2+ is derived from it
+                      // (week1Start + (week-1)*7 days), so there's nothing
+                      // to pick.
+                      onTap: widget.targetWeek != 1
+                          ? null
+                          : () async {
+                              final today = DateTime.now();
+                              // _selectedStartDate may be seeded from the patient's
+                              // existing startDateForDiet, which can predate "today" -
+                              // showDatePicker asserts initialDate >= firstDate, so
+                              // the floor must never be later than the seeded value.
+                              final firstDate = _selectedStartDate.isBefore(today)
+                                  ? _selectedStartDate
+                                  : today;
+                              final lastDate = today.add(
+                                const Duration(days: 60),
+                              );
+                              final picked = await showDatePicker(
+                                context: context,
+                                initialDate: _selectedStartDate,
+                                firstDate: firstDate,
+                                lastDate: _selectedStartDate.isAfter(lastDate)
+                                    ? _selectedStartDate
+                                    : lastDate,
+                              );
+                              if (picked != null) {
+                                setState(() => _selectedStartDate = picked);
+                              }
+                            },
                       child: InputDecorator(
                         decoration: InputDecoration(
                           filled: true,
-                          fillColor: const Color(0xffFEF6FB),
+                          fillColor: widget.targetWeek != 1
+                              ? const Color(0xffF3F4F6)
+                              : const Color(0xffFEF6FB),
                           contentPadding: const EdgeInsets.symmetric(
                             horizontal: 16,
                             vertical: 14,
                           ),
-                          suffixIcon: const Icon(
-                            Icons.calendar_today_outlined,
-                            color: Color(0xff851653),
-                            size: 18,
-                          ),
+                          suffixIcon: widget.targetWeek != 1
+                              ? null
+                              : const Icon(
+                                  Icons.calendar_today_outlined,
+                                  color: Color(0xff851653),
+                                  size: 18,
+                                ),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
                             borderSide: const BorderSide(
@@ -716,13 +744,11 @@ class _CreateDietPlanScreenState extends State<CreateDietPlanScreen> {
                       // ── Validate weight (every week) ──
                       final w = double.tryParse(_weightController.text.trim());
                       if (w == null || w <= 0) {
-                        Get.snackbar(
-                          'Missing Weight',
-                          'Please enter the patient\'s current weight',
-                          backgroundColor: Colors.orange,
-                          colorText: Colors.white,
-                          snackPosition: SnackPosition.TOP,
-                          duration: const Duration(seconds: 3),
+                        showAppToast(
+                          Get.overlayContext!,
+                          message:
+                              'Missing Weight: Please enter the patient\'s current weight',
+                          type: AppToastType.warning,
                         );
                         return;
                       }
@@ -730,24 +756,20 @@ class _CreateDietPlanScreenState extends State<CreateDietPlanScreen> {
 
                       // ── Validate selections ──
                       if (selectedCalories.isEmpty) {
-                        Get.snackbar(
-                          'Missing Selection',
-                          'Please select a Calorie option (Gentle, Steady, Accelerated, or Extreme)',
-                          backgroundColor: Colors.orange,
-                          colorText: Colors.white,
-                          snackPosition: SnackPosition.TOP,
-                          duration: const Duration(seconds: 3),
+                        showAppToast(
+                          Get.overlayContext!,
+                          message:
+                              'Missing Selection: Please select a Calorie option (Gentle, Steady, Accelerated, or Extreme)',
+                          type: AppToastType.warning,
                         );
                         return;
                       }
                       if (selectedMacros.isEmpty) {
-                        Get.snackbar(
-                          'Missing Selection',
-                          'Please select a Macros option (Balanced or Low-Carb)',
-                          backgroundColor: Colors.orange,
-                          colorText: Colors.white,
-                          snackPosition: SnackPosition.TOP,
-                          duration: const Duration(seconds: 3),
+                        showAppToast(
+                          Get.overlayContext!,
+                          message:
+                              'Missing Selection: Please select a Macros option (Balanced or Low-Carb)',
+                          type: AppToastType.warning,
                         );
                         return;
                       }
@@ -765,12 +787,10 @@ class _CreateDietPlanScreenState extends State<CreateDietPlanScreen> {
                         final targetDietPlanId =
                             widget.dietPlanId ?? activeDietPlanId;
                         if (targetDietPlanId.isEmpty) {
-                          Get.snackbar(
-                            'Error',
-                            'No diet plan found to generate weeks for.',
-                            backgroundColor: Colors.red,
-                            colorText: Colors.white,
-                            snackPosition: SnackPosition.TOP,
+                          showAppToast(
+                            Get.overlayContext!,
+                            message: 'No diet plan found to generate weeks for.',
+                            type: AppToastType.error,
                           );
                           return;
                         }
@@ -781,14 +801,11 @@ class _CreateDietPlanScreenState extends State<CreateDietPlanScreen> {
                           currentWeight: w,
                         );
                         if (response == null || response['success'] != true) {
-                          Get.snackbar(
-                            'Could not generate',
-                            response?['message']?.toString() ??
-                                'Please try again.',
-                            backgroundColor: Colors.red,
-                            colorText: Colors.white,
-                            snackPosition: SnackPosition.TOP,
-                            duration: const Duration(seconds: 4),
+                          showAppToast(
+                            Get.overlayContext!,
+                            message:
+                                'Could not generate: ${response?['message']?.toString() ?? 'Please try again.'}',
+                            type: AppToastType.error,
                           );
                           return;
                         }
@@ -812,12 +829,11 @@ class _CreateDietPlanScreenState extends State<CreateDietPlanScreen> {
                         // the reuse branch below instead of re-running AI
                         // generation from scratch).
                         if (widget.firstConsultationId.isEmpty) {
-                          Get.snackbar(
-                            'Error',
-                            'First consultation ID is missing. Please refresh.',
-                            backgroundColor: Colors.red,
-                            colorText: Colors.white,
-                            snackPosition: SnackPosition.TOP,
+                          showAppToast(
+                            Get.overlayContext!,
+                            message:
+                                'First consultation ID is missing. Please refresh.',
+                            type: AppToastType.error,
                           );
                           return;
                         }
@@ -829,12 +845,11 @@ class _CreateDietPlanScreenState extends State<CreateDietPlanScreen> {
                           currentWeight: w,
                         );
                         if (newDietPlanId == null || newDietPlanId.isEmpty) {
-                          Get.snackbar(
-                            'Error',
-                            'Diet plan generation failed. Please try again.',
-                            backgroundColor: Colors.red,
-                            colorText: Colors.white,
-                            snackPosition: SnackPosition.TOP,
+                          showAppToast(
+                            Get.overlayContext!,
+                            message:
+                                'Diet plan generation failed. Please try again.',
+                            type: AppToastType.error,
                           );
                           return;
                         }
@@ -857,12 +872,10 @@ class _CreateDietPlanScreenState extends State<CreateDietPlanScreen> {
                         // finalizedPlan/weeksSummary for weeks 2-4 are
                         // separate fields, untouched by this ──
                         if (activeDietPlanId.isEmpty) {
-                          Get.snackbar(
-                            'Error',
-                            'No diet plan found for this patient.',
-                            backgroundColor: Colors.red,
-                            colorText: Colors.white,
-                            snackPosition: SnackPosition.TOP,
+                          showAppToast(
+                            Get.overlayContext!,
+                            message: 'No diet plan found for this patient.',
+                            type: AppToastType.error,
                           );
                           return;
                         }
@@ -873,14 +886,11 @@ class _CreateDietPlanScreenState extends State<CreateDietPlanScreen> {
                           currentWeight: w,
                         );
                         if (response == null || response['success'] != true) {
-                          Get.snackbar(
-                            'Could not generate',
-                            response?['message']?.toString() ??
-                                'Please try again.',
-                            backgroundColor: Colors.red,
-                            colorText: Colors.white,
-                            snackPosition: SnackPosition.TOP,
-                            duration: const Duration(seconds: 4),
+                          showAppToast(
+                            Get.overlayContext!,
+                            message:
+                                'Could not generate: ${response?['message']?.toString() ?? 'Please try again.'}',
+                            type: AppToastType.error,
                           );
                           return;
                         }
@@ -898,12 +908,10 @@ class _CreateDietPlanScreenState extends State<CreateDietPlanScreen> {
                         // or Week 2/3/4: reuse existing diet plan, skip AI
                         // generation ──
                         if (activeDietPlanId.isEmpty) {
-                          Get.snackbar(
-                            'Error',
-                            'No diet plan found for this patient.',
-                            backgroundColor: Colors.red,
-                            colorText: Colors.white,
-                            snackPosition: SnackPosition.TOP,
+                          showAppToast(
+                            Get.overlayContext!,
+                            message: 'No diet plan found for this patient.',
+                            type: AppToastType.error,
                           );
                           return;
                         }

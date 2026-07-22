@@ -12,6 +12,7 @@ import 'package:docwellnesdoc/app/modules/chat/widgets/doctor_recommendation_bub
 import 'package:docwellnesdoc/app/modules/chat/widgets/meal_log_bubble.dart';
 import 'package:docwellnesdoc/app/modules/chat/widgets/typing_indicator.dart';
 import 'package:docwellnesdoc/app/modules/chat/widgets/water_intake_bubble.dart';
+import 'package:docwellnesdoc/app/utils/common_widgets/app_toast.dart';
 import 'package:docwellnesdoc/main.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -782,10 +783,10 @@ class _ChatScreenState extends State<ChatScreen> {
                   // I will use controller to handle the copy logic or import it.
                   // Wait, I can just use clipboard here since we use material.
                   Clipboard.setData(ClipboardData(text: chat.message));
-                  Get.snackbar(
-                    'Copied',
-                    'Message copied to clipboard',
-                    snackPosition: SnackPosition.BOTTOM,
+                  showAppToast(
+                    Get.overlayContext!,
+                    message: 'Message copied to clipboard',
+                    type: AppToastType.success,
                   );
                 },
               ),
@@ -859,16 +860,17 @@ class _ChatScreenState extends State<ChatScreen> {
                           conversationId: user
                               .id, // We'll just pass conversationId here. We need to handle receiverId correctly inside the controller.
                         );
-                        Get.snackbar(
-                          'Forwarded',
-                          'Message forwarded to ${user.name}',
-                          snackPosition: SnackPosition.BOTTOM,
+                        showAppToast(
+                          Get.overlayContext!,
+                          message: 'Message forwarded to ${user.name}',
+                          type: AppToastType.success,
                         );
                       } else {
-                        Get.snackbar(
-                          'Not Supported',
-                          'Forwarding this message type is not supported yet',
-                          snackPosition: SnackPosition.BOTTOM,
+                        showAppToast(
+                          Get.overlayContext!,
+                          message:
+                              'Forwarding this message type is not supported yet',
+                          type: AppToastType.warning,
                         );
                       }
                     },
@@ -885,12 +887,10 @@ class _ChatScreenState extends State<ChatScreen> {
   void _handleCustomFoodAction(ChatModel chat, String action) async {
     final requestId = chat.metadata?.customFoodRequestId;
     if (requestId == null || requestId.isEmpty) {
-      Get.snackbar(
-        'Error',
-        'Custom food request ID not found',
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
+      showAppToast(
+        Get.overlayContext!,
+        message: 'Custom food request ID not found',
+        type: AppToastType.error,
       );
       return;
     }
@@ -954,24 +954,18 @@ class _ChatScreenState extends State<ChatScreen> {
           controller.chatList.refresh();
         }
 
-        Get.snackbar(
-          action == 'approve' ? 'Approved' : 'Rejected',
-          'Custom food request ${action}d successfully',
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: action == 'approve'
-              ? const Color(0xff10B981)
-              : const Color(0xffEF4444),
-          colorText: Colors.white,
+        showAppToast(
+          Get.overlayContext!,
+          message: 'Custom food request ${action}d successfully',
+          type: AppToastType.success,
         );
       }
     } catch (e) {
       debugPrint('Custom food action error: $e');
-      Get.snackbar(
-        'Error',
-        'Failed to $action custom food request',
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
+      showAppToast(
+        Get.overlayContext!,
+        message: 'Failed to $action custom food request',
+        type: AppToastType.error,
       );
     }
   }

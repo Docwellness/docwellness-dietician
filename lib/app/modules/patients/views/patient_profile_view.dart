@@ -16,6 +16,7 @@ import 'package:docwellnesdoc/app/modules/patients/widgets/calorie_intake_contai
 import 'package:docwellnesdoc/app/modules/patients/widgets/line_chart.dart';
 import 'package:docwellnesdoc/app/modules/patients/widgets/show_diet_level_sheet.dart';
 import 'package:docwellnesdoc/app/routes/app_pages.dart';
+import 'package:docwellnesdoc/app/utils/common_widgets/app_toast.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_button.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
 import 'package:flutter/material.dart';
@@ -98,10 +99,10 @@ class _PatientProfileViewState extends State<PatientProfileView> {
         () => ChatScreen(conversationId: conversationId, receiverId: patientId),
       );
     } else {
-      Get.snackbar(
-        'Error',
-        'Could not open chat. Please try again.',
-        snackPosition: SnackPosition.BOTTOM,
+      showAppToast(
+        Get.overlayContext!,
+        message: 'Could not open chat. Please try again.',
+        type: AppToastType.error,
       );
     }
   }
@@ -286,10 +287,10 @@ class _PatientProfileViewState extends State<PatientProfileView> {
 
     final success = await controller.deletePatient(widget.patientId, email);
     if (success && context.mounted) {
-      Get.snackbar(
-        'Deleted',
-        '"$email" has been permanently deleted.',
-        snackPosition: SnackPosition.BOTTOM,
+      showAppToast(
+        Get.overlayContext!,
+        message: '"$email" has been permanently deleted.',
+        type: AppToastType.success,
       );
       if (Navigator.of(context).canPop()) {
         Get.back();
@@ -333,20 +334,37 @@ class _PatientProfileViewState extends State<PatientProfileView> {
     return [weekNum];
   }
 
+  /// Matches the backend's eligibility window (see
+  /// utils/membershipTiers.js::isWithinEligibilityWindow) so the UI never
+  /// shows "eligible" for a tap the server will reject: the last 2 days of
+  /// [priorWeek]'s date range, not weight-log-dependent.
+  bool _isWithinEligibilityWindow(
+    int priorWeek,
+    List<WeekScheduleEntry> weekSchedule,
+  ) {
+    final matches = weekSchedule.where((w) => w.week == priorWeek).toList();
+    final end = matches.isNotEmpty ? matches.first.endDate : null;
+    if (end == null) return true; // no schedule known yet - don't block
+    return DateTime.now().isAfter(end.subtract(const Duration(days: 2)));
+  }
+
   /// generated: AI content exists, ready to pick/finalize meals.
-  /// eligible: not generated yet, but tier rules allow generating it now.
-  /// locked: not generated yet, and won't be until an earlier week is
-  /// finalized - matches the backend's validateRegenerateRequest gating.
+  /// eligible: not generated yet, but the prior week is finalized AND
+  /// within its last 2 days (not weight-log-dependent - product decision).
+  /// locked: neither of the above yet - matches the backend's
+  /// validateRegenerateRequest gating.
   _WeekCardState _weekCardState(
     int weekNum,
     String? tier,
     List<int> generatedWeeks,
     Set<int> finalizedWeeks,
+    List<WeekScheduleEntry> weekSchedule,
   ) {
     if (generatedWeeks.contains(weekNum)) return _WeekCardState.generated;
     if (tier == 'golden') {
       if (weekNum == 3 || weekNum == 4) {
-        return finalizedWeeks.contains(2)
+        return finalizedWeeks.contains(2) &&
+                _isWithinEligibilityWindow(2, weekSchedule)
             ? _WeekCardState.eligible
             : _WeekCardState.locked;
       }
@@ -354,7 +372,8 @@ class _PatientProfileViewState extends State<PatientProfileView> {
     }
     if (tier == 'platinum') {
       if (weekNum >= 2 && weekNum <= 4) {
-        return finalizedWeeks.contains(weekNum - 1)
+        return finalizedWeeks.contains(weekNum - 1) &&
+                _isWithinEligibilityWindow(weekNum - 1, weekSchedule)
             ? _WeekCardState.eligible
             : _WeekCardState.locked;
       }
@@ -366,12 +385,33 @@ class _PatientProfileViewState extends State<PatientProfileView> {
     return _WeekCardState.locked;
   }
 
-  String _lockedExplanation(int weekNum, String? tier) {
-    if (tier == 'golden') return 'Finalize Week 2 first to unlock weeks 3-4.';
-    if (tier == 'platinum') {
-      return 'Finalize Week ${weekNum - 1} first to unlock Week $weekNum.';
+  String _lockedExplanation(
+    int weekNum,
+    String? tier,
+    Set<int> finalizedWeeks,
+    List<WeekScheduleEntry> weekSchedule,
+  ) {
+    final priorWeek = tier == 'golden' ? 2 : weekNum - 1;
+    final priorLabel = tier == 'golden' ? 'Week 2' : 'Week $priorWeek';
+    final nextLabel = tier == 'golden' ? 'weeks 3-4' : 'Week $weekNum';
+    if (!finalizedWeeks.contains(priorWeek)) {
+      return 'Finalize $priorLabel first to unlock $nextLabel.';
+    }
+    final matches = weekSchedule.where((w) => w.week == priorWeek).toList();
+    final priorEnd = matches.isNotEmpty ? matches.first.endDate : null;
+    final windowOpensAt = priorEnd?.subtract(const Duration(days: 2));
+    if (windowOpensAt != null) {
+      return '$priorLabel is finalized - $nextLabel unlocks ${_formatShortDate(windowOpensAt)}.';
     }
     return 'This week isn\'t ready yet.';
+  }
+
+  String _formatShortDate(DateTime date) {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    return '${date.day} ${months[date.month - 1]}';
   }
 
   /// Formats an ISO date string (e.g. "1995-08-14") to "14 Aug 1995"
@@ -1209,16 +1249,25 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                     final isFinalized = (data?.totalCalories ?? 0) > 0;
 
                     final tier = status.membershipTier;
+                    final profileModel = controller.patientProfileModel.value;
                     final generatedWeeks =
-                        controller
-                            .patientProfileModel
-                            .value
-                            ?.generatedWeekNumbers ??
-                        [];
+                        profileModel?.generatedWeekNumbers ?? [];
                     final finalizedWeeks = controller.weeklyDietPlans
                         .where((w) => (w.totalCalories ?? 0) > 0)
                         .map((w) => w.week!)
                         .toSet();
+                    final weekSchedule = profileModel?.weekSchedule ?? [];
+                    final displayWeekNum =
+                        profileModel?.displayWeek(weekNum) ?? weekNum;
+                    final thisWeekScheduleMatches = weekSchedule
+                        .where((w) => w.week == weekNum)
+                        .toList();
+                    final thisWeekDateRange =
+                        thisWeekScheduleMatches.isNotEmpty &&
+                            thisWeekScheduleMatches.first.startDate != null &&
+                            thisWeekScheduleMatches.first.endDate != null
+                        ? '${_formatShortDate(thisWeekScheduleMatches.first.startDate!)} - ${_formatShortDate(thisWeekScheduleMatches.first.endDate!)}'
+                        : null;
                     // The week the patient is actually living through right
                     // now is the latest *finalized* one - not whichever week
                     // happens to be eligible/pre-generated, which may well
@@ -1231,6 +1280,7 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                       tier,
                       generatedWeeks,
                       finalizedWeeks,
+                      weekSchedule,
                     );
 
                     // ── LOCKED CARD (not yet eligible to generate) ────
@@ -1239,13 +1289,15 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                         padding: const EdgeInsets.only(right: 12),
                         child: GestureDetector(
                           behavior: HitTestBehavior.opaque,
-                          onTap: () => Get.snackbar(
-                            'Week $weekNum locked',
-                            _lockedExplanation(weekNum, tier),
-                            backgroundColor: const Color(0xffFEF6FB),
-                            colorText: const Color(0xff851653),
-                            snackPosition: SnackPosition.TOP,
-                            duration: const Duration(seconds: 3),
+                          onTap: () => showAppToast(
+                            Get.overlayContext!,
+                            message: _lockedExplanation(
+                              weekNum,
+                              tier,
+                              finalizedWeeks,
+                              weekSchedule,
+                            ),
+                            type: AppToastType.warning,
                           ),
                           child: Container(
                             width: 120,
@@ -1267,7 +1319,7 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
-                                  'Week $weekNum',
+                                  'Week $displayWeekNum',
                                   style: const TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.w600,
@@ -1282,6 +1334,16 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                                     color: Color(0xff9DA4AE),
                                   ),
                                 ),
+                                if (thisWeekDateRange != null) ...[
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    thisWeekDateRange,
+                                    style: const TextStyle(
+                                      fontSize: 8,
+                                      color: Color(0xffB0B7C0),
+                                    ),
+                                  ),
+                                ],
                               ],
                             ),
                           ),
@@ -1340,7 +1402,7 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
-                                  'Week $weekNum',
+                                  'Week $displayWeekNum',
                                   style: TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.w600,
@@ -1356,6 +1418,16 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                                     color: colors['text'],
                                   ),
                                 ),
+                                if (thisWeekDateRange != null) ...[
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    thisWeekDateRange,
+                                    style: TextStyle(
+                                      fontSize: 8,
+                                      color: colors['text'],
+                                    ),
+                                  ),
+                                ],
                               ],
                             ),
                           ),
@@ -1421,7 +1493,7 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                               ),
                               const SizedBox(height: 8),
                               Text(
-                                'Week $weekNum',
+                                'Week $displayWeekNum',
                                 style: TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
@@ -1436,6 +1508,16 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                                   color: colors['text'],
                                 ),
                               ),
+                              if (thisWeekDateRange != null) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  thisWeekDateRange,
+                                  style: TextStyle(
+                                    fontSize: 8,
+                                    color: colors['text'],
+                                  ),
+                                ),
+                              ],
                             ],
                           ),
                         ),
@@ -1459,10 +1541,10 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                 onTap: () async {
                   final requestId = status.requestId ?? '';
                   if (requestId.isEmpty) {
-                    Get.snackbar(
-                      'Error',
-                      'No request found',
-                      snackPosition: SnackPosition.BOTTOM,
+                    showAppToast(
+                      Get.overlayContext!,
+                      message: 'No request found',
+                      type: AppToastType.error,
                     );
                     return;
                   }
@@ -1510,8 +1592,18 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                                   scrollController: scrollController,
                                   patientId: widget.patientId,
                                   dietPlanId: status.activeDietPlanId ?? '',
-                                  isRenewal:
-                                      status.activeDietPlanStatus == 'Active',
+                                  // Always false now: every renewal produces
+                                  // a real new DietPlan/cycleNumber (see
+                                  // createAndGenerateDietPlan), so there's no
+                                  // longer a valid "just settle the bill,
+                                  // don't touch the plan" case for a
+                                  // membership renewal - every activation
+                                  // goes through the full activateDietPlan
+                                  // flow below. confirmRenewalPayment is left
+                                  // in place (unreachable from here) in case
+                                  // it's needed for some other balance-only
+                                  // payment scenario.
+                                  isRenewal: false,
                                 );
                               },
                             );
@@ -2291,15 +2383,10 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                               ? null
                               : () async {
                                   if (noteController.text.trim().isEmpty) {
-                                    Get.snackbar(
-                                      'Error',
-                                      'Please write a note',
-                                      snackPosition: SnackPosition.BOTTOM,
-                                      backgroundColor: Colors.red.withValues(
-                                        alpha: 0.9,
-                                      ),
-                                      colorText: Colors.white,
-                                      margin: const EdgeInsets.all(12),
+                                    showAppToast(
+                                      Get.overlayContext!,
+                                      message: 'Please write a note',
+                                      type: AppToastType.warning,
                                     );
                                     return;
                                   }
@@ -2311,27 +2398,16 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                                       );
                                   if (success) {
                                     Navigator.of(ctx).pop();
-                                    Get.snackbar(
-                                      'Success',
-                                      'Note sent to patient',
-                                      snackPosition: SnackPosition.BOTTOM,
-                                      backgroundColor: Colors.green.withValues(
-                                        alpha: 0.9,
-                                      ),
-                                      colorText: Colors.white,
-                                      margin: const EdgeInsets.all(12),
-                                      duration: const Duration(seconds: 2),
+                                    showAppToast(
+                                      Get.overlayContext!,
+                                      message: 'Note sent to patient',
+                                      type: AppToastType.success,
                                     );
                                   } else {
-                                    Get.snackbar(
-                                      'Error',
-                                      'Failed to send note',
-                                      snackPosition: SnackPosition.BOTTOM,
-                                      backgroundColor: Colors.red.withValues(
-                                        alpha: 0.9,
-                                      ),
-                                      colorText: Colors.white,
-                                      margin: const EdgeInsets.all(12),
+                                    showAppToast(
+                                      Get.overlayContext!,
+                                      message: 'Failed to send note',
+                                      type: AppToastType.error,
                                     );
                                   }
                                 },
@@ -2578,10 +2654,11 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                               : () async {
                                   if (selectedBeforeImage == null &&
                                       selectedAfterImage == null) {
-                                    Get.snackbar(
-                                      'Error',
-                                      'Please select at least one image',
-                                      snackPosition: SnackPosition.BOTTOM,
+                                    showAppToast(
+                                      Get.overlayContext!,
+                                      message:
+                                          'Please select at least one image',
+                                      type: AppToastType.warning,
                                     );
                                     return;
                                   }
