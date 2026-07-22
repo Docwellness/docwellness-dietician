@@ -11,4 +11,6 @@ flutter run `
   --dart-define=API_BASE_URL=https://dev-api.docwellness.fit `
   --dart-define=SENTRY_DSN=https://24d8ba47f43fc752850f3fb3a1deda59@o4511762128896000.ingest.de.sentry.io/4511762171822160 `
   --dart-define=POSTHOG_API_KEY=phc_r36BW82kcdGPitJRk34vb2fNnxMamUVaHRcBPzeebVMe `
-  --dart-define=POSTHOG_HOST=https://eu.i.posthog.com
+  --dart-define=POSTHOG_HOST=https://eu.i.posthog.com `
+  --dart-define=SUPABASE_URL=https://ovflhhhtwrjthnyrnaoo.supabase.co `
+  --dart-define=SUPABASE_PUBLISHABLE_KEY=sb_publishable_FmRYCR40VTVGDsHxK7Z9jQ_67UZ-t-o

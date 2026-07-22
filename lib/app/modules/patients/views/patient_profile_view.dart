@@ -168,6 +168,11 @@ class _PatientProfileViewState extends State<PatientProfileView> {
               icon: Icon(Icons.more_vert_sharp, color: Colors.black),
             );
           }),
+          IconButton(
+            onPressed: () => _showDeleteConfirmationDialog(context),
+            icon: const Icon(Icons.delete_outline, color: Color(0xffB42318)),
+            tooltip: 'Delete patient',
+          ),
         ],
       ),
       body: Obx(() {
@@ -184,6 +189,114 @@ class _PatientProfileViewState extends State<PatientProfileView> {
         return _buildProfileContent();
       }),
     );
+  }
+
+  /// Permanently deletes this patient (all their data + Supabase auth
+  /// identity - see patientController.js's deletePatient). Irreversible, so
+  /// the dietician must type the patient's exact email to enable the
+  /// Delete button - a typo-proof safeguard against an accidental tap, on
+  /// top of the backend's own re-check of the same email.
+  Future<void> _showDeleteConfirmationDialog(BuildContext context) async {
+    final email = controller.patientProfileModel.value?.basic?.email;
+    if (email == null || email.isEmpty) return;
+
+    final textController = TextEditingController();
+    final matches = ValueNotifier<bool>(false);
+    textController.addListener(() {
+      matches.value = textController.text.trim().toLowerCase() == email.toLowerCase();
+    });
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: CustomText(
+            text: 'Delete patient?',
+            fontWeight: FontWeight.w600,
+            fontSize: 18,
+            color: const Color(0xff1F2A37),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              CustomText(
+                text:
+                    'This permanently deletes "$email" and ALL their data - diet plans, logs, chat history, payments. This cannot be undone.',
+                fontWeight: FontWeight.w400,
+                fontSize: 14,
+                color: const Color(0xff4D5761),
+              ),
+              const SizedBox(height: 16),
+              CustomText(
+                text: 'Type "$email" to confirm:',
+                fontWeight: FontWeight.w500,
+                fontSize: 14,
+                color: const Color(0xff1F2A37),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: textController,
+                autofocus: true,
+                decoration: InputDecoration(
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  hintText: email,
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            ValueListenableBuilder<bool>(
+              valueListenable: matches,
+              builder: (context, isMatch, _) {
+                return TextButton(
+                  onPressed: isMatch
+                      ? () => Navigator.of(dialogContext).pop(true)
+                      : null,
+                  child: Text(
+                    'Delete',
+                    style: TextStyle(
+                      color: isMatch ? const Color(0xffB42318) : null,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
+        );
+      },
+    );
+
+    matches.dispose();
+    textController.dispose();
+
+    if (confirmed != true || !context.mounted) return;
+
+    final success = await controller.deletePatient(widget.patientId, email);
+    if (success && context.mounted) {
+      Get.snackbar(
+        'Deleted',
+        '"$email" has been permanently deleted.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      if (Navigator.of(context).canPop()) {
+        Get.back();
+      } else {
+        Get.offAllNamed(Routes.PATIENTS);
+      }
+    }
   }
 
   /// Opens CreateDietPlanScreen for Week 2/3/4 with inline weight input
@@ -660,11 +773,6 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                               _boxField(
                                 label: 'Activity Level',
                                 value: healthSummary?.activityLevel ?? '—',
-                              ),
-                              const SizedBox(height: 16),
-                              _boxField(
-                                label: 'Username',
-                                value: basic.username ?? '—',
                               ),
                               const SizedBox(height: 16),
                               _boxField(

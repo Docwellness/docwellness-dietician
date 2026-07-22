@@ -103,6 +103,7 @@ class _NewWidgetState extends State<NewWidget> {
                     bmr: patient.bmr,
                     tdee: patient.tdee,
                     statusLabel: patient.statusLabel,
+                    statusCategory: patient.statusCategory,
                     membershipPlan: patient.membershipPlan,
                   );
                 },

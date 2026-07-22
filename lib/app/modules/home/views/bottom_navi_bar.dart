@@ -39,62 +39,73 @@ class BottomNaviBar extends StatelessWidget {
       () => Scaffold(
         backgroundColor: lightPink,
         body: screens[controller.selectedIndex.value],
-        bottomNavigationBar: Container(
-          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
-          decoration: const BoxDecoration(
-            color: lightPink,
-            borderRadius: BorderRadius.only(
-              topLeft: Radius.circular(20),
-              topRight: Radius.circular(20),
+        // SafeArea (not a fixed bottom padding) so this clears whichever
+        // system navigation style is active - the 3-button nav bar's ~48dp
+        // inset and gesture nav's slimmer inset are both reported through
+        // MediaQuery's padding, which SafeArea reads automatically. Apps
+        // targeting Android 15+ render edge-to-edge by default, so without
+        // this the system nav bar draws on top of - not below - this Row.
+        bottomNavigationBar: SafeArea(
+          top: false,
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
+            decoration: const BoxDecoration(
+              color: lightPink,
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(20),
+                topRight: Radius.circular(20),
+              ),
             ),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: List.generate(icons.length, (index) {
-              final isSelected = controller.selectedIndex.value == index;
-              return Expanded(
-                child: GestureDetector(
-                  onTap: () {
-                    controller.onTabSelected(index);
-                    controller.changeTab(index);
-                  },
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 250),
-                        padding: const EdgeInsets.only(
-                          left: 20,
-                          right: 20,
-                          top: 6,
-                          bottom: 6,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: List.generate(icons.length, (index) {
+                final isSelected = controller.selectedIndex.value == index;
+                return Expanded(
+                  child: GestureDetector(
+                    onTap: () {
+                      controller.onTabSelected(index);
+                      controller.changeTab(index);
+                    },
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 250),
+                          padding: const EdgeInsets.only(
+                            left: 20,
+                            right: 20,
+                            top: 6,
+                            bottom: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? maroonColor
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Image.asset(
+                            icons[index],
+                            height: 22,
+                            colorBlendMode: BlendMode.srcIn,
+                            color: isSelected ? Colors.white : Colors.grey[700],
+                          ),
                         ),
-                        decoration: BoxDecoration(
-                          color: isSelected ? maroonColor : Colors.transparent,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Image.asset(
-                          icons[index],
-                          height: 22,
-                          colorBlendMode: BlendMode.srcIn,
-                          color: isSelected ? Colors.white : Colors.grey[700],
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      CustomText(
-                        text: labels[index],
+                        const SizedBox(height: 4),
+                        CustomText(
+                          text: labels[index],
 
-                        color: isSelected ? maroonColor : Colors.grey[700]!,
-                        fontWeight: isSelected
-                            ? FontWeight.w600
-                            : FontWeight.w500,
-                        fontSize: 10.5,
-                      ),
-                    ],
+                          color: isSelected ? maroonColor : Colors.grey[700]!,
+                          fontWeight: isSelected
+                              ? FontWeight.w600
+                              : FontWeight.w500,
+                          fontSize: 10.5,
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              );
-            }),
+                );
+              }),
+            ),
           ),
         ),
       ),

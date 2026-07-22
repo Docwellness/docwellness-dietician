@@ -713,6 +713,31 @@ class PatientsController extends GetxController {
     }
   }
 
+  /// Permanently deletes a patient (irreversible - see the confirmation
+  /// dialog in patient_profile_view.dart, which requires re-typing the
+  /// patient's email before this is ever called). Returns true/false
+  /// so the caller can navigate away and show a snackbar; on failure the
+  /// backend's specific message (e.g. an email mismatch, caught even
+  /// though the dialog already checks it client-side) is shown instead of
+  /// a generic error.
+  Future<bool> deletePatient(String patientId, String confirmEmail) async {
+    final data = await service.deletePatient(patientId, confirmEmail);
+    if (data != null && data['success'] == true) {
+      // Refresh every tab so the deleted patient disappears everywhere,
+      // regardless of which tab they were in (ongoing/new/past).
+      fetchOngoingPatients();
+      fetchNewPatients();
+      fetchPastPatients();
+      return true;
+    }
+    Get.snackbar(
+      'Error',
+      data?['message'] ?? 'Failed to delete patient',
+      snackPosition: SnackPosition.BOTTOM,
+    );
+    return false;
+  }
+
   /// Fetch tracking data (calorie intake, weight trend, BMI) for charts
   Future<void> fetchTrackingData(String patientId, String period) async {
     isTrackingLoading.value = true;
@@ -2714,6 +2739,16 @@ class PatientsController extends GetxController {
         );
         // Reset weight override
         currentWeightForWeek.value = 0.0;
+        // Get.back() also closes any open snackbar as a side effect (see
+        // GetNavigation.back), and calling it twice back-to-back races
+        // that close against itself - the second call's closeCurrentSnackbar
+        // hits the still-disposing entry from the first and trips GetX's
+        // "Cannot remove entry from a disposed snackbar" assertion. Close
+        // the snackbar explicitly first so both pops below are plain route
+        // pops.
+        if (Get.isSnackbarOpen) {
+          await Get.closeCurrentSnackbar();
+        }
         // Pop both SelectDietSheet and CreateDietPlanScreen (now pushed
         // full screens, not bottom sheets), then land explicitly on the
         // patient profile route - same belt-and-suspenders pattern as

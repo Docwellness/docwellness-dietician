@@ -57,6 +57,9 @@ class NewPatientModel {
   double? tdee;
   String? statusCode;
   String? statusLabel;
+  // 'dietician' | 'patient' | 'review' | 'done' - which side needs to act
+  // next, drives the status box's color (see PatientStatusBox).
+  String? statusCategory;
   String? membershipPlan;
 
   NewPatientModel({
@@ -69,6 +72,7 @@ class NewPatientModel {
     this.tdee,
     this.statusCode,
     this.statusLabel,
+    this.statusCategory,
     this.membershipPlan,
   });
 
@@ -83,6 +87,7 @@ class NewPatientModel {
       tdee: (json['tdee'] as num?)?.toDouble(),
       statusCode: json['statusCode']?.toString(),
       statusLabel: json['statusLabel']?.toString(),
+      statusCategory: json['statusCategory']?.toString(),
       membershipPlan: json['membershipPlan']?.toString(),
     );
   }

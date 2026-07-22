@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:docwellnesdoc/app/models/patient_request_model.dart';
 import 'package:docwellnesdoc/app/modules/chat/controllers/chat_controller.dart';
 import 'package:docwellnesdoc/app/modules/home/services/home_service.dart';
+import 'package:docwellnesdoc/app/services/connectivity_service.dart';
 import 'package:docwellnesdoc/app/modules/notifications/services/notification_service.dart';
 import 'package:docwellnesdoc/app/modules/patients/controllers/patients_controller.dart';
 import 'package:docwellnesdoc/app/modules/performance/controllers/performance_controller.dart';
@@ -84,11 +85,13 @@ class HomeController extends GetxController {
     loadHomeData();
     _listenForNotifications();
     _listenForMessages();
+    Get.find<ConnectivityService>().registerOnReconnected(refreshHomeData);
     super.onInit();
   }
 
   @override
   void onClose() {
+    Get.find<ConnectivityService>().unregister(refreshHomeData);
     _notifSub?.cancel();
     _messageSub?.cancel();
     _dashboardDebounce?.cancel();

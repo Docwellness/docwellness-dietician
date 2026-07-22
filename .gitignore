@@ -21,6 +21,10 @@ migrate_working_dir/
 .env
 .env.*
 
+# Real dev auto-login credentials (see lib/dev_credentials.example.dart for
+# the template) - never commit the actual email/password.
+lib/dev_credentials.dart
+
 # IntelliJ related
 *.iml
 *.ipr

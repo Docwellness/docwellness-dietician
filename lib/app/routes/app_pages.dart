@@ -16,15 +16,17 @@ import '../modules/performance/bindings/performance_binding.dart';
 import '../modules/performance/views/performance_view.dart';
 import '../modules/receipes/bindings/receipes_binding.dart';
 import '../modules/receipes/views/receipes_view.dart';
+import '../modules/splash/views/splash_view.dart';
 
 part 'app_routes.dart';
 
 class AppPages {
   AppPages._();
 
-  static const INITIAL = Routes.HOME;
+  static const INITIAL = Routes.SPLASH;
 
   static final routes = [
+    GetPage(name: _Paths.SPLASH, page: () => const SplashView()),
     GetPage(
       name: _Paths.HOME,
       page: () => BottomNaviBar(),

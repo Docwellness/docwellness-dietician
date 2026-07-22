@@ -57,6 +57,7 @@ dependencies:
   sentry_flutter: ^8.14.2
   posthog_flutter: ^5.31.0
   supabase_flutter: ^2.16.0
+  connectivity_plus: ^7.3.0
 
 dev_dependencies:
   flutter_test:
@@ -68,6 +69,43 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^5.0.0
+  flutter_native_splash: ^2.4.6
+  flutter_launcher_icons: ^0.14.3
+
+# App launcher icon (home screen icon) - mark only, no wordmark/tagline
+# baked in, since the OS already shows the app's display name (see
+# android:label in AndroidManifest.xml) underneath the icon on the home
+# screen - text inside the icon itself would be redundant and, once
+# adaptive-icon-masked, likely clipped anyway. adaptive_icon_foreground is
+# already safe-zone-padded (see icon_adaptive_foreground.png's generation)
+# so the ring isn't clipped by the circle/squircle/rounded-square mask
+# different launchers apply. Regenerate with:
+#   dart run flutter_launcher_icons
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/icons/icon_mark.png"
+  adaptive_icon_background: "#FEF6FB"
+  adaptive_icon_foreground: "assets/icons/icon_adaptive_foreground.png"
+
+# Native (Android/iOS) launch screen shown before the Flutter engine draws
+# its first frame - fills the "wrong icon flashes first" gap the app's
+# default unconfigured launcher icon otherwise leaves. Uses the mark-only
+# icon (not the full logo+wordmark+tagline lockup) because this native splash
+# gets circle/squircle-masked by the OS (especially android_12's
+# windowSplashScreenAnimatedIcon) - text would get clipped. The SAME
+# background color here matches lib/app/modules/splash/views/splash_view.dart
+# (the Dart-drawn splash shown immediately after, which DOES show the full
+# logo+wordmark+tagline), so the two feel like one continuous screen instead
+# of a jarring double-splash. Regenerate the native assets after changing
+# this with:
+#   dart run flutter_native_splash:create
+flutter_native_splash:
+  color: "FEF6FB"
+  image: assets/icons/icon_adaptive_foreground.png
+  android_12:
+    color: "FEF6FB"
+    image: assets/icons/icon_adaptive_foreground.png
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

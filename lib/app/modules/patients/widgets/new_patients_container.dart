@@ -12,6 +12,7 @@ class NewPatientsContainer extends StatelessWidget {
   final double? bmr;
   final double? tdee;
   final String? statusLabel;
+  final String? statusCategory;
   final String? membershipPlan;
 
   const NewPatientsContainer({
@@ -24,8 +25,22 @@ class NewPatientsContainer extends StatelessWidget {
     this.bmr,
     this.tdee,
     this.statusLabel,
+    this.statusCategory,
     this.membershipPlan,
   });
+
+  // Which side needs to act next drives the color, not the raw status - so
+  // it stays visually consistent even as more granular labels get added.
+  static const _categoryColors = {
+    'dietician': (bg: Color(0xffEFF6FF), fg: Color(0xff2563EB)),
+    'patient': (bg: Color(0xffFFFBEB), fg: Color(0xffD97706)),
+    'review': (bg: Color(0xffF0FDFA), fg: Color(0xff0D9488)),
+    'done': (bg: Color(0xffF0FDF4), fg: Color(0xff16A34A)),
+  };
+
+  ({Color bg, Color fg}) get _statusColors =>
+      _categoryColors[statusCategory] ??
+      (bg: const Color(0xffF3F4F6), fg: const Color(0xff6C737F));
 
   @override
   Widget build(BuildContext context) {
@@ -120,61 +135,13 @@ class NewPatientsContainer extends StatelessWidget {
                       Row(
                         children: [
                           Expanded(
-                            child: Wrap(
-                              children: [
-                                CustomText(
-                                  text: fullName,
-                                  fontWeight: FontWeight.w500,
-                                  fontSize: 16,
-                                  color: Color(0xff111927),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                SizedBox(width: 5),
-                                if (statusLabel != null)
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 5,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: Color(0xffFDF2FA),
-                                      borderRadius: BorderRadius.circular(11),
-                                      border: Border.all(
-                                        color: Color(0xff851653),
-                                      ),
-                                    ),
-                                    child: CustomText(
-                                      text: statusLabel!.toUpperCase(),
-                                      color: Color(0xff851653),
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                if (membershipPlan != null &&
-                                    membershipPlan!.isNotEmpty) ...[
-                                  SizedBox(width: 5),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 5,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xffF3F4F6),
-                                      borderRadius: BorderRadius.circular(11),
-                                      border: Border.all(
-                                        color: const Color(0xffD1D5DB),
-                                      ),
-                                    ),
-                                    child: CustomText(
-                                      text: membershipPlan!,
-                                      color: const Color(0xff4D5761),
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
-                              ],
+                            child: CustomText(
+                              text: fullName,
+                              fontWeight: FontWeight.w500,
+                              fontSize: 16,
+                              color: Color(0xff111927),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                           CustomText(
@@ -188,16 +155,56 @@ class NewPatientsContainer extends StatelessWidget {
                         ],
                       ),
 
-                      const SizedBox(height: 4),
-
-                      CustomText(
-                        text: "New patient - awaiting consultation",
-                        color: Color(0xff6C737F),
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                      if (statusLabel != null ||
+                          (membershipPlan != null &&
+                              membershipPlan!.isNotEmpty)) ...[
+                        const SizedBox(height: 6),
+                        Wrap(
+                          spacing: 5,
+                          runSpacing: 5,
+                          children: [
+                            if (statusLabel != null)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 5,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: _statusColors.bg,
+                                  borderRadius: BorderRadius.circular(11),
+                                  border: Border.all(color: _statusColors.fg),
+                                ),
+                                child: CustomText(
+                                  text: statusLabel!,
+                                  color: _statusColors.fg,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            if (membershipPlan != null &&
+                                membershipPlan!.isNotEmpty)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 5,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xffF3F4F6),
+                                  borderRadius: BorderRadius.circular(11),
+                                  border: Border.all(
+                                    color: const Color(0xffD1D5DB),
+                                  ),
+                                ),
+                                child: CustomText(
+                                  text: membershipPlan!,
+                                  color: const Color(0xff4D5761),
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ],
                     ],
                   ),
                 ),

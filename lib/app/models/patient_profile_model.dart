@@ -117,7 +117,6 @@ class MacroStrategy {
 
 class Basic {
   String? fullName;
-  String? username;
   String? email;
   String? whatsappNumber;
   String? gender;
@@ -126,7 +125,6 @@ class Basic {
 
   Basic({
     this.fullName,
-    this.username,
     this.email,
     this.whatsappNumber,
     this.gender,
@@ -136,7 +134,6 @@ class Basic {
 
   Basic.fromJson(Map<String, dynamic> json) {
     fullName = json['fullName'];
-    username = json['username'];
     email = json['email'];
     whatsappNumber = json['whatsappNumber'];
     gender = json['gender'];
