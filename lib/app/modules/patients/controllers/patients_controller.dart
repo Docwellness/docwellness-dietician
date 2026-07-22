@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:developer';
 
@@ -15,6 +16,7 @@ import 'package:docwellnesdoc/app/modules/performance/services/consultation_form
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class PatientsController extends GetxController {
   Rx<PatientProfileModel?> patientProfileModel = Rx<PatientProfileModel?>(null);
@@ -510,6 +512,92 @@ class PatientsController extends GetxController {
 
   final ConsultationFormService _consultationFormService =
       ConsultationFormService();
+
+  // ── Local draft autosave ──────────────────────────────────────────────
+  // Consultation forms are long and get filled in over several minutes;
+  // without this, backgrounding the app, an accidental back-swipe on the
+  // sheet, or an OS-level kill loses every answer typed so far. Saved to
+  // disk (not just kept in memory) since PatientsController itself gets
+  // recreated per profile screen open (see patient_profile_view.dart).
+  //
+  // Deliberately NOT using GetX's debounce()/Worker here: Worker.dispose()
+  // only cancels the stream subscription, not the Timer already armed
+  // inside its private Debouncer - so a timer armed just before a reopen
+  // survives disposal and fires later with whatever customAnswerValues
+  // holds *at that moment*. Owning the Timer directly means cancelling it
+  // actually cancels it.
+  StreamSubscription? _consultationDraftSub;
+  Timer? _consultationDraftSaveTimer;
+
+  String _draftKey(String patientId) => 'consultation_draft_$patientId';
+
+  /// Stop autosaving before touching [customAnswerValues] for a reload
+  /// (clearCustomAnswers(), fetchConsultationTemplate(), getConsultation()).
+  /// Those calls include a real network round-trip that can easily outlast
+  /// the 500ms debounce window - if the *previous* screen's listener is
+  /// still attached while they run, its clear()/reset mutations arm a
+  /// stale timer that fires mid-reload and overwrites the on-disk draft
+  /// with whatever half-reset state existed at that moment (observed: an
+  /// empty draft clobbering real answers). Call this first, synchronously,
+  /// before any of those reload calls - not just at the end of
+  /// [prepareConsultationDraft] - so no reload-internal mutation is ever
+  /// visible to a listener capable of writing to disk.
+  void stopConsultationDraftAutosave() {
+    _consultationDraftSaveTimer?.cancel();
+    _consultationDraftSaveTimer = null;
+    _consultationDraftSub?.cancel();
+    _consultationDraftSub = null;
+  }
+
+  /// Call once the template (and, for edit mode, the server-saved answers)
+  /// have finished loading into [customAnswerValues] - restores any locally
+  /// saved draft on top of that (a draft represents edits the dietician made
+  /// more recently than whatever's on the server) and starts autosaving
+  /// further edits for [patientId]. Callers must have already called
+  /// [stopConsultationDraftAutosave] before their reload sequence began.
+  Future<void> prepareConsultationDraft(String patientId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_draftKey(patientId));
+      if (raw != null && raw.isNotEmpty) {
+        final saved = jsonDecode(raw) as Map<String, dynamic>;
+        saved.forEach((fieldId, value) {
+          customAnswerValues[fieldId] = value is List
+              ? List<String>.from(value.map((e) => e.toString()))
+              : value;
+        });
+        _ensureAnswerStateForTemplate();
+      }
+    } catch (e) {
+      debugPrint('prepareConsultationDraft: failed to load draft: $e');
+    }
+
+    stopConsultationDraftAutosave();
+    _consultationDraftSub = customAnswerValues.listen((_) {
+      _consultationDraftSaveTimer?.cancel();
+      _consultationDraftSaveTimer = Timer(
+        const Duration(milliseconds: 500),
+        () => _saveConsultationDraft(patientId),
+      );
+    });
+  }
+
+  Future<void> _saveConsultationDraft(String patientId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_draftKey(patientId), jsonEncode(customAnswerValues));
+  }
+
+  Future<void> _clearConsultationDraft(String patientId) async {
+    stopConsultationDraftAutosave();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_draftKey(patientId));
+  }
+
+  @override
+  void onClose() {
+    stopConsultationDraftAutosave();
+    super.onClose();
+  }
 
   Future<void> fetchConsultationTemplate() async {
     isConsultationTemplateLoading.value = true;
@@ -1295,6 +1383,7 @@ class PatientsController extends GetxController {
         // status.patientConsented server-side (the patient must re-consent),
         // and that's what gates the "Create Diet Plan" button.
         await getPatientProfile(patientId);
+        await _clearConsultationDraft(patientId);
         Get.back();
       }
     } catch (e) {

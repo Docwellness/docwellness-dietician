@@ -952,6 +952,15 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                               isLoading: controller.isAllQuestionLoading.value,
                               onTap: () async {
                                 controller.report.value = '';
+                                // Must happen before any of the reload calls
+                                // below - they include a network round-trip
+                                // that can outlast the draft's debounce
+                                // window, and leaving the previous autosave
+                                // listener attached during that window lets
+                                // it save a half-reset snapshot over the
+                                // real draft. See prepareConsultationDraft's
+                                // doc comment.
+                                controller.stopConsultationDraftAutosave();
 
                                 // Order matters here - must NOT run
                                 // concurrently. getConsultation() ends by
@@ -971,6 +980,9 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                                 // it.
                                 await controller.fetchConsultationTemplate();
                                 await controller.getConsultation(
+                                  widget.patientId,
+                                );
+                                await controller.prepareConsultationDraft(
                                   widget.patientId,
                                 );
                                 if (!mounted) return;
@@ -1589,6 +1601,10 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                   isLoading: controller.isConsultationTemplateLoading.value,
                   onTap: () async {
                     controller.report.value = '';
+                    // Must happen before clearCustomAnswers()/
+                    // fetchConsultationTemplate() below - see
+                    // prepareConsultationDraft's doc comment for why.
+                    controller.stopConsultationDraftAutosave();
                     controller.clearCustomAnswers();
 
                     // Must be awaited before the sheet opens - the template
@@ -1597,6 +1613,9 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                     // the sheet before the fetch resolves briefly flashed that
                     // placeholder before the real questionnaire appeared.
                     await controller.fetchConsultationTemplate();
+                    await controller.prepareConsultationDraft(
+                      widget.patientId,
+                    );
                     if (!mounted) return;
 
                     showModalBottomSheet(
