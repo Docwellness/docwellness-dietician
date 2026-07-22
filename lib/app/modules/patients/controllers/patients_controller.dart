@@ -1485,6 +1485,7 @@ class PatientsController extends GetxController {
     String dietPlanId,
     List<int> weekNumbers, {
     double? currentWeight,
+    DateTime? startDate,
   }) async {
     generateDietPlanLoading.value = true;
     final data = {
@@ -1492,6 +1493,11 @@ class PatientsController extends GetxController {
       'calorieStrategy': selectedCalorieStrategy,
       'macroStrategy': selectedMacroStrategy,
       if (currentWeight != null) 'currentWeight': currentWeight,
+      // Every week's date is independently editable - it just spans 7 days
+      // from whichever date is picked, no longer rigidly derived from week
+      // 1 (see utils/weekSchedule.js's buildSequentialWeekEntries on the
+      // backend).
+      if (startDate != null) 'startDate': startDate.toIso8601String(),
     };
     Map<String, dynamic>? response;
     try {

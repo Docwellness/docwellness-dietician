@@ -87,12 +87,13 @@ class _CreateDietPlanScreenState extends State<CreateDietPlanScreen> {
     final parsedStart = _parseDdMmYyyy(health?.startDateForDiet ?? '');
     if (parsedStart != null) _selectedStartDate = parsedStart;
 
-    // Week 2+ dates are derived (week1Start + (week-1)*7 days - see
-    // utils/weekSchedule.js on the backend), not independently pickable -
-    // seed from the plan's own weekSchedule so the (now read-only) date
-    // shown matches what's actually scheduled, instead of the week-1 date
-    // above. A cycle's own week 1 (including a renewal's) keeps the normal
-    // editable flow further down.
+    // Every week's date is independently editable (product decision - a
+    // week just spans 7 days from whichever date is picked for it, not
+    // rigidly derived from week 1). For week 2+, seed with the plan's
+    // already-scheduled date for this week (see
+    // utils/weekSchedule.js/buildSequentialWeekEntries on the backend) as a
+    // sensible starting point, rather than always defaulting to week 1's
+    // date - the dietician can still change it via the same picker below.
     if (widget.targetWeek != 1) {
       final scheduled = controller.patientProfileModel.value?.scheduleFor(
         widget.targetWeek,
@@ -358,53 +359,45 @@ class _CreateDietPlanScreenState extends State<CreateDietPlanScreen> {
                     const SizedBox(height: 8),
                     InkWell(
                       borderRadius: BorderRadius.circular(12),
-                      // Only a cycle's own week 1 has an independently
-                      // pickable start date - week 2+ is derived from it
-                      // (week1Start + (week-1)*7 days), so there's nothing
-                      // to pick.
-                      onTap: widget.targetWeek != 1
-                          ? null
-                          : () async {
-                              final today = DateTime.now();
-                              // _selectedStartDate may be seeded from the patient's
-                              // existing startDateForDiet, which can predate "today" -
-                              // showDatePicker asserts initialDate >= firstDate, so
-                              // the floor must never be later than the seeded value.
-                              final firstDate = _selectedStartDate.isBefore(today)
-                                  ? _selectedStartDate
-                                  : today;
-                              final lastDate = today.add(
-                                const Duration(days: 60),
-                              );
-                              final picked = await showDatePicker(
-                                context: context,
-                                initialDate: _selectedStartDate,
-                                firstDate: firstDate,
-                                lastDate: _selectedStartDate.isAfter(lastDate)
-                                    ? _selectedStartDate
-                                    : lastDate,
-                              );
-                              if (picked != null) {
-                                setState(() => _selectedStartDate = picked);
-                              }
-                            },
+                      // Every week's date is editable - it just spans 7
+                      // days from whichever date is picked here, for
+                      // whichever week (or week-pair, for Golden's 3-4)
+                      // this screen is generating.
+                      onTap: () async {
+                        final today = DateTime.now();
+                        // _selectedStartDate may be seeded from the patient's
+                        // existing startDateForDiet, which can predate "today" -
+                        // showDatePicker asserts initialDate >= firstDate, so
+                        // the floor must never be later than the seeded value.
+                        final firstDate = _selectedStartDate.isBefore(today)
+                            ? _selectedStartDate
+                            : today;
+                        final lastDate = today.add(const Duration(days: 60));
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: _selectedStartDate,
+                          firstDate: firstDate,
+                          lastDate: _selectedStartDate.isAfter(lastDate)
+                              ? _selectedStartDate
+                              : lastDate,
+                        );
+                        if (picked != null) {
+                          setState(() => _selectedStartDate = picked);
+                        }
+                      },
                       child: InputDecorator(
                         decoration: InputDecoration(
                           filled: true,
-                          fillColor: widget.targetWeek != 1
-                              ? const Color(0xffF3F4F6)
-                              : const Color(0xffFEF6FB),
+                          fillColor: const Color(0xffFEF6FB),
                           contentPadding: const EdgeInsets.symmetric(
                             horizontal: 16,
                             vertical: 14,
                           ),
-                          suffixIcon: widget.targetWeek != 1
-                              ? null
-                              : const Icon(
-                                  Icons.calendar_today_outlined,
-                                  color: Color(0xff851653),
-                                  size: 18,
-                                ),
+                          suffixIcon: const Icon(
+                            Icons.calendar_today_outlined,
+                            color: Color(0xff851653),
+                            size: 18,
+                          ),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
                             borderSide: const BorderSide(
@@ -799,6 +792,7 @@ class _CreateDietPlanScreenState extends State<CreateDietPlanScreen> {
                           targetDietPlanId,
                           widget.weeksToGenerate!,
                           currentWeight: w,
+                          startDate: _selectedStartDate,
                         );
                         if (response == null || response['success'] != true) {
                           showAppToast(
@@ -884,6 +878,7 @@ class _CreateDietPlanScreenState extends State<CreateDietPlanScreen> {
                           activeDietPlanId,
                           [1],
                           currentWeight: w,
+                          startDate: _selectedStartDate,
                         );
                         if (response == null || response['success'] != true) {
                           showAppToast(
