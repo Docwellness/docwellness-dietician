@@ -1275,6 +1275,29 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                     final latestFinalizedWeek = finalizedWeeks.isEmpty
                         ? 0
                         : finalizedWeeks.reduce((a, b) => a > b ? a : b);
+                    // ...but "finalized" only means the content is ready,
+                    // not that the patient has actually started it - a
+                    // dietician can (and does, for Golden/Platinum) finalize
+                    // a week whose own scheduled date is still in the
+                    // future. Showing that week with the bold "active right
+                    // now" card would be misleading, so it only counts as
+                    // the active week once its own weekSchedule date has
+                    // actually arrived. Missing/incomplete schedule data
+                    // (older plans predating weekSchedule) falls back to the
+                    // old "finalized = active" behavior rather than losing
+                    // the active-week styling entirely.
+                    final latestFinalizedWeekSchedule = weekSchedule
+                        .where((w) => w.week == latestFinalizedWeek)
+                        .toList();
+                    final latestFinalizedWeekStarted =
+                        latestFinalizedWeekSchedule.isEmpty ||
+                        latestFinalizedWeekSchedule.first.startDate == null ||
+                        !latestFinalizedWeekSchedule.first.startDate!.isAfter(
+                          DateTime.now(),
+                        );
+                    final effectiveCurrentWeek = latestFinalizedWeekStarted
+                        ? latestFinalizedWeek
+                        : 0;
                     final cardState = _weekCardState(
                       weekNum,
                       tier,
@@ -1361,7 +1384,7 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                     if (isFinalized) {
                       final colors = controller.getColor(
                         weekNum,
-                        latestFinalizedWeek,
+                        effectiveCurrentWeek,
                       );
                       return Padding(
                         padding: const EdgeInsets.only(right: 12),
