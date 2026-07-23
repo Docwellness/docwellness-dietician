@@ -122,7 +122,7 @@ class PatientRequestContainer extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        height: 104,
+        constraints: const BoxConstraints(minHeight: 104),
         width: double.infinity,
         decoration: BoxDecoration(
           color: Color(0xffFEF6FB),

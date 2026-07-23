@@ -50,7 +50,18 @@ void showAppToast(
   _currentToastEntry?.remove();
   _currentToastEntry = null;
 
-  final overlay = Overlay.of(context);
+  // Overlay.of(context) throws "No Overlay widget found" if called during a
+  // route transition or right after the context's tree has been torn down -
+  // this happened for real in production (Sentry: FlutterError: No Overlay
+  // widget found, in showAppToast) when this was called from inside a catch
+  // block right as a screen was mid-navigation. A dropped toast is much
+  // better than an uncaught exception that skips whatever cleanup (e.g.
+  // resetting a loading flag) was supposed to run right after this call.
+  final overlay = Overlay.maybeOf(context);
+  if (overlay == null) {
+    debugPrint('showAppToast: no Overlay found, dropping message: $message');
+    return;
+  }
   final style = _toastStyles[type]!;
   late OverlayEntry entry;
 
