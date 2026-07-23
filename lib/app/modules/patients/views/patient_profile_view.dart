@@ -8,6 +8,7 @@ import 'package:docwellnesdoc/app/modules/chat/views/chat_screen.dart';
 import 'package:docwellnesdoc/app/modules/patients/controllers/patients_controller.dart';
 import 'package:docwellnesdoc/app/modules/patients/views/clint_log_data_sheet.dart';
 import 'package:docwellnesdoc/app/modules/patients/views/payment_status_view.dart';
+import 'package:docwellnesdoc/app/utils/membership_badge.dart';
 import 'package:docwellnesdoc/app/modules/patients/views/profile_options_sheet.dart';
 import 'package:docwellnesdoc/app/modules/patients/views/questions_view.dart';
 import 'package:docwellnesdoc/app/modules/patients/widgets/bmi_and_body_fat_container.dart';
@@ -483,6 +484,7 @@ class _PatientProfileViewState extends State<PatientProfileView> {
     final basic = controller.patientProfileModel.value?.basic;
     final healthSummary = controller.patientProfileModel.value?.healthSummary;
     final status = controller.patientProfileModel.value?.status;
+    final membershipBadge = membershipBadgeStyle(status?.membershipPlan);
 
     debugPrint('--------------idd-${status?.activeDietPlanId}');
 
@@ -603,8 +605,8 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                     Container(
                       padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(
-                        color: Color(0xffFDF2FA),
-                        border: Border.all(color: Color(0xffEF45B2)),
+                        color: membershipBadge.background,
+                        border: Border.all(color: membershipBadge.border),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Row(
@@ -615,15 +617,17 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                             width: 11.91,
                             height: 12,
                             fit: BoxFit.cover,
+                            color: membershipBadge.text,
+                            colorBlendMode: BlendMode.srcIn,
                           ),
                           SizedBox(width: 4),
                           CustomText(
                             text: (status?.membershipPlan ?? '').isNotEmpty
-                                ? status!.membershipPlan!.toUpperCase()
+                                ? membershipBadge.label.toUpperCase()
                                 : 'NO MEMBERSHIP',
                             fontWeight: FontWeight.w500,
                             fontSize: 12,
-                            color: Color(0xffEF45B2),
+                            color: membershipBadge.text,
                           ),
                         ],
                       ),
@@ -3140,7 +3144,7 @@ class _PatientProfileViewState extends State<PatientProfileView> {
     final rows = <Widget>[];
 
     if (status.membershipPlan != null && status.membershipPlan!.isNotEmpty) {
-      rows.add(_paymentInfoRow('Plan', status.membershipPlan!));
+      rows.add(_paymentInfoRow('Plan', membershipBadgeStyle(status.membershipPlan).label));
     }
 
     if (summary != null) {

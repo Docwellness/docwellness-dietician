@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
+import 'package:docwellnesdoc/app/utils/membership_badge.dart';
 import 'package:flutter/material.dart';
 
 class PatientRequestContainer extends StatelessWidget {
@@ -118,6 +119,7 @@ class PatientRequestContainer extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = _getStatusColors();
     final letter = (title.isNotEmpty ? title[0] : 'U').toUpperCase();
+    final membershipBadge = membershipBadgeStyle(membershipPlan);
 
     return GestureDetector(
       onTap: onTap,
@@ -239,17 +241,17 @@ class PatientRequestContainer extends StatelessWidget {
                           ),
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(8),
-                            color: Color(0xffF3F4F6),
+                            color: membershipBadge.background,
                             border: Border.all(
-                              color: Color(0xffD1D5DB),
+                              color: membershipBadge.border,
                               width: 1.3,
                             ),
                           ),
                           child: CustomText(
-                            text: membershipPlan!,
+                            text: membershipBadge.label,
                             fontWeight: FontWeight.w500,
                             fontSize: 12,
-                            color: Color(0xff4D5761),
+                            color: membershipBadge.text,
                           ),
                         ),
                     ],

@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
+import 'package:docwellnesdoc/app/utils/membership_badge.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -44,6 +45,7 @@ class NewPatientsContainer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final membershipBadge = membershipBadgeStyle(membershipPlan);
     return GestureDetector(
       onTap: () {
         if (patientId != null) {
@@ -189,15 +191,15 @@ class NewPatientsContainer extends StatelessWidget {
                                   vertical: 5,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xffF3F4F6),
+                                  color: membershipBadge.background,
                                   borderRadius: BorderRadius.circular(11),
                                   border: Border.all(
-                                    color: const Color(0xffD1D5DB),
+                                    color: membershipBadge.border,
                                   ),
                                 ),
                                 child: CustomText(
-                                  text: membershipPlan!,
-                                  color: const Color(0xff4D5761),
+                                  text: membershipBadge.label,
+                                  color: membershipBadge.text,
                                   fontSize: 10,
                                   fontWeight: FontWeight.w600,
                                 ),
