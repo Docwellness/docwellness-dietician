@@ -87,20 +87,22 @@ class _CreateDietPlanScreenState extends State<CreateDietPlanScreen> {
     final parsedStart = _parseDdMmYyyy(health?.startDateForDiet ?? '');
     if (parsedStart != null) _selectedStartDate = parsedStart;
 
-    // Every week's date is independently editable (product decision - a
-    // week just spans 7 days from whichever date is picked for it, not
-    // rigidly derived from week 1). For week 2+, seed with the plan's
-    // already-scheduled date for this week (see
-    // utils/weekSchedule.js/buildSequentialWeekEntries on the backend) as a
-    // sensible starting point, rather than always defaulting to week 1's
-    // date - the dietician can still change it via the same picker below.
-    if (widget.targetWeek != 1) {
-      final scheduled = controller.patientProfileModel.value?.scheduleFor(
-        widget.targetWeek,
-      );
-      if (scheduled?.startDate != null) {
-        _selectedStartDate = scheduled!.startDate!;
-      }
+    // Every week's date is independently editable - seed with the plan's
+    // already-scheduled date for this week (see weekSchedule.js's
+    // buildSequentialWeekEntries/cascadeWeekScheduleFrom on the backend),
+    // not just for week 2+. Previously this was scoped to
+    // `targetWeek != 1`, so week 1 always fell back to
+    // healthSummary.startDateForDiet - a snapshot of week 1's date from
+    // whenever the plan/request was first created, which goes stale the
+    // moment anyone moves week 1's date afterwards (including via the
+    // "Update Date" button below, on *this* screen) - reopening this
+    // screen for week 1 then showed the original intake date instead of
+    // the real, current one.
+    final scheduled = controller.patientProfileModel.value?.scheduleFor(
+      widget.targetWeek,
+    );
+    if (scheduled?.startDate != null) {
+      _selectedStartDate = scheduled!.startDate!;
     }
 
     // Re-opening an already-generated/finalized week (see
