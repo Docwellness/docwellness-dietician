@@ -415,6 +415,63 @@ class _CreateDietPlanScreenState extends State<CreateDietPlanScreen> {
                         ),
                       ),
                     ),
+                    const SizedBox(height: 12),
+                    // Lightweight reschedule - moves just this week's date
+                    // (cascading every later week to follow it) without
+                    // touching content/strategy, unlike the full
+                    // Generate/Update Diet Plan button at the bottom of this
+                    // screen. Only meaningful once a plan already exists -
+                    // for a brand new Week 1, the date is just part of the
+                    // initial Generate Diet Plan submission below.
+                    Obx(() {
+                      final activeDietPlanId =
+                          controller
+                              .patientProfileModel
+                              .value
+                              ?.status
+                              ?.activeDietPlanId ??
+                          '';
+                      final dietPlanId = widget.dietPlanId ?? activeDietPlanId;
+                      if (dietPlanId.isEmpty) return const SizedBox.shrink();
+                      final week = widget.weeksToGenerate?.first ?? widget.targetWeek;
+                      return CustomButton(
+                        isLoading: controller.updatingWeekDate.value,
+                        buttonColor: Color(0xff851653),
+                        isOutline: true,
+                        fontSize: 14,
+                        text: 'Update Date',
+                        onTap: () async {
+                          final today = DateTime.now();
+                          final startOfToday = DateTime(
+                            today.year,
+                            today.month,
+                            today.day,
+                          );
+                          final error = await controller.updateWeekDate(
+                            widget.patientId,
+                            dietPlanId,
+                            week,
+                            _selectedStartDate.isBefore(startOfToday)
+                                ? startOfToday
+                                : _selectedStartDate,
+                          );
+                          if (error != null) {
+                            showAppToast(
+                              Get.overlayContext!,
+                              message: error,
+                              type: AppToastType.error,
+                            );
+                            return;
+                          }
+                          showAppToast(
+                            Get.overlayContext!,
+                            message: 'Week $week date updated.',
+                            type: AppToastType.success,
+                          );
+                          Get.back();
+                        },
+                      );
+                    }),
                     const SizedBox(height: 16),
                   ],
                 ),

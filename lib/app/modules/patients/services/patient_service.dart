@@ -159,6 +159,32 @@ class PatientService {
     return null;
   }
 
+  /// Lightweight alternative to generateWeek - moves just this week's date
+  /// (cascading every later week to follow it, see the backend's
+  /// cascadeWeekScheduleFrom) without touching content/strategy.
+  Future<dynamic> updateWeekScheduleDate(
+    String patientId,
+    String dietPlanId,
+    int week,
+    DateTime startDate,
+  ) async {
+    try {
+      final response = await service.request(
+        endPoint: '/patients/$patientId/diet-plans/$dietPlanId/weeks/$week/schedule',
+        method: 'PATCH',
+        headers: {'Authorization': "Bearer $token"},
+        data: {'startDate': startDate.toIso8601String()},
+      );
+
+      if (response != null && response.data is Map) {
+        return response.data;
+      }
+    } catch (e) {
+      debugPrint('-----------------------> $e');
+    }
+    return null;
+  }
+
   Future<dynamic> getAiGeneratedDietPlan(
     String patientId,
     String dietPlanId,

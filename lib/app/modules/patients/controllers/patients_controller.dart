@@ -1513,6 +1513,40 @@ class PatientsController extends GetxController {
     return response;
   }
 
+  /// Lightweight reschedule - just moves this week's date (and cascades
+  /// later weeks to follow it), without touching content/strategy the way
+  /// regenerateWeek does. Returns an error message on failure (e.g. the
+  /// backend's "startDate cannot be earlier than today"), or null on
+  /// success.
+  RxBool updatingWeekDate = false.obs;
+  Future<String?> updateWeekDate(
+    String patientId,
+    String dietPlanId,
+    int week,
+    DateTime startDate,
+  ) async {
+    updatingWeekDate.value = true;
+    String? errorMessage;
+    try {
+      final response = await service.updateWeekScheduleDate(
+        patientId,
+        dietPlanId,
+        week,
+        startDate,
+      );
+      if (response != null && response['success'] == true) {
+        await getPatientProfile(patientId);
+      } else {
+        errorMessage = response?['message']?.toString() ?? 'Could not update date.';
+      }
+    } catch (e) {
+      debugPrint('-----------------------> $e');
+      errorMessage = 'Something went wrong. Please try again.';
+    }
+    updatingWeekDate.value = false;
+    return errorMessage;
+  }
+
   Future<void> getAiGeneratedDietPlan(
     String patientId,
     String dietPlanId,
