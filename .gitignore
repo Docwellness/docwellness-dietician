@@ -20,6 +20,7 @@ migrate_working_dir/
 # Environment files
 .env
 .env.*
+!.env.example
 
 # Real dev auto-login credentials (see lib/dev_credentials.example.dart for
 # the template) - never commit the actual email/password.
