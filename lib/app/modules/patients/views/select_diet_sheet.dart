@@ -637,6 +637,43 @@ class _SelectDietSheetState extends State<SelectDietSheet>
                 () => CustomButton(
                   isLoading: controller.showWeekDietSendingLoading.value,
                   onTap: () async {
+                    // AI_EXECUTION_PLAN.md Phase 7, P7-05: publish
+                    // confirmation - finalizing makes this week's plan
+                    // visible to the patient and was previously one tap
+                    // away with no confirmation, for what's normally a
+                    // hard-to-walk-back action (the patient may already be
+                    // logging meals against it by the time a mistake is
+                    // noticed).
+                    final confirmed = await showDialog<bool>(
+                      context: context,
+                      builder: (dialogContext) => AlertDialog(
+                        title: Text(
+                          'Finalize Week ${controller.selectedWeek.value}?',
+                        ),
+                        content: const Text(
+                          "This makes the week's diet plan visible to the "
+                          'patient. You can still make changes and '
+                          're-finalize later, but the patient may already '
+                          'be acting on it once published.',
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () =>
+                                Navigator.pop(dialogContext, false),
+                            child: const Text('Cancel'),
+                          ),
+                          TextButton(
+                            onPressed: () =>
+                                Navigator.pop(dialogContext, true),
+                            style: TextButton.styleFrom(
+                              foregroundColor: const Color(0xff851653),
+                            ),
+                            child: const Text('Finalize'),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirmed != true) return;
                     await controller.finalizeWeek(
                       widget.patientId,
                       widget.dietPlanId,

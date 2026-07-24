@@ -790,7 +790,39 @@ class _CreateDietPlanScreenState extends State<CreateDietPlanScreen> {
                           selectedMacros !=
                               (_originalMacroStrategyName ?? '') ||
                           _enteredWeight != _originalWeight);
-                  return CustomButton(
+                  // AI generation status (AI_EXECUTION_PLAN.md Phase 7,
+                  // P7-05) - the button's own spinner already covers
+                  // "generating"; this adds a short, named label for the
+                  // states around it so the dietician knows a draft is
+                  // waiting for review or that generation failed, not just
+                  // "not currently loading".
+                  final statusLabel = switch (controller.aiGenerationStatus.value) {
+                    AiGenerationStatus.reviewDraft =>
+                      'AI draft ready - review before finalizing',
+                    AiGenerationStatus.failed => 'Last generation failed',
+                    AiGenerationStatus.published => 'Published to patient',
+                    _ => null,
+                  };
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (statusLabel != null)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Text(
+                            statusLabel,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color:
+                                  controller.aiGenerationStatus.value ==
+                                      AiGenerationStatus.failed
+                                  ? const Color(0xffDC2626)
+                                  : const Color(0xff059669),
+                            ),
+                          ),
+                        ),
+                      CustomButton(
                     isLoading: controller.generateDietPlanLoading.value,
                     onTap: () async {
                       // ── Validate weight (every week) ──
@@ -995,6 +1027,8 @@ class _CreateDietPlanScreenState extends State<CreateDietPlanScreen> {
                         : 'Select Meals for Week ${widget.targetWeek}',
                     isOutline: false,
                     fontSize: 14,
+                      ),
+                    ],
                   );
                 }),
               ),

@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:docwellnesdoc/app/models/chat_model.dart';
+import 'package:docwellnesdoc/core/config/env_service.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -26,11 +27,16 @@ class CustomFoodBubble extends StatelessWidget {
     final foodName = metadata?.foodName ?? metadata?.itemName ?? 'Custom Food';
     final calories = metadata?.calories;
     final rawImageUrl = metadata?.imageUrl ?? chat.attachment;
+    // AI_EXECUTION_PLAN.md Phase 7, P7-01 - was a hardcoded production IP
+    // (http://65.20.81.44:5001), which silently broke this image in dev/
+    // staging and would need a code change (not just an env var) to ever
+    // repoint. EnvService.apiHost is the same env-driven base every other
+    // relative-URL resolution in this app already goes through.
     final imageUrl =
         (rawImageUrl != null &&
             rawImageUrl.isNotEmpty &&
             rawImageUrl.startsWith('/'))
-        ? 'http://65.20.81.44:5001$rawImageUrl'
+        ? '${EnvService.apiHost}$rawImageUrl'
         : rawImageUrl;
 
     return Align(

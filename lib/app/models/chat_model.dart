@@ -18,6 +18,16 @@ class ChatModel {
   final bool isMe;
   final int? serverSeq;
   final ChatModel? replyTo;
+  // Set on optimistically-created local messages (see ChatController.
+  // sendMessage/sendRecommendation) and echoed back by the backend on both
+  // the REST response and the msg.new socket payload - lets dedup match a
+  // socket-delivered echo of a just-sent message against its still-pending
+  // optimistic entry even before the REST response has replaced `id` with
+  // the real server id (see ChatController._handleIncomingMessage - the
+  // dietician is joined to the conversation's socket room via
+  // joinConversation, so their own just-sent message can be echoed back
+  // before that REST response arrives).
+  final String? clientMessageId;
 
   ChatModel({
     required this.id,
@@ -37,6 +47,7 @@ class ChatModel {
     required this.isMe,
     this.serverSeq,
     this.replyTo,
+    this.clientMessageId,
   });
 
   factory ChatModel.fromJson(Map<String, dynamic> json) {
@@ -91,6 +102,7 @@ class ChatModel {
       replyTo: json['replyTo'] != null
           ? ChatModel.fromJson(json['replyTo'])
           : null,
+      clientMessageId: json['clientMessageId'] ?? json['client_message_id'],
     );
   }
 
@@ -216,6 +228,11 @@ class ChatModel {
       replyTo: message['replyTo'] != null
           ? ChatModel.fromJson(message['replyTo'])
           : null,
+      clientMessageId:
+          message['clientMessageId'] ??
+          message['client_message_id'] ??
+          data['clientMessageId'] ??
+          data['client_message_id'],
     );
   }
 
@@ -265,6 +282,7 @@ class ChatModel {
       'receiverRole': receiverRole,
       'isMe': isMe,
       'serverSeq': serverSeq,
+      'clientMessageId': clientMessageId,
     };
   }
 

@@ -20,6 +20,9 @@ import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+/// AI diet-plan generation states - AI_EXECUTION_PLAN.md Phase 7, P7-05.
+enum AiGenerationStatus { idle, queued, generating, reviewDraft, failed, published }
+
 class PatientsController extends GetxController {
   Rx<PatientProfileModel?> patientProfileModel = Rx<PatientProfileModel?>(null);
   Rx<DietPlanWeekData?> dietPlanWeekData = Rx<DietPlanWeekData?>(null);
@@ -35,6 +38,25 @@ class PatientsController extends GetxController {
   RxBool isOngoingLoading = false.obs;
   RxBool isNewLoading = false.obs;
   RxBool isPastLoading = false.obs;
+
+  // Error states for each tab (AI_EXECUTION_PLAN.md Phase 7, P7-04) - a
+  // fetch failure previously just debugPrint'd and left the list empty,
+  // rendering identically to "genuinely no patients" with no retry
+  // affordance. Cleared at the start of every fetch, set on catch.
+  RxBool ongoingError = false.obs;
+  RxBool newError = false.obs;
+  RxBool pastError = false.obs;
+
+  // Sort (P7-04) - alphabetical by default; for the Ongoing tab, "needs
+  // attention first" resorts by adherence ascending (worst first) using
+  // the same adherencePercent already driving PatientWidget's accent
+  // color, so no new data source is needed. New/Past tabs don't have an
+  // adherence metric, so this toggle just leaves them alphabetical.
+  RxBool sortByAttentionFirst = false.obs;
+
+  void toggleAttentionSort() {
+    sortByAttentionFirst.value = !sortByAttentionFirst.value;
+  }
 
   // Search query
   RxString searchQuery = ''.obs;
@@ -64,6 +86,17 @@ class PatientsController extends GetxController {
   RxBool updatingWeekItem = false.obs;
 
   RxBool generateDietPlanLoading = false.obs;
+
+  // AI generation status (AI_EXECUTION_PLAN.md Phase 7, P7-05) - additive
+  // alongside generateDietPlanLoading/lastDietPlanGenerationError above
+  // (existing call sites reading those are untouched), giving the UI a
+  // named state instead of inferring status from a bool + nullable string.
+  // `queued` exists for spec-completeness but is never actually set today
+  // - diet plan generation is a synchronous HTTP call in this codebase,
+  // not a background job with a queue; `published` is set once the
+  // dietician finalizes a week (finalizeWeek/finalizeAll), which is this
+  // app's human-approval gate - see those methods.
+  Rx<AiGenerationStatus> aiGenerationStatus = AiGenerationStatus.idle.obs;
   RxBool activateDietPlanLoading = false.obs;
   RxBool rejectPaymentLoading = false.obs;
   RxBool confirmRenewalPaymentLoading = false.obs;
@@ -1260,6 +1293,7 @@ class PatientsController extends GetxController {
   /// Fetch ongoing patients (Paid + Active plan)
   Future<void> fetchOngoingPatients() async {
     isOngoingLoading.value = true;
+    ongoingError.value = false;
     try {
       final response = await service.getPatientsByTab(tab: 'ongoing');
       if (response != null && response['data'] != null) {
@@ -1269,6 +1303,7 @@ class PatientsController extends GetxController {
       }
     } catch (e) {
       debugPrint('fetchOngoingPatients error: $e');
+      ongoingError.value = true;
     }
     isOngoingLoading.value = false;
   }
@@ -1276,6 +1311,7 @@ class PatientsController extends GetxController {
   /// Fetch new patients (Unpaid, no active plan)
   Future<void> fetchNewPatients() async {
     isNewLoading.value = true;
+    newError.value = false;
     try {
       final response = await service.getPatientsByTab(tab: 'new');
       if (response != null && response['data'] != null) {
@@ -1287,6 +1323,7 @@ class PatientsController extends GetxController {
       }
     } catch (e) {
       debugPrint('fetchNewPatients error: $e');
+      newError.value = true;
     }
     isNewLoading.value = false;
   }
@@ -1294,6 +1331,7 @@ class PatientsController extends GetxController {
   /// Fetch past patients (Completed)
   Future<void> fetchPastPatients() async {
     isPastLoading.value = true;
+    pastError.value = false;
     try {
       final response = await service.getPatientsByTab(tab: 'past');
       if (response != null && response['data'] != null) {
@@ -1303,6 +1341,7 @@ class PatientsController extends GetxController {
       }
     } catch (e) {
       debugPrint('fetchPastPatients error: $e');
+      pastError.value = true;
     }
     isPastLoading.value = false;
   }
@@ -1316,46 +1355,82 @@ class PatientsController extends GetxController {
     ]);
   }
 
-  /// Filtered ongoing patients based on search query
+  /// Filtered + sorted ongoing patients based on search query and
+  /// sortByAttentionFirst (see field doc comment).
   List<OngoingPatientModel> get filteredOngoingPatients {
-    if (searchQuery.value.isEmpty) return ongoingPatients;
-    return ongoingPatients
-        .where(
-          (p) =>
-              p.fullName?.toLowerCase().contains(
-                searchQuery.value.toLowerCase(),
-              ) ??
-              false,
-        )
-        .toList();
+    var list = searchQuery.value.isEmpty
+        ? ongoingPatients.toList()
+        : ongoingPatients
+            .where(
+              (p) =>
+                  p.fullName?.toLowerCase().contains(
+                    searchQuery.value.toLowerCase(),
+                  ) ??
+                  false,
+            )
+            .toList();
+    if (sortByAttentionFirst.value) {
+      list.sort(
+        (a, b) => (a.adherencePercent ?? 100).compareTo(
+          b.adherencePercent ?? 100,
+        ),
+      );
+    } else {
+      list.sort(
+        (a, b) => (a.fullName ?? '').toLowerCase().compareTo(
+          (b.fullName ?? '').toLowerCase(),
+        ),
+      );
+    }
+    return list;
   }
 
-  /// Filtered new patients based on search query
+  /// Filtered + sorted new patients based on search query (alphabetical -
+  /// no adherence metric exists for this tab, see sortByAttentionFirst).
   List<NewPatientModel> get filteredNewPatients {
-    if (searchQuery.value.isEmpty) return newPatients;
-    return newPatients
-        .where(
-          (p) =>
-              p.fullName?.toLowerCase().contains(
-                searchQuery.value.toLowerCase(),
-              ) ??
-              false,
-        )
-        .toList();
+    var list = searchQuery.value.isEmpty
+        ? newPatients.toList()
+        : newPatients
+            .where(
+              (p) =>
+                  p.fullName?.toLowerCase().contains(
+                    searchQuery.value.toLowerCase(),
+                  ) ??
+                  false,
+            )
+            .toList();
+    if (sortByAttentionFirst.value) {
+      list.sort(
+        (a, b) => (a.fullName ?? '').toLowerCase().compareTo(
+          (b.fullName ?? '').toLowerCase(),
+        ),
+      );
+    }
+    return list;
   }
 
-  /// Filtered past patients based on search query
+  /// Filtered + sorted past patients based on search query (alphabetical -
+  /// no adherence metric exists for this tab, see sortByAttentionFirst).
   List<PastPatientModel> get filteredPastPatients {
-    if (searchQuery.value.isEmpty) return pastPatients;
-    return pastPatients
-        .where(
-          (p) =>
-              p.fullName?.toLowerCase().contains(
-                searchQuery.value.toLowerCase(),
-              ) ??
-              false,
-        )
-        .toList();
+    var list = searchQuery.value.isEmpty
+        ? pastPatients.toList()
+        : pastPatients
+            .where(
+              (p) =>
+                  p.fullName?.toLowerCase().contains(
+                    searchQuery.value.toLowerCase(),
+                  ) ??
+                  false,
+            )
+            .toList();
+    if (sortByAttentionFirst.value) {
+      list.sort(
+        (a, b) => (a.fullName ?? '').toLowerCase().compareTo(
+          (b.fullName ?? '').toLowerCase(),
+        ),
+      );
+    }
+    return list;
   }
 
   // Future<void> sendConsultation(String patientId, bool isFemale) async {
@@ -1590,6 +1665,7 @@ class PatientsController extends GetxController {
     double? currentWeight,
   }) async {
     generateDietPlanLoading.value = true;
+    aiGenerationStatus.value = AiGenerationStatus.generating;
     lastDietPlanGenerationError = null;
     final data = {
       'firstConsultationId': firstConsultationId,
@@ -1612,12 +1688,20 @@ class PatientsController extends GetxController {
           patientProfileModel.value?.status?.activeDietPlanId = dietPlanId;
 
           patientProfileModel.refresh();
+          // AI produced a draft - still requires the dietician to review
+          // and finalize before a patient ever sees it (see finalizeWeek/
+          // finalizeAll below), never auto-published.
+          aiGenerationStatus.value = AiGenerationStatus.reviewDraft;
         } else {
           lastDietPlanGenerationError = response['message']?.toString();
+          aiGenerationStatus.value = AiGenerationStatus.failed;
         }
+      } else {
+        aiGenerationStatus.value = AiGenerationStatus.failed;
       }
     } catch (e) {
       debugPrint('-----------------$e');
+      aiGenerationStatus.value = AiGenerationStatus.failed;
     }
     generateDietPlanLoading.value = false;
     return dietPlanId;
@@ -2964,6 +3048,11 @@ class PatientsController extends GetxController {
 
       if (response != null && response['success'] == true) {
         debugPrint("Week finalized successfully");
+        // Dietician's explicit human-approval action - this is what turns
+        // an AI-generated draft into something the patient can see (see
+        // AI_EXECUTION_PLAN.md Phase 7, P7-05's "require human approval
+        // before publishing").
+        aiGenerationStatus.value = AiGenerationStatus.published;
         showAppToast(
           Get.overlayContext!,
           message: "$selectedWeek finalized successfully",
@@ -3061,6 +3150,7 @@ class PatientsController extends GetxController {
       if (response != null && response['success'] == true) {
         // Check if payment request was auto-sent by backend
         final paymentSent = response['data']?['paymentRequestSent'] == true;
+        aiGenerationStatus.value = AiGenerationStatus.published;
 
         Get.back();
         Get.back();

@@ -26,6 +26,27 @@ class SocketService extends GetxService with WidgetsBindingObserver {
   final RxBool isConnected = false.obs;
   final RxString currentRoom = ''.obs;
 
+  // Reconnect-sync (AI_EXECUTION_PLAN.md Phase 7, P7-03) - Socket.IO rooms
+  // are server-side session state that's wiped on disconnect, so a dropped
+  // and reconnected socket stops receiving conv:{id} broadcasts until it
+  // rejoins; and any UI relying on presence/unread counts can go stale for
+  // the same reason a network-level reconnect can (see
+  // ConnectivityService, whose registerOnReconnected/unregister shape this
+  // mirrors) - except a socket can drop and recover while the network
+  // itself never goes offline (server restart, LB hiccup, idle timeout),
+  // so this is a distinct signal from ConnectivityService, not a
+  // duplicate of it.
+  final _reconnectCallbacks = <VoidCallback>{};
+  bool _hasConnectedBefore = false;
+
+  void registerOnReconnect(VoidCallback onReconnect) {
+    _reconnectCallbacks.add(onReconnect);
+  }
+
+  void unregisterOnReconnect(VoidCallback onReconnect) {
+    _reconnectCallbacks.remove(onReconnect);
+  }
+
   // Stream controllers for different events
   final _messageController = StreamController<Map<String, dynamic>>.broadcast();
   final _typingController = StreamController<Map<String, dynamic>>.broadcast();
@@ -100,6 +121,23 @@ class SocketService extends GetxService with WidgetsBindingObserver {
     _socket!.onConnect((_) {
       log('✅ Socket connected');
       isConnected.value = true;
+
+      if (_hasConnectedBefore) {
+        // A genuine reconnect (not the first connection this session) -
+        // rejoin whatever room we were in server-side (the server has no
+        // memory of it after a drop) before notifying listeners, so
+        // syncActiveConversation()'s refetch and any subsequent live
+        // messages both land correctly.
+        log('🔄 Socket reconnected — syncing state');
+        final room = currentRoom.value;
+        if (room.isNotEmpty) {
+          _socket?.emit('chat.join', {'conversation_id': room});
+        }
+        for (final cb in [..._reconnectCallbacks]) {
+          cb();
+        }
+      }
+      _hasConnectedBefore = true;
     });
 
     _socket!.on('ws.auth_ok', (data) {

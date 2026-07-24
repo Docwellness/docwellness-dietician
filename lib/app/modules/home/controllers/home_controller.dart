@@ -86,12 +86,20 @@ class HomeController extends GetxController {
     _listenForNotifications();
     _listenForMessages();
     Get.find<ConnectivityService>().registerOnReconnected(refreshHomeData);
+    // AI_EXECUTION_PLAN.md Phase 7, P7-03 - syncUnreadCounts() on socket
+    // reconnect (distinct from ConnectivityService's network-level signal
+    // above - a socket can drop/reconnect while the network itself stays
+    // online, e.g. a server restart). refreshHomeData already re-fetches
+    // notificationUnreadCount/messagesReceived, so it's the right callback
+    // for both signals rather than a separate implementation.
+    Get.find<SocketService>().registerOnReconnect(refreshHomeData);
     super.onInit();
   }
 
   @override
   void onClose() {
     Get.find<ConnectivityService>().unregister(refreshHomeData);
+    Get.find<SocketService>().unregisterOnReconnect(refreshHomeData);
     _notifSub?.cancel();
     _messageSub?.cancel();
     _dashboardDebounce?.cancel();

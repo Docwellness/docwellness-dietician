@@ -56,6 +56,44 @@ class ChatController extends GetxController {
     }
 
     _setupSocketListeners();
+    _socketService.registerOnReconnect(_syncOnReconnect);
+  }
+
+  /// AI_EXECUTION_PLAN.md Phase 7, P7-03 - syncActiveConversation() +
+  /// updatePresence(). Re-fetches the open conversation via REST (the
+  /// authoritative source, catches anything missed while disconnected)
+  /// and re-requests the other user's presence, since both can go stale
+  /// across a socket drop even though the room rejoin (SocketService) and
+  /// this callback both fire immediately on reconnect.
+  void _syncOnReconnect() {
+    if (currentConversationId != null) {
+      debugPrint('🔄 Reconnect sync: refetching active conversation');
+      _silentRefetchMessages(currentConversationId!);
+    }
+    if (currentReceiverId != null) {
+      _socketService.getPresence([currentReceiverId!]);
+    }
+  }
+
+  /// Same fetch as getPatientChat, minus the visible loading spinner and
+  /// redundant room-join (SocketService's own reconnect handler already
+  /// rejoined) - a reconnect while a chat is already open should silently
+  /// catch up, not flash the screen back to a loading state.
+  Future<void> _silentRefetchMessages(String conversationId) async {
+    try {
+      final response = await service.getPatientChat(conversationId);
+      if (response != null) {
+        final List data = response['data'];
+        final fetchedChats = data.map((e) => ChatModel.fromJson(e)).toList();
+        fetchedChats.sort((a, b) {
+          if (a.createdAt == null || b.createdAt == null) return 0;
+          return b.createdAt!.compareTo(a.createdAt!);
+        });
+        chatList.value = fetchedChats;
+      }
+    } catch (e) {
+      debugPrint('Reconnect message resync error: $e');
+    }
   }
 
   void _setupSocketListeners() {
@@ -110,6 +148,7 @@ class ChatController extends GetxController {
               isMe: chatList[i].isMe,
               serverSeq: chatList[i].serverSeq,
               replyTo: chatList[i].replyTo,
+              clientMessageId: chatList[i].clientMessageId,
             );
           }
         }
@@ -143,8 +182,24 @@ class ChatController extends GetxController {
           '✅ Parsed message: id=${message.id}, type=${message.messageType}, text=${message.message}',
         );
 
-        // Check if message already exists
-        final existingIndex = chatList.indexWhere((m) => m.id == message.id);
+        // Dedup by id OR clientMessageId (AI_EXECUTION_PLAN.md Phase 7,
+        // P7-02: "deduplicate legacy events during transition") - the
+        // dietician is joined to this conversation's socket room (see
+        // joinConversation in getPatientChat), so their own just-sent
+        // message can be echoed back here (via msg.new or a legacy
+        // event - both feed the same onMessage stream, see
+        // SocketService) before the REST response in sendMessage()/
+        // sendRecommendation() has replaced the optimistic entry's temp
+        // id with the real server id. Matching on clientMessageId too
+        // catches that race - id-only matching missed it, since the
+        // pending optimistic entry still has the temp id at that point.
+        final existingIndex = chatList.indexWhere(
+          (m) =>
+              m.id == message.id ||
+              (message.clientMessageId != null &&
+                  message.clientMessageId!.isNotEmpty &&
+                  m.clientMessageId == message.clientMessageId),
+        );
         debugPrint('📍 Existing index: $existingIndex');
         if (existingIndex == -1) {
           // Insert at beginning so newest appears at bottom with reverse: true
@@ -287,6 +342,7 @@ class ChatController extends GetxController {
       receiverRole: 'patient',
       isMe: true,
       replyTo: replyingTo,
+      clientMessageId: clientMessageId,
     );
     // Insert at beginning so newest appears at bottom with reverse: true
     chatList.insert(0, localMessage);
@@ -484,6 +540,7 @@ class ChatController extends GetxController {
       receiverRole: 'patient',
       isMe: true,
       replyTo: replyingTo,
+      clientMessageId: clientMessageId,
     );
     chatList.insert(0, localMessage);
 
@@ -522,6 +579,9 @@ class ChatController extends GetxController {
     _readSubscription?.cancel();
     _typingTimer?.cancel();
     _refreshTimer?.cancel();
+    try {
+      Get.find<SocketService>().unregisterOnReconnect(_syncOnReconnect);
+    } catch (_) {}
 
     super.onClose();
   }
