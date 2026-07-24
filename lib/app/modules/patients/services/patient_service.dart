@@ -122,9 +122,12 @@ class PatientService {
         data: data,
       );
 
-      if (response != null &&
-          response.statusCode == 201 &&
-          response.data['success'] == true) {
+      // Surface the failure payload too (e.g. the backend's 502 "AI
+      // diet-plan generation produced severe, unresolvable issues..."
+      // message), not just the success payload - same fix as generateWeek
+      // below. Without this the caller only ever sees null on failure and
+      // has no way to tell the dietician *why* generation failed.
+      if (response != null && response.data is Map) {
         return response.data;
       }
     } catch (e) {

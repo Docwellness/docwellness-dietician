@@ -901,6 +901,7 @@ class _CreateDietPlanScreenState extends State<CreateDietPlanScreen> {
                           showAppToast(
                             Get.overlayContext!,
                             message:
+                                controller.lastDietPlanGenerationError ??
                                 'Diet plan generation failed. Please try again.',
                             type: AppToastType.error,
                           );

@@ -1574,6 +1574,14 @@ class PatientsController extends GetxController {
   /// to be null at this point (e.g. profile not yet loaded), leaving the
   /// caller to fetch with an empty dietPlanId and show a blank/zeroed plan
   /// even though generation actually succeeded.
+  /// Set whenever generateDietPlan below fails, to whatever explanation the
+  /// backend gave (e.g. "no meal entries found for required slot..." when
+  /// the recipe pool can't cover every required meal slot) - null return
+  /// value alone can't distinguish "network error" from "AI validation
+  /// failed" from "tier not recognized", so the caller reads this instead
+  /// of falling back to a generic message.
+  String? lastDietPlanGenerationError;
+
   Future<String?> generateDietPlan(
     String patientId,
     String firstConsultationId,
@@ -1582,6 +1590,7 @@ class PatientsController extends GetxController {
     double? currentWeight,
   }) async {
     generateDietPlanLoading.value = true;
+    lastDietPlanGenerationError = null;
     final data = {
       'firstConsultationId': firstConsultationId,
       'requestId': requestId,
@@ -1603,6 +1612,8 @@ class PatientsController extends GetxController {
           patientProfileModel.value?.status?.activeDietPlanId = dietPlanId;
 
           patientProfileModel.refresh();
+        } else {
+          lastDietPlanGenerationError = response['message']?.toString();
         }
       }
     } catch (e) {
