@@ -286,6 +286,20 @@ class ChatModel {
     };
   }
 
+  /// Whether `incoming` already exists in `existing` - matches by id OR
+  /// clientMessageId (AI_EXECUTION_PLAN.md Phase 7/8, P7-02/P8-02). Pulled
+  /// out of ChatController's socket listener as a pure, unit-testable
+  /// function - see test/message_dedup_test.dart.
+  static bool isDuplicate(List<ChatModel> existing, ChatModel incoming) {
+    return existing.any(
+      (m) =>
+          m.id == incoming.id ||
+          (incoming.clientMessageId != null &&
+              incoming.clientMessageId!.isNotEmpty &&
+              m.clientMessageId == incoming.clientMessageId),
+    );
+  }
+
   bool get isMealLog =>
       messageType == 'meal_log' || messageType == 'diet_update';
   bool get isImage => messageType == 'image';

@@ -18,6 +18,7 @@ import 'package:docwellnesdoc/app/utils/common_widgets/app_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:posthog_flutter/posthog_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// AI diet-plan generation states - AI_EXECUTION_PLAN.md Phase 7, P7-05.
@@ -3053,6 +3054,12 @@ class PatientsController extends GetxController {
         // AI_EXECUTION_PLAN.md Phase 7, P7-05's "require human approval
         // before publishing").
         aiGenerationStatus.value = AiGenerationStatus.published;
+        // AI_EXECUTION_PLAN.md Phase 8, P8-04 - no PHI: just the week
+        // label, not any meal/nutrition content.
+        Posthog().capture(
+          eventName: 'diet_plan_published',
+          properties: {'scope': 'week', 'week': selectedWeek},
+        );
         showAppToast(
           Get.overlayContext!,
           message: "$selectedWeek finalized successfully",
@@ -3151,6 +3158,11 @@ class PatientsController extends GetxController {
         // Check if payment request was auto-sent by backend
         final paymentSent = response['data']?['paymentRequestSent'] == true;
         aiGenerationStatus.value = AiGenerationStatus.published;
+        // AI_EXECUTION_PLAN.md Phase 8, P8-04 - no PHI.
+        Posthog().capture(
+          eventName: 'diet_plan_published',
+          properties: {'scope': 'all_weeks'},
+        );
 
         Get.back();
         Get.back();

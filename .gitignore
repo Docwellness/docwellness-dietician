@@ -16,6 +16,7 @@ migrate_working_dir/
 *.md
 *.txt
 !CMakeLists.txt
+!RELEASE_CHECKLIST.md
 
 # Environment files
 .env

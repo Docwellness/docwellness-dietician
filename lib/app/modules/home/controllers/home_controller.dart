@@ -13,6 +13,7 @@ import 'package:docwellnesdoc/app/modules/receipes/services/recipe_service.dart'
 import 'package:docwellnesdoc/app/services/socket_service.dart';
 import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
+import 'package:posthog_flutter/posthog_flutter.dart';
 
 class HomeController extends GetxController {
   final HomeService service = HomeService();
@@ -153,6 +154,8 @@ class HomeController extends GetxController {
       fetchCouponCount(),
     ]);
     showHomeLoading.value = false;
+    // AI_EXECUTION_PLAN.md Phase 8, P8-04 - no PHI: no properties.
+    Posthog().capture(eventName: 'dashboard_loaded');
   }
 
   Future<void> refreshHomeData() async {

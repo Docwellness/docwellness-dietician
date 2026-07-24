@@ -8,6 +8,7 @@ import 'package:docwellnesdoc/main.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:posthog_flutter/posthog_flutter.dart';
 
 class ChatController extends GetxController {
   ReceiverModel? receiverModel;
@@ -193,15 +194,11 @@ class ChatController extends GetxController {
         // id with the real server id. Matching on clientMessageId too
         // catches that race - id-only matching missed it, since the
         // pending optimistic entry still has the temp id at that point.
-        final existingIndex = chatList.indexWhere(
-          (m) =>
-              m.id == message.id ||
-              (message.clientMessageId != null &&
-                  message.clientMessageId!.isNotEmpty &&
-                  m.clientMessageId == message.clientMessageId),
-        );
-        debugPrint('📍 Existing index: $existingIndex');
-        if (existingIndex == -1) {
+        // See ChatModel.isDuplicate's doc comment - pulled out as a pure,
+        // unit-testable function (test/message_dedup_test.dart).
+        final isDuplicate = ChatModel.isDuplicate(chatList, message);
+        debugPrint('📍 Is duplicate: $isDuplicate');
+        if (!isDuplicate) {
           // Insert at beginning so newest appears at bottom with reverse: true
           chatList.insert(0, message);
           debugPrint(
@@ -213,7 +210,7 @@ class ChatController extends GetxController {
             readMessage(conversationId: currentConversationId!);
           }
         } else {
-          debugPrint('⚠️ Message already exists at index $existingIndex');
+          debugPrint('⚠️ Message already exists (duplicate)');
         }
       } else {
         debugPrint('⚠️ Message is for different conversation, skipping');
@@ -362,6 +359,12 @@ class ChatController extends GetxController {
 
     if (response != null && response['data'] != null) {
       replaceMessage(clientMessageId, ChatModel.fromJson(response['data']));
+      // AI_EXECUTION_PLAN.md Phase 8, P8-04 - no PHI: never the message
+      // content itself, only that a text message was sent.
+      Posthog().capture(
+        eventName: 'chat_message_sent',
+        properties: {'message_type': 'text'},
+      );
       return {'success': true, 'data': localMessage};
     }
 

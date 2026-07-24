@@ -132,6 +132,9 @@ Future<void> _autoLoginDietician() async {
         response.data['success'] == true) {
       userId = response.data['data']['_id'];
       debugPrint('🧪 Auto-logged in as dietician: userId=$userId');
+      // AI_EXECUTION_PLAN.md Phase 8, P8-04 - no PHI: no properties, same
+      // shape as the user app's login_success.
+      await Posthog().capture(eventName: 'login_success');
     } else {
       debugPrint(
         'Dietician auto-login: /auth/me failed (${response?.statusCode})',
