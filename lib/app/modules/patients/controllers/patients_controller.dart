@@ -807,10 +807,12 @@ class PatientsController extends GetxController {
   Future<void> fillConsultationWithMockData(String patientGender) async {
     isMockFillLoading.value = true;
     try {
+      final patientContext = _buildMockFillPatientContext();
       final firstPassFields = _fillableFields(patientGender);
       final firstPassAnswers = await _mockFillService.generateAnswers(
         fields: firstPassFields,
         patientGender: patientGender,
+        patientContext: patientContext,
       );
       _applyMockAnswers(firstPassFields, firstPassAnswers);
 
@@ -822,12 +824,58 @@ class PatientsController extends GetxController {
         final secondPassAnswers = await _mockFillService.generateAnswers(
           fields: secondPassFields,
           patientGender: patientGender,
+          patientContext: patientContext,
         );
         _applyMockAnswers(secondPassFields, secondPassAnswers);
       }
     } finally {
       isMockFillLoading.value = false;
     }
+  }
+
+  /// Real basic/health info already on file for the patient whose profile is
+  /// currently open, so generated answers are grounded in - and consistent
+  /// with - the actual person instead of reading as a disconnected generic
+  /// template. Only non-null fields are included.
+  Map<String, dynamic> _buildMockFillPatientContext() {
+    final basic = patientProfileModel.value?.basic;
+    final health = patientProfileModel.value?.healthSummary;
+    final age = _ageFromDob(basic?.dateOfBirth);
+
+    final context = <String, dynamic>{};
+    if (basic?.fullName != null) context['name'] = basic!.fullName;
+    if (age != null) context['age'] = age;
+    if (health?.height != null) context['heightCm'] = health!.height;
+    if (health?.weight != null) context['weightKg'] = health!.weight;
+    if (health?.primaryGoal != null) context['primaryGoal'] = health!.primaryGoal;
+    if (health?.targetWeight != null) {
+      context['targetWeight'] = health!.targetWeight;
+    }
+    if (health?.activityLevel != null) {
+      context['activityLevel'] = health!.activityLevel;
+    }
+    if (health?.healthConcerns != null && health!.healthConcerns!.isNotEmpty) {
+      context['healthConcerns'] = health.healthConcerns;
+    }
+    return context;
+  }
+
+  int? _ageFromDob(String? dobDdMmYyyy) {
+    if (dobDdMmYyyy == null || dobDdMmYyyy.isEmpty) return null;
+    final parts = dobDdMmYyyy.split('-');
+    if (parts.length != 3) return null;
+    final day = int.tryParse(parts[0]);
+    final month = int.tryParse(parts[1]);
+    final year = int.tryParse(parts[2]);
+    if (day == null || month == null || year == null) return null;
+    final birthDate = DateTime(year, month, day);
+    final today = DateTime.now();
+    int age = today.year - birthDate.year;
+    if (today.month < birthDate.month ||
+        (today.month == birthDate.month && today.day < birthDate.day)) {
+      age--;
+    }
+    return age;
   }
 
   List<ConsultationFormField> _fillableFields(String patientGender) {

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:dio/dio.dart';
 import 'package:docwellnesdoc/app/modules/performance/models/consultation_form_field.dart';
@@ -15,16 +16,43 @@ class ConsultationMockFillService {
   // no need for a heavier model just to invent plausible mock answers.
   static const _model = 'llama-3.3-70b-versatile';
 
+  // Given an identical field list + gender every time (same form, same
+  // patient), the model tends to converge on the same "most likely" mock
+  // persona even with a non-zero temperature - repeated taps produced near-
+  // identical answers in practice. Rolling a random archetype into the
+  // prompt each call, plus a random nonce the model is told to use only as
+  // inspiration for variety, forces genuinely different output per tap
+  // instead of relying on sampling alone.
+  static const _archetypes = [
+    'a busy working professional with an irregular schedule',
+    'a college student living in a hostel/mess',
+    'a homemaker managing a household with kids',
+    'a retiree with a relatively sedentary routine',
+    'a fitness enthusiast who trains regularly',
+    'someone recovering from a recent illness/surgery',
+    'a frequent traveler for work with inconsistent meal timings',
+    'a night-shift worker with a flipped sleep schedule',
+    'a new parent adjusting to disrupted sleep and routines',
+    'someone managing a chronic condition (e.g. thyroid, PCOS, diabetes)',
+  ];
+
   final Dio _dio = Dio();
+  final Random _random = Random();
 
   /// Returns a map of fieldId -> mock answer value (String for
   /// text/textarea/number/date/yesNo/singleChoice, a list of strings for
   /// multiChoice). Fields with type `file` are never asked for - nothing
   /// meaningful to mock there. Throws on any failure (network, bad API key,
   /// unparseable response) - the caller shows that as a toast.
+  ///
+  /// [patientContext] carries whatever real basic/health info is already
+  /// known about this patient (name, age, gender, height/weight/goal/etc.)
+  /// so the generated answers stay grounded in - and consistent with - the
+  /// actual person instead of reading as a generic template.
   Future<Map<String, dynamic>> generateAnswers({
     required List<ConsultationFormField> fields,
     required String patientGender,
+    Map<String, dynamic>? patientContext,
   }) async {
     if (kGroqApiKey.isEmpty) {
       throw StateError(
@@ -48,11 +76,28 @@ class ConsultationMockFillService {
         )
         .toList();
 
+    final archetype = _archetypes[_random.nextInt(_archetypes.length)];
+    final nonce = _random.nextInt(1000000);
+
+    final contextBlock = (patientContext == null || patientContext.isEmpty)
+        ? 'None known yet - invent a plausible person from scratch.'
+        : jsonEncode(patientContext);
+
     final prompt =
         '''
 You are generating realistic MOCK answers for a dietician's patient-intake
 consultation form, for internal app testing only (never shown to a real
 patient). The patient is $patientGender.
+
+Known real info about this patient already (treat as ground truth - stay
+consistent with it, don't contradict it):
+$contextBlock
+
+For this generation, imagine the patient as: $archetype.
+Variety token (ignore its value, just use it as a seed to make this
+generation meaningfully different in details/wording from any other run -
+different lifestyle specifics, different numbers, different phrasing):
+$nonce
 
 Fields (JSON array, each has fieldId/label/type, and options if choice-based):
 ${jsonEncode(fieldDescriptions)}
@@ -69,7 +114,8 @@ Rules per type:
 - multiChoice: a JSON array of 1 or more of the field's own "options"
   values, verbatim.
 Keep answers mutually consistent (e.g. don't contradict yourself across
-related fields). No commentary, no markdown - just the JSON object.
+related fields, and stay consistent with the known real info above). No
+commentary, no markdown - just the JSON object.
 ''';
 
     final response = await _dio.post(
@@ -91,7 +137,8 @@ related fields). No commentary, no markdown - just the JSON object.
           {'role': 'user', 'content': prompt},
         ],
         'response_format': {'type': 'json_object'},
-        'temperature': 0.9,
+        'temperature': 1.2,
+        'top_p': 0.95,
       },
     );
 
