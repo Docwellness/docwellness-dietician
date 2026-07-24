@@ -9,6 +9,7 @@ import 'package:docwellnesdoc/app/models/patient_list_model.dart';
 import 'package:docwellnesdoc/app/models/patient_profile_model.dart';
 import 'package:docwellnesdoc/app/models/tracking_data_model.dart';
 import 'package:docwellnesdoc/app/models/update_ai_diet_plain_model.dart';
+import 'package:docwellnesdoc/app/modules/patients/services/consultation_mock_fill_service.dart';
 import 'package:docwellnesdoc/app/modules/patients/services/patient_service.dart';
 import 'package:docwellnesdoc/app/modules/patients/views/questions_view.dart';
 import 'package:docwellnesdoc/app/modules/performance/models/consultation_form_field.dart';
@@ -790,6 +791,94 @@ class PatientsController extends GetxController {
       );
     }
     return field.dependsOnValues.contains((parentAnswer ?? '').toString());
+  }
+
+  // ── Dev-only "magic fill" (see QuestionsView's kReleaseMode gate) ──
+  final ConsultationMockFillService _mockFillService =
+      ConsultationMockFillService();
+  RxBool isMockFillLoading = false.obs;
+
+  /// Fills every currently-fillable field (dietician-editable, not a
+  /// consent field, not a file upload) with AI-generated mock data via
+  /// Groq - for fast manual testing only, never reachable in a release
+  /// build. Runs a second pass for any dependsOnFieldId follow-up fields
+  /// that only became visible once the first pass's answers were applied
+  /// (e.g. an "Other, please specify" field revealed by picking "Other").
+  Future<void> fillConsultationWithMockData(String patientGender) async {
+    isMockFillLoading.value = true;
+    try {
+      final firstPassFields = _fillableFields(patientGender);
+      final firstPassAnswers = await _mockFillService.generateAnswers(
+        fields: firstPassFields,
+        patientGender: patientGender,
+      );
+      _applyMockAnswers(firstPassFields, firstPassAnswers);
+
+      final answeredIds = firstPassFields.map((f) => f.fieldId).toSet();
+      final secondPassFields = _fillableFields(
+        patientGender,
+      ).where((f) => !answeredIds.contains(f.fieldId)).toList();
+      if (secondPassFields.isNotEmpty) {
+        final secondPassAnswers = await _mockFillService.generateAnswers(
+          fields: secondPassFields,
+          patientGender: patientGender,
+        );
+        _applyMockAnswers(secondPassFields, secondPassAnswers);
+      }
+    } finally {
+      isMockFillLoading.value = false;
+    }
+  }
+
+  List<ConsultationFormField> _fillableFields(String patientGender) {
+    return consultationTemplate
+        .where((f) => isFieldVisible(f, patientGender))
+        .where((f) => !_consentFieldIds.contains(f.fieldId))
+        .where((f) => f.type != ConsultationFieldType.file)
+        .toList();
+  }
+
+  void _applyMockAnswers(
+    List<ConsultationFormField> fields,
+    Map<String, dynamic> answers,
+  ) {
+    for (final f in fields) {
+      final value = answers[f.fieldId];
+      if (value == null) continue;
+      switch (f.type) {
+        case ConsultationFieldType.text:
+        case ConsultationFieldType.textarea:
+        case ConsultationFieldType.number:
+        case ConsultationFieldType.date:
+          final text = value.toString();
+          customTextControllerFor(f.fieldId).text = text;
+          setCustomAnswer(f.fieldId, text);
+          break;
+        case ConsultationFieldType.yesNo:
+          final text = value.toString();
+          if (text == 'Yes' || text == 'No') {
+            setCustomAnswer(f.fieldId, text);
+          }
+          break;
+        case ConsultationFieldType.singleChoice:
+          final text = value.toString();
+          if (f.options.isEmpty || f.options.contains(text)) {
+            setCustomAnswer(f.fieldId, text);
+          }
+          break;
+        case ConsultationFieldType.multiChoice:
+          if (value is List) {
+            final list = value
+                .map((e) => e.toString())
+                .where((v) => f.options.isEmpty || f.options.contains(v))
+                .toList();
+            if (list.isNotEmpty) setCustomAnswer(f.fieldId, list);
+          }
+          break;
+        case ConsultationFieldType.file:
+          break;
+      }
+    }
   }
 
   // api functions

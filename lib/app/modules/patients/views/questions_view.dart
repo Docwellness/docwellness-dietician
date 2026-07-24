@@ -1,7 +1,9 @@
 import 'package:docwellnesdoc/app/modules/patients/controllers/patients_controller.dart';
 import 'package:docwellnesdoc/app/modules/performance/models/consultation_form_field.dart';
+import 'package:docwellnesdoc/app/utils/common_widgets/app_toast.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_button.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -64,6 +66,47 @@ class QuestionsView extends StatelessWidget {
                     fontSize: 20,
                     color: Color(0xff1F2A37),
                   ),
+                  // Dev-only "magic fill" button: auto-generates mock answers
+                  // via Groq for fast manual testing. Never built into a
+                  // release binary regardless of what's tapped.
+                  if (!kReleaseMode && !isDisable) ...[
+                    Spacer(),
+                    Obx(
+                      () => IconButton(
+                        tooltip: 'Dev only: fill with AI mock data',
+                        onPressed: controller.isMockFillLoading.value
+                            ? null
+                            : () async {
+                                try {
+                                  await controller.fillConsultationWithMockData(
+                                    gendar,
+                                  );
+                                } catch (e) {
+                                  if (context.mounted) {
+                                    showAppToast(
+                                      context,
+                                      message: 'Mock fill failed: $e',
+                                      type: AppToastType.error,
+                                    );
+                                  }
+                                }
+                              },
+                        icon: controller.isMockFillLoading.value
+                            ? SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Color(0xff851653),
+                                ),
+                              )
+                            : Icon(
+                                Icons.auto_fix_high,
+                                color: Color(0xff851653),
+                              ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
               Divider(color: Color(0xff9DA4AE)),

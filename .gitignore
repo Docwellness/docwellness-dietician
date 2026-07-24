@@ -25,6 +25,11 @@ migrate_working_dir/
 # the template) - never commit the actual email/password.
 lib/dev_credentials.dart
 
+# Real Groq API key for the dev-only "magic fill" button (see
+# lib/groq_dev_credentials.example.dart for the template) - never commit
+# the actual key.
+lib/groq_dev_credentials.dart
+
 # IntelliJ related
 *.iml
 *.ipr
