@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -12,72 +14,22 @@ import 'app/services/connectivity_service.dart';
 import 'app/services/notification_service.dart';
 import 'app/services/socket_service.dart';
 import 'app/utils/functions/dio_function.dart';
-import 'dev_credentials.dart';
+import 'core/config/env_service.dart';
+import 'core/session/session_service.dart';
 
-String? token;
-String? userId;
+/// Thin bridge over SessionService (see core/session/session_service.dart)
+/// so every existing call site that reads/writes `token`/`userId` directly
+/// keeps working unchanged, while the actual session data now lives in the
+/// service's secure-storage-backed state instead of a bare in-memory
+/// global that's lost on every app restart. SessionService must already be
+/// registered (see _bootstrap's first line) before anything touches these.
+String? get token => SessionService.to.token;
+set token(String? value) => unawaited(SessionService.to.setToken(value));
 
-/// Backend base URL. Override at build time with:
-///   flutter build web --dart-define=API_BASE_URL=https://api-dev.example.com
-const String _apiHost = String.fromEnvironment(
-  'API_BASE_URL',
-  defaultValue: 'http://localhost:5000',
-);
-const String apiBaseUrl = '$_apiHost/api/dietician';
+String? get userId => SessionService.to.userId;
+set userId(String? value) => unawaited(SessionService.to.setUserId(value));
 
-// Publishable (anon) key - safe to commit, same as docwellness-user's
-// scripts/run-dev.ps1 (it only allows the actions RLS policies permit, not
-// reading arbitrary data - never the *service role* key). Defaulted here
-// (rather than left empty like the optional Sentry/PostHog defines below)
-// because auto-login below can't function at all without Supabase actually
-// being initialized - this project's run-dev.ps1 was missing both of these
-// dart-defines entirely, unlike docwellness-user's equivalent script.
-const String _supabaseUrl = String.fromEnvironment(
-  'SUPABASE_URL',
-  defaultValue: 'https://ovflhhhtwrjthnyrnaoo.supabase.co',
-);
-const String _supabasePublishableKey = String.fromEnvironment(
-  'SUPABASE_PUBLISHABLE_KEY',
-  defaultValue: 'sb_publishable_FmRYCR40VTVGDsHxK7Z9jQ_67UZ-t-o',
-);
-
-// TEMPORARY, until a real login screen exists: since there's only one
-// dietician account, auto-sign-in as them at boot rather than build a login
-// UI for a single user. Credentials come from either a --dart-define at
-// launch time, or (falling back, for a plain `flutter run` with no defines)
-// lib/dev_credentials.dart - a gitignored, uncommitted local file (see
-// dev_credentials.example.dart for the template) so the real password never
-// enters git history or the compiled app's committed source. Auto-login is
-// a no-op unless both end up non-empty. Replace with a real login screen
-// once there's more than one dietician.
-const String _autoLoginEmail = String.fromEnvironment(
-  'DIETICIAN_AUTO_LOGIN_EMAIL',
-  defaultValue: kDevDieticianEmail,
-);
-const String _autoLoginPassword = String.fromEnvironment(
-  'DIETICIAN_AUTO_LOGIN_PASSWORD',
-  defaultValue: kDevDieticianPassword,
-);
-
-// Sentry/PostHog are only enabled once a real DSN/API key is supplied via
-// --dart-define at build time; empty defaults keep both no-ops so local runs
-// without those defines behave exactly as before.
-const String _sentryDsn = String.fromEnvironment(
-  'SENTRY_DSN',
-  defaultValue: '',
-);
-const String _appEnv = String.fromEnvironment(
-  'ENV',
-  defaultValue: 'development',
-);
-const String _posthogApiKey = String.fromEnvironment(
-  'POSTHOG_API_KEY',
-  defaultValue: '',
-);
-const String _posthogHost = String.fromEnvironment(
-  'POSTHOG_HOST',
-  defaultValue: 'https://us.i.posthog.com',
-);
+const String apiBaseUrl = '${EnvService.apiHost}/api/dietician';
 
 Future<void> main() async {
   // WidgetsFlutterBinding.ensureInitialized() must be called for the first
@@ -87,14 +39,14 @@ Future<void> main() async {
   // caused a "Zone mismatch" assertion. Both branches now call it from
   // inside _bootstrap(), invoked directly in main()'s zone when Sentry is
   // off, or inside appRunner's zone when it's on.
-  if (_sentryDsn.isEmpty) {
+  if (EnvService.sentryDsn.isEmpty) {
     await _bootstrap();
     runApp(MyApp());
   } else {
     await SentryFlutter.init(
       (options) {
-        options.dsn = _sentryDsn;
-        options.environment = _appEnv;
+        options.dsn = EnvService.sentryDsn;
+        options.environment = EnvService.appEnv;
         options.tracesSampleRate = 0.0;
       },
       appRunner: () async {
@@ -108,12 +60,17 @@ Future<void> main() async {
 Future<void> _bootstrap() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Registered before anything else - the token/userId getters/setters
+  // above delegate to this immediately, including from deep inside
+  // _autoLoginDietician() further down this same function.
+  await Get.putAsync(() => SessionService().init(), permanent: true);
+
   await Get.putAsync(() => ConnectivityService().init(), permanent: true);
 
-  if (_supabaseUrl.isNotEmpty) {
+  if (EnvService.supabaseUrl.isNotEmpty) {
     await Supabase.initialize(
-      url: _supabaseUrl,
-      publishableKey: _supabasePublishableKey,
+      url: EnvService.supabaseUrl,
+      publishableKey: EnvService.supabasePublishableKey,
     );
   }
 
@@ -141,18 +98,22 @@ Future<void> _bootstrap() async {
 }
 
 Future<void> _initPostHog() async {
-  if (_posthogApiKey.isEmpty) return;
-  final config = PostHogConfig(_posthogApiKey)..host = _posthogHost;
+  if (EnvService.posthogApiKey.isEmpty) return;
+  final config = PostHogConfig(EnvService.posthogApiKey)
+    ..host = EnvService.posthogHost;
   await Posthog().setup(config);
 }
 
 Future<void> _autoLoginDietician() async {
-  if (_autoLoginEmail.isEmpty || _autoLoginPassword.isEmpty) return;
+  if (EnvService.dieticianAutoLoginEmail.isEmpty ||
+      EnvService.dieticianAutoLoginPassword.isEmpty) {
+    return;
+  }
 
   try {
     final authRes = await Supabase.instance.client.auth.signInWithPassword(
-      email: _autoLoginEmail,
-      password: _autoLoginPassword,
+      email: EnvService.dieticianAutoLoginEmail,
+      password: EnvService.dieticianAutoLoginPassword,
     );
     final session = authRes.session;
     if (session == null) {
