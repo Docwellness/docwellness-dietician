@@ -223,10 +223,24 @@ class RecipeService {
     int limit = 10,
   }) async {
     try {
+      // servingTime values like "Night Drink"/"Morning Drink"/"Evening
+      // Snack" contain a space - building the query string by raw
+      // interpolation (as this used to) sent an unencoded space in the
+      // URL, which the backend couldn't match against VALID_SERVING_TIMES,
+      // so every space-containing serving time silently came back empty
+      // (this method's own catch-all returns [] on any non-200/exception,
+      // which is exactly what rendered as "No recipes found"). Passing a
+      // queryParameters map instead lets Dio URL-encode each value
+      // correctly.
       final response = await _apiService.request(
-        endPoint:
-            '/recipes/by-serving-time?servingTime=$servingTime&page=$page&limit=$limit${cuisine != null ? '&cuisine=$cuisine' : ''}',
+        endPoint: '/recipes/by-serving-time',
         method: 'GET',
+        queryParameters: {
+          'servingTime': servingTime,
+          'page': page,
+          'limit': limit,
+          if (cuisine != null) 'cuisine': cuisine,
+        },
         headers: {'Authorization': 'Bearer $token'},
       );
 
@@ -302,23 +316,25 @@ class RecipeService {
     int limit = 20,
   }) async {
     try {
-      String queryString = '?page=$page&limit=$limit';
-      if (category != null && category != 'All') {
-        queryString += '&category=$category';
-      }
-      if (topCategory != null && topCategory != 'All') {
-        queryString += '&topCategory=$topCategory';
-      }
-      if (servingTime != null && servingTime.isNotEmpty) {
-        queryString += '&servingTime=$servingTime';
-      }
-      if (tag != null && tag.isNotEmpty) {
-        queryString += '&tag=$tag';
-      }
+      // See listRecipesByServingTime above - values like "Night Drink" or
+      // "Healthy Bowls" contain spaces, so building this as a raw string
+      // (as this used to) sent unencoded query params and silently
+      // returned empty results for any such category/servingTime.
+      final queryParameters = <String, dynamic>{
+        'page': page,
+        'limit': limit,
+        if (category != null && category != 'All') 'category': category,
+        if (topCategory != null && topCategory != 'All')
+          'topCategory': topCategory,
+        if (servingTime != null && servingTime.isNotEmpty)
+          'servingTime': servingTime,
+        if (tag != null && tag.isNotEmpty) 'tag': tag,
+      };
 
       final response = await _apiService.request(
-        endPoint: '/recipes$queryString',
+        endPoint: '/recipes',
         method: 'GET',
+        queryParameters: queryParameters,
         headers: {'Authorization': 'Bearer $token'},
       );
 
@@ -655,7 +671,11 @@ class RecipeListItem {
       servingTime: json['servingTime'] ?? '',
       servings: json['servings'] ?? 1,
       ingredientsCount: json['ingredientsCount'] ?? 0,
-      calories: json['calories'],
+      // nutrition.calories is stored as a Mongoose Number and can come back
+      // as a double (e.g. 8.6) - assigning that directly to this int? field
+      // throws a runtime TypeError ("double is not a subtype of int"),
+      // which the caller's try/catch swallowed into an empty recipe list.
+      calories: (json['calories'] as num?)?.round(),
       description: json['description'] ?? '',
       createdAt: json['createdAt'] != null
           ? DateTime.tryParse(json['createdAt'])
