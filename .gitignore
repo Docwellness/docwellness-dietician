@@ -63,3 +63,11 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Auto-generated plugin registrant files for platforms this checkout doesn't
+# actually build (Linux/macOS/Windows) - `flutter pub get` regenerates these
+# locally on every machine and they only create dev-branch diff noise.
+**/generated_plugin_registrant.cc
+**/generated_plugin_registrant.h
+**/generated_plugins.cmake
+**/GeneratedPluginRegistrant.swift
