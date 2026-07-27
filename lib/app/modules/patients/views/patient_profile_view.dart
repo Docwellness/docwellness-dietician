@@ -3288,6 +3288,19 @@ class _PatientProfileViewState extends State<PatientProfileView> {
     final expiryStr = status.subscriptionExpiresAt;
     if (expiryStr == null) return SizedBox.shrink();
 
+    // startRenewal (dietPlanRequestController.js) deliberately flips
+    // requestStatus back to 'Unpaid' when a renewal cycle starts while
+    // leaving the *old* cycle's subscriptionExpiresAt untouched on the
+    // same document - a deliberate choice for other consumers of that
+    // field (the old period's real expiry stays visible/correct until the
+    // new cycle's activateDietPlan overwrites it), but showing "Active"/
+    // "Expired" here for a request that isn't currently paid is
+    // misleading regardless of how accurate the stale date's own math is
+    // - same fix as docwellness-user's HomeController.hasPaidSubscriptionCycle.
+    final isPaidCycle =
+        status.requestStatus == 'Paid' || status.requestStatus == 'PartiallyPaid';
+    if (!isPaidCycle) return SizedBox.shrink();
+
     final expiresAt = DateTime.tryParse(expiryStr);
     if (expiresAt == null) return SizedBox.shrink();
 
