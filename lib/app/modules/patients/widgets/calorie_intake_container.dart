@@ -54,51 +54,47 @@ class CalorieIntakeContainer extends StatelessWidget {
 
             const SizedBox(width: 20),
 
-            // BARS
+            // BARS - spread evenly across the full available width instead
+            // of being packed left inside a scroll view, which left a large
+            // empty gap on the right for low bar-counts like "This week".
             Expanded(
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: List.generate(data.length, (index) {
-                    final point = data[index];
-                    // Determine bar color based on calorie comparison
-                    // Green = on track or under, Red = over planned
-                    final isOverPlanned =
-                        point.calories > point.plannedCalories;
-                    final hasData = point.calories > 0;
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: List.generate(data.length, (index) {
+                  final point = data[index];
+                  // Determine bar color based on calorie comparison
+                  // Green = on track or under, Red = over planned
+                  final isOverPlanned = point.calories > point.plannedCalories;
+                  final hasData = point.calories > 0;
 
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          _CalorieBar(
-                            consumed: point.calories,
-                            planned: point.plannedCalories,
-                            maxValue: effectiveMax,
-                            width: 8,
-                            totalHeight: barTotalHeight,
-                            isOverPlanned: isOverPlanned,
-                            hasData: hasData,
-                          ),
-                          const SizedBox(height: 8),
-                          CustomText(
-                            text: point.label,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w400,
-                            color:
-                                (currentIndex >= 0
-                                    ? index == currentIndex
-                                    : index == 0)
-                                ? const Color(0xffF670CA)
-                                : const Color(0xff94A3B8),
-                          ),
-                        ],
+                  return Column(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      _CalorieBar(
+                        consumed: point.calories,
+                        planned: point.plannedCalories,
+                        maxValue: effectiveMax,
+                        width: 8,
+                        totalHeight: barTotalHeight,
+                        isOverPlanned: isOverPlanned,
+                        hasData: hasData,
                       ),
-                    );
-                  }),
-                ),
+                      const SizedBox(height: 8),
+                      CustomText(
+                        text: point.label,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w400,
+                        color:
+                            (currentIndex >= 0
+                                ? index == currentIndex
+                                : index == 0)
+                            ? const Color(0xffF670CA)
+                            : const Color(0xff94A3B8),
+                      ),
+                    ],
+                  );
+                }),
               ),
             ),
           ],

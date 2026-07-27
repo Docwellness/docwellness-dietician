@@ -49,7 +49,7 @@ class _PatientProfileViewState extends State<PatientProfileView> {
     controller.showFirstConsultationiInfo.value = false;
     controller.showPaymentInfo.value = false;
     controller.getPatientProfile(widget.patientId);
-    controller.fetchTrackingData(widget.patientId, 'week');
+    controller.fetchAllTrackingData(widget.patientId);
     controller.fetchJourneyImages(widget.patientId);
     controller.fetchAutoJourneyMilestones(widget.patientId);
     controller.fetchDoctorNotes(widget.patientId);
@@ -1806,10 +1806,9 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                           ),
                           Obx(
                             () => TimePeriodDropdown(
-                              selectedPeriod:
-                                  controller.trackingTimePeriod.value,
+                              selectedPeriod: controller.caloriePeriod.value,
                               onChanged: (period) =>
-                                  controller.changeTrackingPeriod(
+                                  controller.changeCaloriePeriod(
                                     widget.patientId,
                                     period,
                                   ),
@@ -1819,7 +1818,7 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                       ),
                       SizedBox(height: 18),
                       Obx(() {
-                        final td = controller.trackingData.value;
+                        final td = controller.calorieTrackingData.value;
                         if (td == null) return SizedBox.shrink();
                         return CalorieIntakeContainer(
                           data: td.calorieData,
@@ -1888,11 +1887,16 @@ class _PatientProfileViewState extends State<PatientProfileView> {
 
                   Obx(
                     () => TimePeriodDropdown(
-                      selectedPeriod: controller.trackingTimePeriod.value,
-                      onChanged: (period) => controller.changeTrackingPeriod(
-                        widget.patientId,
-                        period,
-                      ),
+                      selectedPeriod: controller.weightPeriod.value,
+                      onChanged: (period) =>
+                          controller.changeWeightPeriod(
+                            widget.patientId,
+                            period,
+                          ),
+                      // Weight trend is derived from the weight log - a
+                      // week-over-week view isn't meaningful, so only
+                      // offer month/year.
+                      periods: const ['month', 'year'],
                     ),
                   ),
                 ],
@@ -1906,7 +1910,7 @@ class _PatientProfileViewState extends State<PatientProfileView> {
               padding: const EdgeInsets.only(left: 16, right: 16, top: 10),
 
               child: Obx(() {
-                final td = controller.trackingData.value;
+                final td = controller.weightTrackingData.value;
                 if (td == null || td.weightTrend.isEmpty) {
                   return SizedBox.shrink();
                 }
@@ -1921,16 +1925,16 @@ class _PatientProfileViewState extends State<PatientProfileView> {
               padding: const EdgeInsets.only(left: 16, right: 16, top: 16),
 
               child: Obx(() {
-                final td = controller.trackingData.value;
+                final td = controller.bmiTrackingData.value;
                 if (td == null || td.bmiTrend.isEmpty) {
                   return SizedBox.shrink();
                 }
                 return BmiChart(
                   bmiData: td.bmiTrend,
                   currentBmi: td.currentBmi,
-                  selectedPeriod: controller.trackingTimePeriod.value,
+                  selectedPeriod: controller.bmiPeriod.value,
                   onPeriodChanged: (period) =>
-                      controller.changeTrackingPeriod(widget.patientId, period),
+                      controller.changeBmiPeriod(widget.patientId, period),
                   currentIndex: td.currentIndex,
                 );
               }),

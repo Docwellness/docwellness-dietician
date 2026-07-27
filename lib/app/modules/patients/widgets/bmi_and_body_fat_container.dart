@@ -112,6 +112,9 @@ class BmiChart extends StatelessWidget {
                 child: TimePeriodDropdown(
                   selectedPeriod: selectedPeriod,
                   onChanged: onPeriodChanged,
+                  // BMI is derived from the weight log - a week-over-week
+                  // view isn't meaningful, so only offer month/year.
+                  periods: const ['month', 'year'],
                 ),
               ),
             ],
@@ -125,7 +128,7 @@ class BmiChart extends StatelessWidget {
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: SizedBox(
-                width: values.isEmpty ? 200 : values.length * 50,
+                width: values.isEmpty ? 200 : values.length * 65,
                 child: values.isEmpty
                     ? Center(
                         child: CustomText(
@@ -139,7 +142,7 @@ class BmiChart extends StatelessWidget {
                         BarChartData(
                           maxY: chartMax,
                           minY: chartMin,
-                          groupsSpace: 8,
+                          groupsSpace: 22,
                           barTouchData: BarTouchData(
                             enabled: true,
                             touchTooltipData: BarTouchTooltipData(
@@ -279,15 +282,20 @@ class BmiChart extends StatelessWidget {
 class TimePeriodDropdown extends StatelessWidget {
   final String selectedPeriod;
   final ValueChanged<String> onChanged;
+  // Which period options this instance offers - defaults to all three.
+  // Charts derived from the weight log (BMI, weight trend) only offer
+  // month/year, since a week-over-week view isn't meaningful for those.
+  final List<String> periods;
 
   const TimePeriodDropdown({
     super.key,
     required this.selectedPeriod,
     required this.onChanged,
+    this.periods = const ['week', 'month', 'year'],
   });
 
-  String get _displayText {
-    switch (selectedPeriod) {
+  static String _labelFor(String period) {
+    switch (period) {
       case 'week':
         return 'This week';
       case 'month':
@@ -295,9 +303,11 @@ class TimePeriodDropdown extends StatelessWidget {
       case 'year':
         return 'This year';
       default:
-        return 'This week';
+        return period;
     }
   }
+
+  String get _displayText => _labelFor(selectedPeriod);
 
   @override
   Widget build(BuildContext context) {
@@ -336,11 +346,9 @@ class TimePeriodDropdown extends StatelessWidget {
           ],
         ),
       ),
-      itemBuilder: (context) => [
-        PopupMenuItem(value: 'week', child: Text('This week')),
-        PopupMenuItem(value: 'month', child: Text('This month')),
-        PopupMenuItem(value: 'year', child: Text('This year')),
-      ],
+      itemBuilder: (context) => periods
+          .map((p) => PopupMenuItem(value: p, child: Text(_labelFor(p))))
+          .toList(),
     );
   }
 }

@@ -215,10 +215,18 @@ class PatientsController extends GetxController {
   RxBool isProfileDeactivated = false.obs;
 
   // ===== Tracking Data (Charts) =====
-  Rx<TrackingData?> trackingData = Rx<TrackingData?>(null);
+  // Each chart (Calorie Intake, Weight Trend, BMI) keeps its own period and
+  // fetches independently - Calorie Intake offers week/month/year, Weight
+  // Trend and BMI (both derived from the weight log) only offer month/year
+  // (see TimePeriodDropdown's `periods` param) - so changing one chart's
+  // period no longer changes the other two.
+  Rx<TrackingData?> calorieTrackingData = Rx<TrackingData?>(null);
+  Rx<TrackingData?> weightTrackingData = Rx<TrackingData?>(null);
+  Rx<TrackingData?> bmiTrackingData = Rx<TrackingData?>(null);
   RxBool isTrackingLoading = false.obs;
-  // Single unified period for all charts (since they share one API call)
-  RxString trackingTimePeriod = 'week'.obs;
+  RxString caloriePeriod = 'week'.obs;
+  RxString weightPeriod = 'month'.obs;
+  RxString bmiPeriod = 'month'.obs;
 
   // ===== Journey Images =====
   RxList<JourneyImageModel> journeyImages = <JourneyImageModel>[].obs;
@@ -1037,24 +1045,77 @@ class PatientsController extends GetxController {
     return false;
   }
 
-  /// Fetch tracking data (calorie intake, weight trend, BMI) for charts
-  Future<void> fetchTrackingData(String patientId, String period) async {
+  /// Fetch calorie, weight, and BMI tracking data in parallel - each chart
+  /// keeps its own period, so this hits the shared tracking-data endpoint
+  /// once per chart with that chart's selected period.
+  Future<void> fetchAllTrackingData(String patientId) async {
     isTrackingLoading.value = true;
     try {
-      final response = await service.getPatientTrackingData(patientId, period);
-      if (response != null && response['data'] != null) {
-        trackingData.value = TrackingData.fromJson(response['data']);
-      }
-    } catch (e) {
-      debugPrint('fetchTrackingData error: $e');
+      await Future.wait([
+        fetchCalorieTrackingData(patientId),
+        fetchWeightTrackingData(patientId),
+        fetchBmiTrackingData(patientId),
+      ]);
+    } finally {
+      isTrackingLoading.value = false;
     }
-    isTrackingLoading.value = false;
   }
 
-  /// Change the unified time period for all charts and refetch
-  void changeTrackingPeriod(String patientId, String period) {
-    trackingTimePeriod.value = period;
-    fetchTrackingData(patientId, period);
+  Future<void> fetchCalorieTrackingData(String patientId) async {
+    try {
+      final response = await service.getPatientTrackingData(
+        patientId,
+        caloriePeriod.value,
+      );
+      if (response != null && response['data'] != null) {
+        calorieTrackingData.value = TrackingData.fromJson(response['data']);
+      }
+    } catch (e) {
+      debugPrint('fetchCalorieTrackingData error: $e');
+    }
+  }
+
+  Future<void> fetchWeightTrackingData(String patientId) async {
+    try {
+      final response = await service.getPatientTrackingData(
+        patientId,
+        weightPeriod.value,
+      );
+      if (response != null && response['data'] != null) {
+        weightTrackingData.value = TrackingData.fromJson(response['data']);
+      }
+    } catch (e) {
+      debugPrint('fetchWeightTrackingData error: $e');
+    }
+  }
+
+  Future<void> fetchBmiTrackingData(String patientId) async {
+    try {
+      final response = await service.getPatientTrackingData(
+        patientId,
+        bmiPeriod.value,
+      );
+      if (response != null && response['data'] != null) {
+        bmiTrackingData.value = TrackingData.fromJson(response['data']);
+      }
+    } catch (e) {
+      debugPrint('fetchBmiTrackingData error: $e');
+    }
+  }
+
+  void changeCaloriePeriod(String patientId, String period) {
+    caloriePeriod.value = period;
+    fetchCalorieTrackingData(patientId);
+  }
+
+  void changeWeightPeriod(String patientId, String period) {
+    weightPeriod.value = period;
+    fetchWeightTrackingData(patientId);
+  }
+
+  void changeBmiPeriod(String patientId, String period) {
+    bmiPeriod.value = period;
+    fetchBmiTrackingData(patientId);
   }
 
   // ===== Journey Image Methods =====
