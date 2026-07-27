@@ -153,6 +153,21 @@ class RecipeModel {
   // The persisted quantity for secondaryComponent - same "only meaningful
   // when isSelected" semantics as servings.
   final num secondaryServings;
+  // The recipe's real, independently-adjustable components (see
+  // models/Recipe.js's `components` on the backend) - e.g. Idli with Sambar
+  // and Chutney is 3 entries, each in its own natural unit. Falls back to a
+  // synthesized [servingSize, secondaryComponent] pair (below) for a recipe
+  // the backend hasn't migrated yet, so this is never empty.
+  final List<ComponentModel> components;
+  // Per-component selected quantities (same order/length as `components`),
+  // only when the dietician has actually persisted explicit per-component
+  // servings for this meal - null otherwise (NOT defaulted to a sentinel
+  // like `servings`/`secondaryServings` above, since a real base quantity
+  // like "1 nos" would be indistinguishable from an unset sentinel). The
+  // dietician app falls back to the servings/secondaryServings sentinel
+  // convention for components 0/1 when this is null - see
+  // patients_controller.dart's _applyDraftOptionsForWeek.
+  final List<num>? componentServings;
   // Real active-ingredient facts for a supplement - see SupplementFacts in
   // ai_diet_plain_model.dart (same shape); null for ordinary food recipes.
   final SupplementFacts? supplementFacts;
@@ -170,10 +185,32 @@ class RecipeModel {
     this.tags = const [],
     this.secondaryComponent,
     this.secondaryServings = 1,
+    this.components = const [],
+    this.componentServings,
     this.supplementFacts,
   });
 
   factory RecipeModel.fromJson(Map<String, dynamic> json) {
+    final servingSize = ServingSizeModel.fromJson(json['servingSize'] ?? {});
+    final secondaryComponent = json['secondaryComponent'] != null
+        ? SecondaryComponentModel.fromJson(json['secondaryComponent'])
+        : null;
+    final rawComponents = json['components'] as List?;
+    final components = (rawComponents != null && rawComponents.isNotEmpty)
+        ? rawComponents.map((e) => ComponentModel.fromJson(e)).toList()
+        : [
+            ComponentModel(
+              label: json['name'] ?? '',
+              quantity: servingSize.quantity > 0 ? servingSize.quantity : 1,
+              unit: servingSize.unit.isNotEmpty ? servingSize.unit : 'g',
+            ),
+            if (secondaryComponent != null)
+              ComponentModel(
+                label: secondaryComponent.label,
+                quantity: secondaryComponent.quantity,
+                unit: secondaryComponent.unit,
+              ),
+          ];
     return RecipeModel(
       id: json['id'] ?? '',
       name: json['name'] ?? '',
@@ -182,18 +219,42 @@ class RecipeModel {
       servingTime: json['servingTime'] ?? '',
       isSelected: json['isSelected'] ?? false,
       nextWeekTag: json['nextWeekTag'],
-      servingSize: ServingSizeModel.fromJson(json['servingSize'] ?? {}),
+      servingSize: servingSize,
       servings: (json['servings'] as num?) ?? 1,
       tags:
           (json['tags'] as List?)?.map((e) => e.toString()).toList() ??
           const [],
-      secondaryComponent: json['secondaryComponent'] != null
-          ? SecondaryComponentModel.fromJson(json['secondaryComponent'])
-          : null,
+      secondaryComponent: secondaryComponent,
       secondaryServings: (json['secondaryServings'] as num?) ?? 1,
+      components: components,
+      componentServings: (json['componentServings'] as List?)
+          ?.map((e) => e as num)
+          .toList(),
       supplementFacts: json['supplementFacts'] != null
           ? SupplementFacts.fromJson(json['supplementFacts'])
           : null,
+    );
+  }
+}
+
+/// One independently-adjustable component of a recipe's single serving -
+/// e.g. {label:'Idli', quantity:3, unit:'nos'}. See RecipeModel.components.
+class ComponentModel {
+  final String label;
+  final num quantity;
+  final String unit;
+
+  ComponentModel({
+    required this.label,
+    required this.quantity,
+    required this.unit,
+  });
+
+  factory ComponentModel.fromJson(Map<String, dynamic> json) {
+    return ComponentModel(
+      label: json['label'] ?? '',
+      quantity: (json['quantity'] as num?) ?? 1,
+      unit: json['unit'] ?? 'g',
     );
   }
 }

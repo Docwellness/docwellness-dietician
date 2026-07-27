@@ -465,6 +465,7 @@ class ReceipesController extends GetxController {
         dietaryHabits: recipe.dietaryHabits,
         freeFrom: recipe.freeFrom,
         servingSize: recipe.servingSize,
+        components: recipe.components,
         ingredients: recipe.ingredients,
         cookingSteps: recipe.cookingSteps,
         nutrition: recipe.nutrition,
@@ -489,6 +490,16 @@ class ReceipesController extends GetxController {
     } finally {
       isSaving.value = false;
     }
+  }
+
+  /// Writes back a dietician's manual edit of the recipe's components (see
+  /// EditComponentsSheet) - purely local/in-memory, same as every other
+  /// generatedRecipe.value edit; persisting happens via the existing Save
+  /// Recipe/Add to Database button, same as an ingredient edit would.
+  void updateComponents(List<RecipeComponent> components) {
+    final current = generatedRecipe.value;
+    if (current == null) return;
+    generatedRecipe.value = current.copyWithComponents(components);
   }
 
   /// Clear the form

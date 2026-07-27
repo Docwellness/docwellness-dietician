@@ -415,43 +415,37 @@ class _SelectDietSheetState extends State<SelectDietSheet>
                             final isSelected = selectedRecipesForWeek.contains(
                               recipe,
                             );
-                            // Live quantity/nutrition - once selected, both the
-                            // serving badge and the macro numbers reflect the
-                            // dietician's actual +/- adjustment, not just the
-                            // recipe's static base serving (otherwise a card
-                            // showing "3x Chapati" would misleadingly still
-                            // display 1-chapati's worth of calories).
-                            final liveServings = isSelected
-                                ? (controller.selectedServings[controller
-                                          .servingsKey(recipe)] ??
-                                      recipe.baseServingQuantity)
-                                : recipe.baseServingQuantity;
-                            final ratio = isSelected
-                                ? liveServings / recipe.baseServingQuantity
+                            // Live quantity/nutrition - once selected, both
+                            // the per-component steppers and the macro
+                            // numbers reflect the dietician's actual +/-
+                            // adjustment, not just the recipe's static base
+                            // serving (otherwise a card showing "3x
+                            // Chapati" would misleadingly still display
+                            // 1-chapati's worth of calories). combinedRatio
+                            // averages every component's own ratio, mirroring
+                            // PatientsController._nutritionScaleRatio.
+                            final liveComponents = isSelected
+                                ? List<num>.generate(
+                                    recipe.components.length,
+                                    (i) => controller.componentServingsAt(
+                                      recipe,
+                                      i,
+                                    ),
+                                  )
+                                : recipe.components
+                                      .map((c) => c.quantity)
+                                      .toList();
+                            final combinedRatio = isSelected
+                                ? List<num>.generate(
+                                        recipe.components.length,
+                                        (i) =>
+                                            recipe.components[i].quantity > 0
+                                            ? liveComponents[i] /
+                                                  recipe.components[i].quantity
+                                            : 1,
+                                      ).reduce((a, b) => a + b) /
+                                      recipe.components.length
                                 : 1;
-
-                            // Compound snacks (e.g. "Banana with Roasted
-                            // Chana and Seeds") have a second independently-
-                            // adjustable component - the recipe's stated
-                            // nutrition covers both together, so the macro
-                            // numbers shown here average both ratios,
-                            // matching calculateTotalsForWeek/
-                            // buildFinalizeWeekPayload's _nutritionScaleRatio.
-                            final liveSecondaryServings =
-                                recipe.hasSecondaryComponent && isSelected
-                                ? (controller
-                                          .selectedSecondaryServings[controller
-                                          .servingsKey(recipe)] ??
-                                      recipe.secondaryBaseQuantity)
-                                : recipe.secondaryBaseQuantity;
-                            final secondaryRatio =
-                                recipe.hasSecondaryComponent && isSelected
-                                ? liveSecondaryServings /
-                                      recipe.secondaryBaseQuantity
-                                : 1;
-                            final combinedRatio = recipe.hasSecondaryComponent
-                                ? (ratio + secondaryRatio) / 2
-                                : ratio;
 
                             return Padding(
                               padding: const EdgeInsets.symmetric(
@@ -461,7 +455,7 @@ class _SelectDietSheetState extends State<SelectDietSheet>
                               child: FoodCard(
                                 image: recipe.image,
                                 name: recipe.name,
-                                grams: "$liveServings",
+                                grams: "${liveComponents[0]}",
                                 unit: recipe.servingUnit,
                                 calorie:
                                     (recipe.nutrition.calories * combinedRatio)
@@ -481,30 +475,30 @@ class _SelectDietSheetState extends State<SelectDietSheet>
                                     .map((n) => n.displayLabel)
                                     .toList(),
                                 isSelected: isSelected,
-                                currentServings: liveServings,
                                 onSelect: () =>
                                     controller.toggleMealSelection(recipe),
-                                onIncrement: () =>
-                                    controller.incrementServings(recipe),
-                                onDecrement: () =>
-                                    controller.decrementServings(recipe),
                                 onTapDetails: () =>
                                     _openRecipeDetails(recipe.id),
-                                secondaryLabel: recipe.hasSecondaryComponent
-                                    ? recipe.secondaryLabel
-                                    : null,
-                                secondaryUnit: recipe.secondaryUnit,
-                                secondaryCurrentServings: liveSecondaryServings,
-                                onSecondaryIncrement:
-                                    recipe.hasSecondaryComponent
-                                    ? () => controller
-                                          .incrementSecondaryServings(recipe)
-                                    : null,
-                                onSecondaryDecrement:
-                                    recipe.hasSecondaryComponent
-                                    ? () => controller
-                                          .decrementSecondaryServings(recipe)
-                                    : null,
+                                components: isSelected
+                                    ? List<FoodCardComponentData>.generate(
+                                        recipe.components.length,
+                                        (i) => FoodCardComponentData(
+                                          label: recipe.components[i].label,
+                                          quantity: liveComponents[i],
+                                          unit: recipe.components[i].unit,
+                                          onIncrement: () => controller
+                                              .incrementComponentServings(
+                                                recipe,
+                                                i,
+                                              ),
+                                          onDecrement: () => controller
+                                              .decrementComponentServings(
+                                                recipe,
+                                                i,
+                                              ),
+                                        ),
+                                      )
+                                    : const [],
                               ),
                             );
                           }),

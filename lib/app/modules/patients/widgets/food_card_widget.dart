@@ -20,30 +20,18 @@ class FoodCard extends StatelessWidget {
   // next to the calorie text.
   final String unit;
 
-  // Servings +/- stepper - optional (nullable callbacks), so callers that
-  // don't wire it (e.g. a read-only card) simply don't render it. Only
-  // shown while the card is selected, since adjusting servings for an
-  // unselected item has no effect on the plan.
-  final num? currentServings;
-  final VoidCallback? onIncrement;
-  final VoidCallback? onDecrement;
-
   // Opens the recipe's full detail (ingredients/instructions) in a bottom
   // sheet - optional, so callers that don't wire it just show a
   // non-interactive image/name (tapping does nothing, same as before).
   final VoidCallback? onTapDetails;
 
-  // A second, independent +/- stepper for compound snacks that combine a
-  // countable fruit with a scoopable mix-in (e.g. "Banana with Roasted
-  // Chana and Seeds" - the primary badge/stepper above is the banana, this
-  // is the seeds) - see Recipe.hasSecondaryComponent. Optional, same
-  // nullable-callback pattern as the primary stepper: only rendered when
-  // both callbacks and a label are provided.
-  final String? secondaryLabel;
-  final String secondaryUnit;
-  final num? secondaryCurrentServings;
-  final VoidCallback? onSecondaryIncrement;
-  final VoidCallback? onSecondaryDecrement;
+  // One independently-adjustable +/- stepper per recipe component (see
+  // Recipe.components) - e.g. Idli/Sambar/Chutney renders 3, an ordinary
+  // single-quantity recipe renders 1. Only shown while the card is
+  // selected, since adjusting servings for an unselected item has no
+  // effect on the plan. Empty for a read-only card that doesn't wire
+  // selection at all.
+  final List<FoodCardComponentData> components;
 
   // Pre-formatted "name amount unit · x% NRV" labels (see
   // SupplementNutrient.displayLabel) for a supplement recipe - when
@@ -66,15 +54,8 @@ class FoodCard extends StatelessWidget {
     this.nextWeekTag,
     required this.image,
     this.unit = '',
-    this.currentServings,
-    this.onIncrement,
-    this.onDecrement,
     this.onTapDetails,
-    this.secondaryLabel,
-    this.secondaryUnit = '',
-    this.secondaryCurrentServings,
-    this.onSecondaryIncrement,
-    this.onSecondaryDecrement,
+    this.components = const [],
     this.supplementNutrientLabels,
   });
 
@@ -193,26 +174,34 @@ class FoodCard extends StatelessWidget {
                     const SizedBox(height: 6),
                     Row(
                       children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            border: Border.all(color: Color(0xffEF45B2)),
-                            color: const Color(0xffFCE7F6),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: CustomText(
-                            text: _formatQuantityLabel(grams, unit),
+                        // The static quantity pill only makes sense when
+                        // there's nothing else showing this recipe's
+                        // quantity - once selected, the per-component
+                        // stepper list below already shows each
+                        // component's own live quantity, so repeating it
+                        // here would just be the same number twice.
+                        if (!isSelected) ...[
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              border: Border.all(color: Color(0xffEF45B2)),
+                              color: const Color(0xffFCE7F6),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: CustomText(
+                              text: _formatQuantityLabel(grams, unit),
 
-                            color: Color(0xff851653),
-                            fontWeight: FontWeight.w500,
-                            fontSize: 12,
+                              color: Color(0xff851653),
+                              fontWeight: FontWeight.w500,
+                              fontSize: 12,
+                            ),
                           ),
-                        ),
-                        if (!_isSupplement) ...[
-                          const SizedBox(width: 5),
+                          if (!_isSupplement) const SizedBox(width: 5),
+                        ],
+                        if (!_isSupplement)
                           CustomText(
                             text: "$calorie calorie",
 
@@ -220,81 +209,64 @@ class FoodCard extends StatelessWidget {
                             color: Color(0xff6C737F),
                             fontSize: 12,
                           ),
-                        ],
                       ],
                     ),
-                    if (isSelected &&
-                        onIncrement != null &&
-                        onDecrement != null) ...[
+                    if (isSelected && components.isNotEmpty) ...[
                       const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          _ServingsStepButton(
-                            icon: Icons.remove,
-                            onTap: onDecrement!,
+                      // One stepper row per independently-adjustable
+                      // component (see Recipe.components) - a compound
+                      // dish like Idli with Sambar and Chutney gets one
+                      // row per item, each with its own real unit; an
+                      // ordinary single-quantity recipe just gets one row
+                      // with no label (the card title already names it).
+                      for (final component in components)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: Row(
+                            children: [
+                              if (components.length > 1) ...[
+                                Container(
+                                  constraints: const BoxConstraints(
+                                    minWidth: 56,
+                                  ),
+                                  child: CustomText(
+                                    text: component.label,
+                                    color: Color(0xff6C737F),
+                                    fontWeight: FontWeight.w400,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                              ],
+                              _ServingsStepButton(
+                                icon: Icons.remove,
+                                onTap: component.onDecrement,
+                              ),
+                              Container(
+                                constraints: const BoxConstraints(
+                                  minWidth: 48,
+                                ),
+                                alignment: Alignment.center,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                ),
+                                child: CustomText(
+                                  text: _formatQuantityLabel(
+                                    '${component.quantity}',
+                                    component.unit,
+                                  ),
+                                  color: Color(0xff384250),
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 12,
+                                ),
+                              ),
+                              _ServingsStepButton(
+                                icon: Icons.add,
+                                onTap: component.onIncrement,
+                              ),
+                            ],
                           ),
-                          Container(
-                            constraints: const BoxConstraints(minWidth: 48),
-                            alignment: Alignment.center,
-                            padding: const EdgeInsets.symmetric(horizontal: 6),
-                            child: CustomText(
-                              text: currentServings != null
-                                  ? _formatQuantityLabel(
-                                      '$currentServings',
-                                      unit,
-                                    )
-                                  : '',
-                              color: Color(0xff384250),
-                              fontWeight: FontWeight.w600,
-                              fontSize: 12,
-                            ),
-                          ),
-                          _ServingsStepButton(
-                            icon: Icons.add,
-                            onTap: onIncrement!,
-                          ),
-                        ],
-                      ),
-                    ],
-                    if (isSelected &&
-                        secondaryLabel != null &&
-                        onSecondaryIncrement != null &&
-                        onSecondaryDecrement != null) ...[
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          CustomText(
-                            text: '$secondaryLabel: ',
-                            color: Color(0xff6C737F),
-                            fontWeight: FontWeight.w400,
-                            fontSize: 12,
-                          ),
-                          _ServingsStepButton(
-                            icon: Icons.remove,
-                            onTap: onSecondaryDecrement!,
-                          ),
-                          Container(
-                            constraints: const BoxConstraints(minWidth: 48),
-                            alignment: Alignment.center,
-                            padding: const EdgeInsets.symmetric(horizontal: 6),
-                            child: CustomText(
-                              text: secondaryCurrentServings != null
-                                  ? _formatQuantityLabel(
-                                      '$secondaryCurrentServings',
-                                      secondaryUnit,
-                                    )
-                                  : '',
-                              color: Color(0xff384250),
-                              fontWeight: FontWeight.w600,
-                              fontSize: 12,
-                            ),
-                          ),
-                          _ServingsStepButton(
-                            icon: Icons.add,
-                            onTap: onSecondaryIncrement!,
-                          ),
-                        ],
-                      ),
+                        ),
                     ],
                   ],
                 ),
@@ -412,6 +384,24 @@ class FoodCard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// One independently-adjustable +/- stepper for a single recipe component
+/// (see Recipe.components / FoodCard.components) - e.g. "Idli: 3 nos".
+class FoodCardComponentData {
+  final String label;
+  final num quantity;
+  final String unit;
+  final VoidCallback onIncrement;
+  final VoidCallback onDecrement;
+
+  const FoodCardComponentData({
+    required this.label,
+    required this.quantity,
+    required this.unit,
+    required this.onIncrement,
+    required this.onDecrement,
+  });
 }
 
 class _ServingsStepButton extends StatelessWidget {

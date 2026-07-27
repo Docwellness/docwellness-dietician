@@ -3,6 +3,7 @@ import 'package:docwellnesdoc/app/modules/receipes/controllers/receipes_controll
 import 'package:docwellnesdoc/app/modules/receipes/models/recipe_model.dart';
 import 'package:docwellnesdoc/app/modules/receipes/services/recipe_service.dart';
 import 'package:docwellnesdoc/app/modules/receipes/widgets/cooking_steps_tab.dart';
+import 'package:docwellnesdoc/app/modules/receipes/widgets/edit_components_sheet.dart';
 import 'package:docwellnesdoc/app/modules/receipes/widgets/ingredient_tile.dart';
 import 'package:docwellnesdoc/app/modules/receipes/widgets/nutrition_details_widget.dart';
 import 'package:docwellnesdoc/app/modules/receipes/widgets/update_ai_inputs_sheet.dart';
@@ -61,6 +62,17 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
   }
 
   String get recipeCategory => recipe?.category ?? '';
+
+  /// Whole numbers with no decimals, fractional values (e.g. 0.5 bowl)
+  /// with up to 2 decimals, trailing zeros trimmed - mirrors
+  /// IngredientTile's own quantity formatting for visual consistency.
+  static String _formatComponentQuantity(num q) {
+    if (q == q.roundToDouble()) return q.toStringAsFixed(0);
+    var s = q.toStringAsFixed(2);
+    s = s.replaceFirst(RegExp(r'0+$'), '');
+    s = s.replaceFirst(RegExp(r'\.$'), '');
+    return s;
+  }
 
   String get recipeDescription {
     if (recipe != null) {
@@ -214,6 +226,49 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
         });
       }
     }
+  }
+
+  /// Opens the component (portion) editor - see EditComponentsSheet. Saving
+  /// only updates local/in-memory state (_editableRecipe), same as an
+  /// ingredient edit - it rides along with whichever persistence button
+  /// ("Add to Database" for a not-yet-saved preview, "Save Recipe" for an
+  /// already-saved one) the dietician taps next.
+  void _openEditComponentsSheet() {
+    if (recipe == null) return;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      useSafeArea: true,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return DraggableScrollableSheet(
+          initialChildSize: 1,
+          maxChildSize: 1,
+          minChildSize: 0.5,
+          expand: false,
+          builder: (ctx, scrollCtrl) {
+            return EditComponentsSheet(
+              scrollController: scrollCtrl,
+              initialComponents: recipe!.components,
+              onSaved: (components) {
+                setState(() {
+                  _editableRecipe = recipe!.copyWithComponents(components);
+                });
+                if (widget.fromAddRecipeScreen) {
+                  // Keep the shared controller's copy in sync too, since
+                  // "Add to Database" reads generatedRecipe.value, not
+                  // _editableRecipe (see saveRecipe in receipes_controller).
+                  Get.find<ReceipesController>().updateComponents(components);
+                }
+              },
+            );
+          },
+        );
+      },
+    );
   }
 
   /// Fetches a fresh internet photo for the ingredient at [index] (Pexels,
@@ -428,6 +483,41 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
             ],
           ),
         ),
+
+        // ------------------- PORTIONS SUMMARY -------------------
+        // Read-only preview of the recipe's real components (see
+        // EditComponentsSheet for the editor) - lets a dietician see at a
+        // glance whether the AI produced a sensible portion (e.g. "2 egg")
+        // or fell back to a raw gram total, without opening the editor.
+        if (recipe != null && recipe!.components.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(left: 16, right: 16, top: 8),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final component in recipe!.components)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xffFCE7F6),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: CustomText(
+                      text: recipe!.components.length > 1
+                          ? '${component.label}: ${_formatComponentQuantity(component.quantity)} ${component.unit}'
+                          : '${_formatComponentQuantity(component.quantity)} ${component.unit}',
+                      fontWeight: FontWeight.w500,
+                      fontSize: 12,
+                      color: const Color(0xff851653),
+                    ),
+                  ),
+              ],
+            ),
+          ),
 
         const SizedBox(height: 16),
 
@@ -698,6 +788,16 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
           ),
         if (widget.fromAddRecipeScreen == true)
           Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            child: CustomButton(
+              fontSize: 13.5,
+              onTap: _openEditComponentsSheet,
+              text: 'Edit Portions',
+              isOutline: true,
+            ),
+          ),
+        if (widget.fromAddRecipeScreen == true)
+          Padding(
             padding: const EdgeInsets.all(16),
             child: Obx(() {
               final controller = Get.find<ReceipesController>();
@@ -796,6 +896,16 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
           ),
         if (widget.fromAddRecipeScreen == false)
           Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            child: CustomButton(
+              fontSize: 13.5,
+              onTap: _openEditComponentsSheet,
+              text: 'Edit Portions',
+              isOutline: true,
+            ),
+          ),
+        if (widget.fromAddRecipeScreen == false)
+          Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
             child: CustomButton(
               fontSize: 13.5,
@@ -812,6 +922,7 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
                     description: r.description,
                     dietaryHabits: r.dietaryHabits,
                     freeFrom: r.freeFrom,
+                    components: r.components,
                     ingredients: r.ingredients,
                     cookingSteps: r.cookingSteps,
                     nutrition: r.nutrition,

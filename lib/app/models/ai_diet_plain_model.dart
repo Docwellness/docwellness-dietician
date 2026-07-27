@@ -120,11 +120,6 @@ class Recipe {
   final String image;
   final int totalWeightGrams;
   final Nutrition nutrition;
-  // The recipe's own base serving (e.g. Chole = 350g, Chapati = 1 piece) -
-  // the "1x" reference point the servings +/- stepper adjusts away from.
-  // `nutrition` above is always per this base serving.
-  final num baseServingQuantity;
-  final String servingUnit;
   // Which meal slot this recipe was selected under - needed so
   // buildFinalizeWeekPayload can build {servingTime, recipeId} entries
   // straight from weekSelectedRecipes (a recipe never carried its own
@@ -142,15 +137,14 @@ class Recipe {
   // selected under two different day-groups' same slot with different
   // counts.
   final String dayGroup;
-  // The second independently-adjustable component of a compound snack
-  // (e.g. "Banana with Roasted Chana and Seeds" - servingSize/baseServing-
-  // Quantity above is the banana, this is the seeds mix-in) - see
-  // patients_controller.dart's selectedSecondaryServings/increment-
-  // /decrementSecondaryServings. secondaryLabel.isEmpty means "no second
-  // component", true for every ordinary single-quantity recipe.
-  final String secondaryLabel;
-  final num secondaryBaseQuantity;
-  final String secondaryUnit;
+  // The recipe's real, independently-adjustable components (see
+  // models/Recipe.js's `components` on the backend) - e.g. Idli with
+  // Sambar and Chutney is 3 entries, each in its own natural unit (nos,
+  // bowl, tbsp). Always at least 1 entry (never empty) - see
+  // PatientsController._recipeFromOptionModel. `nutrition` above is
+  // always the total for one serving, i.e. every component at its own
+  // base quantity together.
+  final List<RecipeComponent> components;
   // Real active-ingredient facts for a supplement (see SupplementFacts) -
   // null for every ordinary food recipe. When present, the dietician app
   // shows these instead of the (zeroed, meaningless) calorie/protein/
@@ -163,35 +157,47 @@ class Recipe {
     required this.image,
     required this.totalWeightGrams,
     required this.nutrition,
-    this.baseServingQuantity = 1,
-    this.servingUnit = 'g',
     this.servingTime = '',
     this.tags = const [],
     this.dayGroup = 'Monday',
-    this.secondaryLabel = '',
-    this.secondaryBaseQuantity = 1,
-    this.secondaryUnit = '',
+    List<RecipeComponent>? components,
     this.supplementFacts,
-  });
+  }) : components = (components == null || components.isEmpty)
+           ? [RecipeComponent(label: name, quantity: 1, unit: 'g')]
+           : components;
 
   factory Recipe.fromJson(Map<String, dynamic> json) {
     final secondary = json["secondaryComponent"] as Map<String, dynamic>?;
+    final rawComponents = json["components"] as List?;
+    final components = (rawComponents != null && rawComponents.isNotEmpty)
+        ? rawComponents
+              .map((e) => RecipeComponent.fromJson(e as Map<String, dynamic>))
+              .toList()
+        : [
+            RecipeComponent(
+              label: json["name"] ?? '',
+              quantity: (json["baseServingQuantity"] as num?) ?? 1,
+              unit: json["servingUnit"] ?? 'g',
+            ),
+            if (secondary != null)
+              RecipeComponent(
+                label: secondary["label"] ?? '',
+                quantity: (secondary["quantity"] as num?) ?? 1,
+                unit: secondary["unit"] ?? '',
+              ),
+          ];
     return Recipe(
       id: json["_id"] ?? '',
       name: json["name"] ?? '',
       image: json["image"] ?? '',
       totalWeightGrams: json["totalWeightGrams"] ?? 0,
       nutrition: Nutrition.fromJson(json["nutrition"] ?? {}),
-      baseServingQuantity: (json["baseServingQuantity"] as num?) ?? 1,
-      servingUnit: json["servingUnit"] ?? 'g',
       servingTime: json["servingTime"] ?? '',
       tags:
           (json["tags"] as List?)?.map((e) => e.toString()).toList() ??
           const [],
       dayGroup: json["dayGroup"] ?? 'Monday',
-      secondaryLabel: secondary?["label"] ?? '',
-      secondaryBaseQuantity: (secondary?["quantity"] as num?) ?? 1,
-      secondaryUnit: secondary?["unit"] ?? '',
+      components: components,
       supplementFacts: json["supplementFacts"] != null
           ? SupplementFacts.fromJson(json["supplementFacts"])
           : null,
@@ -209,6 +215,7 @@ class Recipe {
     "servingTime": servingTime,
     "tags": tags,
     "dayGroup": dayGroup,
+    "components": components.map((c) => c.toJson()).toList(),
     if (secondaryLabel.isNotEmpty)
       "secondaryComponent": {
         "label": secondaryLabel,
@@ -218,7 +225,18 @@ class Recipe {
     if (supplementFacts != null) "supplementFacts": supplementFacts!.toJson(),
   };
 
-  bool get hasSecondaryComponent => secondaryLabel.isNotEmpty;
+  // --- Legacy 2-slot accessors, derived from `components` -------------
+  // Kept so every existing call site (increment/decrementServings,
+  // FoodCard's primary badge, etc.) keeps compiling/behaving unchanged for
+  // the common 1-2 component case; new code (the per-component stepper
+  // list) should read `components` directly instead.
+  num get baseServingQuantity => components[0].quantity;
+  String get servingUnit => components[0].unit;
+  bool get hasSecondaryComponent => components.length > 1;
+  String get secondaryLabel => components.length > 1 ? components[1].label : '';
+  num get secondaryBaseQuantity =>
+      components.length > 1 ? components[1].quantity : 1;
+  String get secondaryUnit => components.length > 1 ? components[1].unit : '';
 
   /// A copy under a different day-group - used for supplements, which are
   /// meant to be identical across all 4 day-groups (see toggleMealSelection
@@ -230,14 +248,10 @@ class Recipe {
     image: image,
     totalWeightGrams: totalWeightGrams,
     nutrition: nutrition,
-    baseServingQuantity: baseServingQuantity,
-    servingUnit: servingUnit,
     servingTime: servingTime,
     tags: tags,
     dayGroup: dayGroup ?? this.dayGroup,
-    secondaryLabel: secondaryLabel,
-    secondaryBaseQuantity: secondaryBaseQuantity,
-    secondaryUnit: secondaryUnit,
+    components: components,
     supplementFacts: supplementFacts,
   );
 
@@ -261,6 +275,37 @@ class Recipe {
 
   @override
   int get hashCode => Object.hash(id, servingTime, dayGroup);
+}
+
+// ---------------------------
+// RecipeComponent
+// ---------------------------
+/// One independently-adjustable component of a single serving of a recipe -
+/// e.g. {label:'Idli', quantity:3, unit:'nos'}. See Recipe.components.
+class RecipeComponent {
+  final String label;
+  final num quantity;
+  final String unit;
+
+  RecipeComponent({
+    required this.label,
+    required this.quantity,
+    required this.unit,
+  });
+
+  factory RecipeComponent.fromJson(Map<String, dynamic> json) {
+    return RecipeComponent(
+      label: json["label"] ?? '',
+      quantity: (json["quantity"] as num?) ?? 1,
+      unit: json["unit"] ?? 'g',
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    "label": label,
+    "quantity": quantity,
+    "unit": unit,
+  };
 }
 
 // ---------------------------

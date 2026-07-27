@@ -142,6 +142,7 @@ class RecipeService {
     DietaryHabits? dietaryHabits,
     FreeFrom? freeFrom,
     ServingSize? servingSize,
+    List<RecipeComponent>? components,
     List<Ingredient>? ingredients,
     List<String>? cookingSteps,
     Nutrition? nutrition,
@@ -159,6 +160,8 @@ class RecipeService {
         if (dietaryHabits != null) 'dietaryHabits': dietaryHabits.toJson(),
         if (freeFrom != null) 'freeFrom': freeFrom.toJson(),
         if (servingSize != null) 'servingSize': servingSize.toJson(),
+        if (components != null)
+          'components': components.map((e) => e.toJson()).toList(),
         if (ingredients != null)
           'ingredients': ingredients.map((e) => e.toJson()).toList(),
         if (cookingSteps != null) 'cookingSteps': cookingSteps,
@@ -410,6 +413,7 @@ class RecipeService {
     String? description,
     DietaryHabits? dietaryHabits,
     FreeFrom? freeFrom,
+    List<RecipeComponent>? components,
     List<Ingredient>? ingredients,
     List<String>? cookingSteps,
     Nutrition? nutrition,
@@ -423,6 +427,8 @@ class RecipeService {
         if (description != null) 'description': description,
         if (dietaryHabits != null) 'dietaryHabits': dietaryHabits.toJson(),
         if (freeFrom != null) 'freeFrom': freeFrom.toJson(),
+        if (components != null)
+          'components': components.map((e) => e.toJson()).toList(),
         if (ingredients != null)
           'ingredients': ingredients.map((e) => e.toJson()).toList(),
         if (cookingSteps != null) 'cookingSteps': cookingSteps,

@@ -26,6 +26,13 @@ class RecipePreview {
   // SupplementFacts (shared with the diet-plan selection flow). Null for
   // every ordinary food recipe.
   final SupplementFacts? supplementFacts;
+  // The recipe's real, independently-adjustable components (see
+  // models/Recipe.js's `components` on the backend) - e.g. Idli with
+  // Sambar and Chutney is 3 entries, each in its own natural unit (nos,
+  // bowl, tbsp). Always at least one entry - see the fallback in fromJson.
+  // This is what EditComponentsSheet edits and what the dietician-facing
+  // diet-plan stepper (patients_controller.dart) ultimately steps through.
+  final List<RecipeComponent> components;
 
   RecipePreview({
     this.id,
@@ -48,7 +55,16 @@ class RecipePreview {
     this.languages = const ['English'],
     this.translations = const {},
     this.supplementFacts,
-  });
+    List<RecipeComponent>? components,
+  }) : components = (components == null || components.isEmpty)
+           ? [
+               RecipeComponent(
+                 label: name,
+                 quantity: servingSize.quantity ?? 1,
+                 unit: servingSize.unit ?? 'g',
+               ),
+             ]
+           : components;
 
   factory RecipePreview.fromJson(Map<String, dynamic> json) {
     // Parse language field - can be a string or list
@@ -103,6 +119,9 @@ class RecipePreview {
       supplementFacts: json['supplementFacts'] != null
           ? SupplementFacts.fromJson(json['supplementFacts'])
           : null,
+      components: (json['components'] as List<dynamic>?)
+          ?.map((e) => RecipeComponent.fromJson(e))
+          .toList(),
     );
   }
 
@@ -131,6 +150,35 @@ class RecipePreview {
       languages: languages,
       translations: translations,
       supplementFacts: supplementFacts,
+      components: components,
+    );
+  }
+
+  /// Returns a copy with [components] overridden - used by
+  /// EditComponentsSheet to write back the dietician's edits.
+  RecipePreview copyWithComponents(List<RecipeComponent> newComponents) {
+    return RecipePreview(
+      id: id,
+      name: name,
+      image: image,
+      description: description,
+      category: category,
+      cuisine: cuisine,
+      servingTime: servingTime,
+      servings: servings,
+      preparationTime: preparationTime,
+      cookingTime: cookingTime,
+      dietaryHabits: dietaryHabits,
+      freeFrom: freeFrom,
+      ingredients: ingredients,
+      servingSize: servingSize,
+      nutrition: nutrition,
+      cookingSteps: cookingSteps,
+      warnings: warnings,
+      languages: languages,
+      translations: translations,
+      supplementFacts: supplementFacts,
+      components: newComponents,
     );
   }
 
@@ -158,8 +206,45 @@ class RecipePreview {
         (key, value) => MapEntry(key, value.toJson()),
       ),
       if (supplementFacts != null) 'supplementFacts': supplementFacts!.toJson(),
+      'components': components.map((e) => e.toJson()).toList(),
     };
   }
+}
+
+/// One independently-adjustable component of a single serving of a recipe -
+/// e.g. {label:'Idli', quantity:3, unit:'nos'}. See RecipePreview.components.
+class RecipeComponent {
+  final String label;
+  final num quantity;
+  final String unit;
+
+  RecipeComponent({
+    required this.label,
+    required this.quantity,
+    required this.unit,
+  });
+
+  factory RecipeComponent.fromJson(Map<String, dynamic> json) {
+    return RecipeComponent(
+      label: json['label'] ?? '',
+      quantity: (json['quantity'] as num?) ?? 1,
+      unit: json['unit'] ?? 'g',
+    );
+  }
+
+  RecipeComponent copyWith({String? label, num? quantity, String? unit}) {
+    return RecipeComponent(
+      label: label ?? this.label,
+      quantity: quantity ?? this.quantity,
+      unit: unit ?? this.unit,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'label': label,
+    'quantity': quantity,
+    'unit': unit,
+  };
 }
 
 /// Translation data for a single language

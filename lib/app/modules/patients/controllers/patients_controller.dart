@@ -181,27 +181,31 @@ class PatientsController extends GetxController {
   Rx<DietPlanData?> dietPlanData = Rx<DietPlanData?>(null);
   RxMap<int, List<Recipe>> weekSelectedRecipes = <int, List<Recipe>>{}.obs;
 
-  /// Servings multiplier per selected recipe, keyed by id + servingTime (see
-  /// servingsKey) rather than id alone - the same recipe (e.g. Chapati) can
-  /// be selected in both Lunch and Dinner in the same week with different
-  /// counts (3 chapatis at Lunch, 2 at Dinner), and those must not collide.
-  /// Values: e.g. 3 for "3 chapatis", or 400 for "400g of Chole" (gram/ml-
-  /// based items store the adjusted absolute quantity, not a multiplier -
-  /// see incrementServings/calculateTotalsForWeek). Defaults to the
-  /// recipe's own baseServingQuantity (1x) when a card is first selected.
-  RxMap<String, num> selectedServings = <String, num>{}.obs;
+  /// Per-component selected quantities for a selected recipe (same
+  /// order/length as Recipe.components), keyed by id + servingTime +
+  /// dayGroup (see servingsKey) rather than id alone - the same recipe
+  /// (e.g. Chapati) can be selected in both Lunch and Dinner in the same
+  /// week with different counts, and those must not collide. A component's
+  /// value is the adjusted absolute quantity in its own unit (e.g. 3 for
+  /// "3 nos" of Idli, 400 for "400g" of Chole) - never a multiplier.
+  /// Missing/absent means "still at every component's own base quantity" -
+  /// see componentServingsAt.
+  RxMap<String, List<num>> selectedComponentServings =
+      <String, List<num>>{}.obs;
 
-  /// Same shape as [selectedServings], for the second independently-
-  /// adjustable component of a compound snack (e.g. the seeds/chikki
-  /// mix-in alongside a fruit - see Recipe.hasSecondaryComponent). Empty
-  /// for every ordinary single-quantity recipe.
-  RxMap<String, num> selectedSecondaryServings = <String, num>{}.obs;
+  /// The dietician-set quantity for `recipe.components[index]`, or that
+  /// component's own base quantity if never explicitly adjusted.
+  num componentServingsAt(Recipe recipe, int index) {
+    final stored = selectedComponentServings[servingsKey(recipe)];
+    if (stored != null && index < stored.length) return stored[index];
+    return recipe.components[index].quantity;
+  }
 
-  /// Composite key for [selectedServings]/[selectedSecondaryServings] - see
-  /// those fields' doc comments. Includes dayGroup (not just id+servingTime)
-  /// since the same recipe can be legitimately selected under two different
-  /// day-groups' same slot with different counts (e.g. 3 chapatis at
-  /// Monday-group's Lunch, 2 at Tuesday-group's Lunch).
+  /// Composite key for [selectedComponentServings] - includes dayGroup (not
+  /// just id+servingTime) since the same recipe can be legitimately
+  /// selected under two different day-groups' same slot with different
+  /// counts (e.g. 3 chapatis at Monday-group's Lunch, 2 at Tuesday-group's
+  /// Lunch).
   String servingsKey(Recipe r) => '${r.id}|${r.servingTime}|${r.dayGroup}';
 
   /// Tracks which weeks the user has manually toggled selections on.
@@ -1879,31 +1883,42 @@ class PatientsController extends GetxController {
             dayGroupOptions.dayGroup,
           );
           defaultSelected.add(recipe);
-          // A backend `servings` of exactly 1 means "never explicitly set"
-          // (see cleanSelectedMeals' default) for any unit - not a genuine
-          // "1 gram" or "exactly 1 piece" - so seed from the trend-aware
-          // default instead. Piece-based items need this too now: a
-          // weight-loss default is 1/4, not 1, so "1" can no longer be
-          // trusted as the piece baseline the way it was before this phase.
-          // Only applies to a not-yet-finalized week though - once
-          // data.isFinalized is true, `servings` came from the dietician's
-          // actual finalizeWeekPlan save (see getDraftWeekOptions' finalized-
-          // Plan preference), so an explicit "1" must be trusted as-is or
-          // "Update Diet Plan" would silently reset it back to the trend
-          // default on every re-open.
-          final isUnexplicitDefault = r.servings == 1 && !data.isFinalized;
-          selectedServings[servingsKey(recipe)] = isUnexplicitDefault
-              ? _defaultServingsForTrend(recipe)
-              : r.servings;
-          if (recipe.hasSecondaryComponent) {
-            final isUnexplicitSecondaryDefault =
-                r.secondaryServings == 1 && !data.isFinalized;
-            selectedSecondaryServings[servingsKey(
-              recipe,
-            )] = isUnexplicitSecondaryDefault
-                ? recipe.secondaryBaseQuantity
-                : r.secondaryServings;
-          }
+          // r.componentServings is only ever non-null when the dietician
+          // actually persisted explicit per-component quantities for this
+          // meal (see RecipeModel.componentServings) - trust it verbatim
+          // when present. Otherwise fall back to the legacy sentinel
+          // convention for components 0/1 only (a backend `servings`/
+          // `secondaryServings` of exactly 1 means "never explicitly set" -
+          // see cleanSelectedMeals' default - not a genuine "1 gram" or
+          // "exactly 1 piece"), and the trend-aware default for any other
+          // component. Only applies to a not-yet-finalized week though -
+          // once data.isFinalized is true, these came from the dietician's
+          // actual finalizeWeekPlan save (see getDraftWeekOptions'
+          // finalizedPlan preference), so an explicit "1" must be trusted
+          // as-is or "Update Diet Plan" would silently reset it back to the
+          // trend default on every re-open.
+          selectedComponentServings[servingsKey(recipe)] = List<num>.generate(
+            recipe.components.length,
+            (i) {
+              final explicit = r.componentServings;
+              if (explicit != null && i < explicit.length) return explicit[i];
+              if (i == 0) {
+                final isUnexplicitDefault =
+                    r.servings == 1 && !data.isFinalized;
+                return isUnexplicitDefault
+                    ? _defaultComponentServing(recipe, 0)
+                    : r.servings;
+              }
+              if (i == 1 && recipe.hasSecondaryComponent) {
+                final isUnexplicitSecondaryDefault =
+                    r.secondaryServings == 1 && !data.isFinalized;
+                return isUnexplicitSecondaryDefault
+                    ? recipe.components[1].quantity
+                    : r.secondaryServings;
+              }
+              return _defaultComponentServing(recipe, i);
+            },
+          );
         }
       }
     }
@@ -2051,16 +2066,18 @@ class PatientsController extends GetxController {
         fats: m.nutrition.fats,
         fiber: m.nutrition.fiber,
       ),
-      baseServingQuantity: m.servingSize.quantity > 0
-          ? m.servingSize.quantity
-          : 1,
-      servingUnit: m.servingSize.unit.isNotEmpty ? m.servingSize.unit : 'g',
       servingTime: persistedServingTime,
       tags: m.tags,
       dayGroup: dayGroup,
-      secondaryLabel: m.secondaryComponent?.label ?? '',
-      secondaryBaseQuantity: m.secondaryComponent?.quantity ?? 1,
-      secondaryUnit: m.secondaryComponent?.unit ?? '',
+      components: m.components
+          .map(
+            (c) => RecipeComponent(
+              label: c.label,
+              quantity: c.quantity,
+              unit: c.unit,
+            ),
+          )
+          .toList(),
       supplementFacts: m.supplementFacts,
     );
   }
@@ -2122,30 +2139,20 @@ class PatientsController extends GetxController {
               r.servingTime == recipe.servingTime &&
               r.dayGroup == dg,
         );
-        selectedServings.remove(servingsKey(variant));
-        selectedSecondaryServings.remove(servingsKey(variant));
+        selectedComponentServings.remove(servingsKey(variant));
         if (!isCurrentlySelected) {
           currentWeekRecipes.add(variant);
-          selectedServings[servingsKey(variant)] = _defaultServingsForTrend(
-            variant,
-          );
-          if (variant.hasSecondaryComponent) {
-            selectedSecondaryServings[servingsKey(variant)] =
-                variant.secondaryBaseQuantity;
-          }
+          selectedComponentServings[servingsKey(variant)] =
+              _defaultComponentServings(variant);
         }
       }
     } else if (currentWeekRecipes.contains(recipe)) {
       currentWeekRecipes.remove(recipe);
-      selectedServings.remove(servingsKey(recipe));
-      selectedSecondaryServings.remove(servingsKey(recipe));
+      selectedComponentServings.remove(servingsKey(recipe));
     } else {
       currentWeekRecipes.add(recipe);
-      selectedServings[servingsKey(recipe)] = _defaultServingsForTrend(recipe);
-      if (recipe.hasSecondaryComponent) {
-        selectedSecondaryServings[servingsKey(recipe)] =
-            recipe.secondaryBaseQuantity;
-      }
+      selectedComponentServings[servingsKey(recipe)] =
+          _defaultComponentServings(recipe);
     }
 
     weekSelectedRecipes[currentWeekNumber] = currentWeekRecipes;
@@ -2168,13 +2175,31 @@ class PatientsController extends GetxController {
     'Evening Snack',
   };
 
+  // Units genuinely counted as discrete whole items (matches the backend's
+  // COUNTABLE_COMPONENT_UNITS, dietPlanValidator.js) - drives the loss/gain
+  // trend default/clamp ratio (0.5x/1x, floor 1/4, ceiling 5). Only ever
+  // applied to a recipe's component 0 - see _isTrendScoped.
+  static const Set<String> _countableUnits = {'piece', 'nos', 'egg', 'slice'};
+
+  bool _isCountable(String unit) => _countableUnits.contains(unit);
+
+  // Everything except a plain scoopable/pourable mass (g/ml) steps in
+  // nicer whole-ish increments - fractional for a countable component-0
+  // unit, or a flat 1 for a vessel/spoon unit (bowl, cup, tbsp, tsp) at any
+  // position - rather than the coarse step meant for a mass/volume.
+  bool _isWholeUnit(String unit) => unit != 'g' && unit != 'ml';
+
   /// Gram-based trend clamping (sabji/salad ranges) only applies within
   /// Lunch/Dinner/Evening Snack, where those concepts mean something.
   /// Piece-based fractional stepping applies everywhere a piece-counted
   /// item appears (e.g. a Breakfast paratha), since "how many" is a
-  /// trend-relevant question regardless of meal slot.
+  /// trend-relevant question regardless of meal slot. Only ever consulted
+  /// for a recipe's component 0 (see _defaultComponentServing/
+  /// _clampComponentServing) - every other component uses simple flat
+  /// stepping with no trend awareness, same as the old secondary-component
+  /// behavior.
   bool _isTrendScoped(Recipe r) =>
-      _isPieceBased(r) || _trendScopedSlots.contains(r.servingTime);
+      _isCountable(r.servingUnit) || _trendScopedSlots.contains(r.servingTime);
 
   /// The dietician-facing weight trend for the currently loaded draft -
   /// 'loss' or 'gain', derived server-side from the patient's primaryGoal
@@ -2185,7 +2210,6 @@ class PatientsController extends GetxController {
   /// (tags:'salad') from everything else gram/ml-based (sabji, curry,
   /// Steamed Rice) - both salad and "everything else" are gram-unit, so
   /// unit alone can't tell them apart.
-  bool _isPieceBased(Recipe r) => r.servingUnit == 'piece';
   bool _isSalad(Recipe r) => r.tags.contains('salad');
 
   /// Piece-based sides (Chapati, Bhakri - tags:'side', an accompaniment to
@@ -2193,26 +2217,37 @@ class PatientsController extends GetxController {
   /// Sandwich, the paratha family - not tagged 'side') cap at 5.
   num? _pieceCeiling(Recipe r) => r.tags.contains('side') ? null : 5;
 
-  /// Default quantity to seed for a never-explicitly-adjusted selection.
-  num _defaultServingsForTrend(Recipe r) {
-    if (!_isTrendScoped(r)) return r.baseServingQuantity;
+  /// Default quantity to seed for component `index` of a never-explicitly-
+  /// adjusted selection. Only component 0 gets the trend-aware (loss/gain)
+  /// default - every other component (e.g. Idli/Sambar's Sambar/Chutney)
+  /// just starts at its own base quantity, matching the old secondary-
+  /// component behavior generalized to any extra component.
+  num _defaultComponentServing(Recipe r, int index) {
+    final component = r.components[index];
+    if (index != 0 || !_isTrendScoped(r)) return component.quantity;
     final isLoss = weightTrend == 'loss';
     // A slightly-below-whole default (not the smallest possible 1/4) so
     // every card doesn't start identically tiny - still clearly lighter
     // than the gain default, and the dietician can step it either way.
-    if (_isPieceBased(r)) return isLoss ? 0.5 : 1;
+    if (_isCountable(component.unit)) return isLoss ? 0.5 : 1;
     if (_isSalad(r)) return isLoss ? 100 : 180;
     return isLoss ? 75 : 125;
   }
 
-  /// Clamps a stepper-adjusted value to the trend's realistic range - only
-  /// within scope; out-of-scope slots (Breakfast etc.) are never clamped.
-  /// Piece-based items are floored at 1/4; sides (tags:'side') have no
-  /// ceiling, everything else piece-based caps at 5.
-  num _clampServingsForTrend(Recipe r, num value) {
-    if (!_isTrendScoped(r)) return value;
+  /// All of `r`'s components at their never-explicitly-adjusted defaults -
+  /// see [_defaultComponentServing].
+  List<num> _defaultComponentServings(Recipe r) =>
+      List<num>.generate(r.components.length, (i) => _defaultComponentServing(r, i));
+
+  /// Clamps a stepper-adjusted value for component `index` to the trend's
+  /// realistic range - only component 0, only within scope; every other
+  /// component/out-of-scope case is never clamped. Piece-based items are
+  /// floored at 1/4; sides (tags:'side') have no ceiling, everything else
+  /// piece-based caps at 5.
+  num _clampComponentServing(Recipe r, int index, num value) {
+    if (index != 0 || !_isTrendScoped(r)) return value;
     final isLoss = weightTrend == 'loss';
-    if (_isPieceBased(r)) {
+    if (_isCountable(r.components[0].unit)) {
       final floored = value < 0.25 ? 0.25 : value;
       final ceiling = _pieceCeiling(r);
       return ceiling != null && floored > ceiling ? ceiling : floored;
@@ -2230,101 +2265,109 @@ class PatientsController extends GetxController {
     return current > 1 ? 0.5 : 0.25;
   }
 
-  /// Step size for the servings +/- control on gram/ml-based items (sides
-  /// use [_pieceStep] instead - see incrementServings/decrementServings).
-  num _servingsStep(String unit) => unit == 'piece' ? 1 : 50;
+  /// Step size for component `index`'s +/- control. Component 0 (the
+  /// recipe's primary quantity) uses fractional piece-stepping for a
+  /// countable unit, else a flat 50 for a plain mass/volume. Every other
+  /// component uses a finer flat step - 1 for a whole/spoon unit (nos,
+  /// egg, bowl, cup, tbsp, tsp...), 10 for a plain mass/volume (e.g. 80g
+  /// chikki total) - matches the old secondary-component step sizes, now
+  /// applied per-component.
+  num _componentStep(Recipe r, int index, num current, {required bool incrementing}) {
+    final unit = r.components[index].unit;
+    if (index == 0) {
+      if (_isCountable(unit)) {
+        return _pieceStep(current, incrementing: incrementing);
+      }
+      return _isWholeUnit(unit) ? 1 : 50;
+    }
+    return _isWholeUnit(unit) ? 1 : 10;
+  }
 
-  void incrementServings(Recipe recipe) {
+  /// Writes a new quantity for component `index` of `recipe`, expanding
+  /// [selectedComponentServings]'s stored list (from each component's own
+  /// base quantity) to cover it first if this is the first adjustment.
+  void _setComponentServing(Recipe recipe, int index, num value) {
     final key = servingsKey(recipe);
-    final current = selectedServings[key] ?? recipe.baseServingQuantity;
-    // Piece-based items always use fractional stepping (see _isTrendScoped
-    // - piece-based is always in scope regardless of meal slot).
-    final step = _isPieceBased(recipe)
-        ? _pieceStep(current, incrementing: true)
-        : _servingsStep(recipe.servingUnit);
-    selectedServings[key] = _clampServingsForTrend(recipe, current + step);
+    final current = List<num>.of(
+      selectedComponentServings[key] ??
+          recipe.components.map((c) => c.quantity).toList(),
+    );
+    while (current.length <= index) {
+      current.add(recipe.components[current.length].quantity);
+    }
+    current[index] = value;
+    selectedComponentServings[key] = current;
+  }
+
+  void incrementComponentServings(Recipe recipe, int index) {
+    final current = componentServingsAt(recipe, index);
+    final step = _componentStep(recipe, index, current, incrementing: true);
+    _setComponentServing(
+      recipe,
+      index,
+      _clampComponentServing(recipe, index, current + step),
+    );
     final currentWeekNumber = int.parse(selectedWeek.value.split(" ").last);
     calculateTotalsForWeek(currentWeekNumber);
   }
 
-  void decrementServings(Recipe recipe) {
-    final key = servingsKey(recipe);
-    final current = selectedServings[key] ?? recipe.baseServingQuantity;
-    final isTrendPiece = _isPieceBased(recipe);
-    final step = isTrendPiece
-        ? _pieceStep(current, incrementing: false)
-        : _servingsStep(recipe.servingUnit);
+  void decrementComponentServings(Recipe recipe, int index) {
+    final current = componentServingsAt(recipe, index);
+    final step = _componentStep(recipe, index, current, incrementing: false);
+    final isFractional = index == 0 && _isCountable(recipe.components[0].unit);
     // Floor at one step - never zero/negative servings of a selected item
-    // (piece-based trend items floor at 1/4 via the clamp below instead).
-    final next = isTrendPiece
+    // (fractional/piece-based trend items floor at 1/4 via the clamp
+    // below instead).
+    final next = isFractional
         ? current - step
         : (current - step < step ? step : current - step);
-    selectedServings[key] = _clampServingsForTrend(recipe, next);
+    _setComponentServing(
+      recipe,
+      index,
+      _clampComponentServing(recipe, index, next),
+    );
     final currentWeekNumber = int.parse(selectedWeek.value.split(" ").last);
     calculateTotalsForWeek(currentWeekNumber);
   }
 
-  /// Step size for the secondary-component +/- control (see
-  /// Recipe.hasSecondaryComponent) - 1 tbsp for scoopable mix-ins, 10g for
-  /// gram-based ones (e.g. chikki) - deliberately finer than the primary
-  /// gram step since these are small quantities (e.g. 80g chikki total).
-  num _secondaryStep(String unit) => unit == 'tbsp' ? 1 : 10;
+  // Backward-compatible aliases for the old fixed primary/secondary API -
+  // component 0 is the old "primary", component 1 the old "secondary".
+  void incrementServings(Recipe recipe) => incrementComponentServings(recipe, 0);
+  void decrementServings(Recipe recipe) => decrementComponentServings(recipe, 0);
+  void incrementSecondaryServings(Recipe recipe) =>
+      incrementComponentServings(recipe, 1);
+  void decrementSecondaryServings(Recipe recipe) =>
+      decrementComponentServings(recipe, 1);
 
-  void incrementSecondaryServings(Recipe recipe) {
-    final key = servingsKey(recipe);
-    final current =
-        selectedSecondaryServings[key] ?? recipe.secondaryBaseQuantity;
-    final step = _secondaryStep(recipe.secondaryUnit);
-    selectedSecondaryServings[key] = current + step;
-    final currentWeekNumber = int.parse(selectedWeek.value.split(" ").last);
-    calculateTotalsForWeek(currentWeekNumber);
+  /// Ratio of the dietician-set quantity to component `index`'s own base
+  /// quantity - e.g. Chole's sole component adjusted to 400g / base 350g =
+  /// ~1.14x. Works uniformly for countable components too, since their
+  /// base quantity is a real count (so e.g. 3 idli / base 3 nos = 1x, or a
+  /// plain count multiplier once adjusted).
+  num _componentRatio(Recipe r, int index) {
+    final base = r.components[index].quantity;
+    if (base <= 0) return 1;
+    return componentServingsAt(r, index) / base;
   }
 
-  void decrementSecondaryServings(Recipe recipe) {
-    final key = servingsKey(recipe);
-    final current =
-        selectedSecondaryServings[key] ?? recipe.secondaryBaseQuantity;
-    final step = _secondaryStep(recipe.secondaryUnit);
-    // Floor at one step - never zero/negative servings of a selected item.
-    selectedSecondaryServings[key] = current - step < step
-        ? step
-        : current - step;
-    final currentWeekNumber = int.parse(selectedWeek.value.split(" ").last);
-    calculateTotalsForWeek(currentWeekNumber);
-  }
-
-  /// Ratio of the dietician-set servings to the recipe's own base serving -
-  /// e.g. Chole adjusted to 400g / base 350g = ~1.14x. Works uniformly for
-  /// piece-based items too, since their baseServingQuantity is 1 (so e.g.
-  /// 3 chapatis / 1 = 3x, the same as a plain count multiplier).
-  num _servingsRatio(Recipe r) {
-    final servings = selectedServings[servingsKey(r)] ?? r.baseServingQuantity;
-    if (r.baseServingQuantity <= 0) return 1;
-    return servings / r.baseServingQuantity;
-  }
-
-  /// Same as [_servingsRatio], for the secondary component (see
-  /// Recipe.hasSecondaryComponent) - 1 if there's no secondary component.
-  num _secondaryServingsRatio(Recipe r) {
-    if (!r.hasSecondaryComponent) return 1;
-    final servings =
-        selectedSecondaryServings[servingsKey(r)] ?? r.secondaryBaseQuantity;
-    if (r.secondaryBaseQuantity <= 0) return 1;
-    return servings / r.secondaryBaseQuantity;
-  }
-
-  /// The ratio used to scale a recipe's total nutrition. For ordinary
-  /// recipes this is just [_servingsRatio]. For a compound snack with a
-  /// secondary component (e.g. banana + seeds), the recipe's stated
-  /// nutrition covers BOTH components together at their base quantities,
-  /// and there's no per-ingredient calorie breakdown to split it precisely
-  /// - the average of both components' individual ratios is a reasonable,
-  /// honest approximation (not fabricated precision), consistent with the
-  /// flat approximations already used elsewhere in this app (15g/tbsp,
+  /// The ratio used to scale a recipe's total nutrition - the average of
+  /// every component's individual ratio (see [_componentRatio]),
+  /// generalizing the old fixed primary+secondary average to however many
+  /// components the recipe actually has. For an ordinary single-component
+  /// recipe this is just that one ratio. For a multi-component dish (e.g.
+  /// Idli/Sambar/Chutney), the recipe's stated nutrition covers every
+  /// component together at their base quantities, and there's no per-
+  /// ingredient calorie breakdown to split it precisely - the average of
+  /// each component's individual ratio is a reasonable, honest
+  /// approximation (not fabricated precision), consistent with the flat
+  /// approximations already used elsewhere in this app (15g/tbsp,
   /// 250ml/cup).
   num _nutritionScaleRatio(Recipe r) {
-    if (!r.hasSecondaryComponent) return _servingsRatio(r);
-    return (_servingsRatio(r) + _secondaryServingsRatio(r)) / 2;
+    final ratios = List<num>.generate(
+      r.components.length,
+      (i) => _componentRatio(r, i),
+    );
+    return ratios.reduce((a, b) => a + b) / ratios.length;
   }
 
   // Monday's meals repeat on Friday, Tuesday's on Saturday, Wednesday's on
@@ -2399,9 +2442,45 @@ class PatientsController extends GetxController {
     };
   }
 
-  // CALCULATE TOTAL NUTRITION ("Total Budget" card)
+  /// Totals for just the currently-active day-group tab's selected meals -
+  /// a single day, unweighted (unlike _weightedWeekTotals' 7-day average).
+  /// This is what the "Total Budget" card shows while editing, since
+  /// "Required Calories" is a single day's budget (selectedCalorieStrategy'
+  /// s calorieBudget - see select_diet_sheet.dart) and the backend's
+  /// validation warnings are also per-day-group ("Week 1, Monday: total
+  /// daily calories (1901) deviate..." - dietPlanValidator.js) - comparing
+  /// those against a whole-week blended average made it impossible to tell,
+  /// while fixing Monday specifically, whether Monday was actually fixed.
+  Map<String, double> _dayGroupTotals(int weekNumber, String dayGroup) {
+    final selectedRecipes = (weekSelectedRecipes[weekNumber] ?? [])
+        .where((r) => !r.tags.contains('supplement'))
+        .where((r) => r.dayGroup == dayGroup);
+
+    double calories = 0, fat = 0, carbs = 0, protein = 0, fiber = 0;
+    for (final r in selectedRecipes) {
+      final ratio = _nutritionScaleRatio(r);
+      calories += r.nutrition.calories * ratio;
+      fat += r.nutrition.fats * ratio;
+      carbs += r.nutrition.carbs * ratio;
+      protein += r.nutrition.protein * ratio;
+      fiber += r.nutrition.fiber * ratio;
+    }
+
+    return {
+      'calories': calories,
+      'fat': fat,
+      'carbs': carbs,
+      'protein': protein,
+      'fiber': fiber,
+    };
+  }
+
+  // CALCULATE TOTAL NUTRITION ("Total Budget" card) - the active day-group
+  // tab's single-day total (see _dayGroupTotals). buildFinalizeWeekPayload
+  // uses _weightedWeekTotals directly for the actual submitted week
+  // summary, which is intentionally a different (whole-week) number.
   void calculateTotalsForWeek(int weekNumber) {
-    final totals = _weightedWeekTotals(weekNumber);
+    final totals = _dayGroupTotals(weekNumber, selectedDayGroup.value);
     totalCalories.value = totals['calories']!;
     totalProtein.value = totals['protein']!;
     totalFat.value = totals['fat']!;
@@ -2432,7 +2511,7 @@ class PatientsController extends GetxController {
   /// true then goes stale the moment the dietician actually acts on it
   /// (nudges a serving back toward budget, or reselects a bad recipe
   /// reference). Re-checking both warning shapes here against
-  /// weekSelectedRecipes/selectedServings (the dietician's live picture,
+  /// weekSelectedRecipes/selectedComponentServings (the dietician's live picture,
   /// same one calculateTotalsForWeek/"Total Budget" already shows) lets a
   /// resolved warning drop out of the review box immediately instead of
   /// sitting there stale until the plan is re-fetched. Every other warning
@@ -2987,17 +3066,22 @@ class PatientsController extends GetxController {
     final selectedRecipes = weekSelectedRecipes[weekNumber] ?? [];
 
     final selectedMeals = selectedRecipes.map((selected) {
+      // servings/secondaryServings (components 0/1) are still sent
+      // alongside componentServings for backward compatibility with
+      // consumers not yet reading the generalized field (e.g. the patient
+      // app's meal-logging flow) - see cleanSelectedMeals in
+      // dietPlanController.js.
       return {
         "dayGroup": selected.dayGroup,
         "servingTime": selected.servingTime,
         "recipeId": selected.id,
-        "servings":
-            selectedServings[servingsKey(selected)] ??
-            selected.baseServingQuantity,
+        "servings": componentServingsAt(selected, 0),
         if (selected.hasSecondaryComponent)
-          "secondaryServings":
-              selectedSecondaryServings[servingsKey(selected)] ??
-              selected.secondaryBaseQuantity,
+          "secondaryServings": componentServingsAt(selected, 1),
+        "componentServings": List<num>.generate(
+          selected.components.length,
+          (i) => componentServingsAt(selected, i),
+        ),
       };
     }).toList();
 
