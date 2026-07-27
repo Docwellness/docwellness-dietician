@@ -51,13 +51,12 @@ class _SelectDietSheetState extends State<SelectDietSheet>
   // servingTime in updateShiftMeals, so a mismatch here silently hides a
   // whole tab's meals even when the plan has real data for that slot.
   final List<String> _shifts = [
-    "Breakfast",
     "Morning Drink",
-    "Lunch",
+    "Breakfast",
     "Brunch",
-    // "Morning Snacks",
-    "Dinner",
+    "Lunch",
     "Evening Snack",
+    "Dinner",
     "Night Drink",
     // Browsing-only pseudo-slot (see buildServingTimeOptions in
     // dietPlanOptions.js) - lists every supplement recipe regardless of
@@ -479,26 +478,33 @@ class _SelectDietSheetState extends State<SelectDietSheet>
                                     controller.toggleMealSelection(recipe),
                                 onTapDetails: () =>
                                     _openRecipeDetails(recipe.id),
-                                components: isSelected
-                                    ? List<FoodCardComponentData>.generate(
-                                        recipe.components.length,
-                                        (i) => FoodCardComponentData(
-                                          label: recipe.components[i].label,
-                                          quantity: liveComponents[i],
-                                          unit: recipe.components[i].unit,
-                                          onIncrement: () => controller
-                                              .incrementComponentServings(
-                                                recipe,
-                                                i,
-                                              ),
-                                          onDecrement: () => controller
-                                              .decrementComponentServings(
-                                                recipe,
-                                                i,
-                                              ),
+                                // Always passed (not just while selected) -
+                                // FoodCard uses this for its unselected-
+                                // state quantity pill(s) too now, so a
+                                // multi-part dish still shows every part
+                                // (e.g. "Banana: 1 nos, Oats Pancakes: 2
+                                // nos") instead of only its first
+                                // component. The +/- callbacks are simply
+                                // unused while unselected (FoodCard doesn't
+                                // render steppers then).
+                                components: List<FoodCardComponentData>.generate(
+                                  recipe.components.length,
+                                  (i) => FoodCardComponentData(
+                                    label: recipe.components[i].label,
+                                    quantity: liveComponents[i],
+                                    unit: recipe.components[i].unit,
+                                    onIncrement: () => controller
+                                        .incrementComponentServings(
+                                          recipe,
+                                          i,
                                         ),
-                                      )
-                                    : const [],
+                                    onDecrement: () => controller
+                                        .decrementComponentServings(
+                                          recipe,
+                                          i,
+                                        ),
+                                  ),
+                                ),
                               ),
                             );
                           }),

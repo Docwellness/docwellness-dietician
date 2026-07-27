@@ -130,7 +130,7 @@ class PatientsController extends GetxController {
   /// Current weight entered by doctor for week 2/3/4
   RxDouble currentWeightForWeek = 0.0.obs;
 
-  RxString getSelectedShift = "Breakfast".obs;
+  RxString getSelectedShift = "Morning Drink".obs;
 
   RxList<RecipeModel> getShiftMeals = <RecipeModel>[].obs;
 
@@ -141,7 +141,7 @@ class PatientsController extends GetxController {
   RxList<DailyMeal> shiftMeals = <DailyMeal>[].obs;
 
   /// Currently selected shift (e.g. "Breakfast", "Morning Drink", ...)
-  RxString selectedShift = "Breakfast".obs;
+  RxString selectedShift = "Morning Drink".obs;
 
   /// Currently selected day-group in the draft-review screen - one of
   /// 'Monday' (repeats Friday), 'Tuesday' (repeats Saturday), 'Wednesday'

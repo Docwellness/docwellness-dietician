@@ -68,33 +68,29 @@ class FoodCard extends StatelessWidget {
   // 250ml ≈ 1 cup (the standard metric/Indian recipe cup).
   static const num _mlPerCup = 250;
 
-  /// Formats a raw numeric quantity string for display: piece-based units
-  /// get fraction notation (1/4, 1/2, 3/4, 1 1/2...) instead of a raw
-  /// decimal; ml-based units get an approximate cup count (also in fraction
-  /// notation); gram-based units get an approximate tablespoon count.
+  /// Formats a raw numeric quantity string for display: a genuinely
+  /// ambiguous mass/volume (plain "g"/"ml") gets an approximate tbsp/cup
+  /// hint alongside it, since a bare gram figure is hard to picture. Every
+  /// other unit - piece, nos, egg, slice, bowl, cup, tbsp, tsp - is already
+  /// a real, human-sized measure (see COMPONENT_UNITS on the backend) and
+  /// gets clean fraction notation (1/4, 1/2, 3/4, 1 1/2...) with no
+  /// further conversion - converting "2 egg" into "~0 tbsp" would be
+  /// nonsensical, not helpful.
   static String _formatQuantityLabel(String rawValue, String unit) {
     final value = num.tryParse(rawValue);
     if (value == null) {
       return unit.isNotEmpty ? '$rawValue $unit' : rawValue;
     }
-    if (unit == 'piece') {
-      return '${_formatPieceFraction(value)} $unit';
-    }
     if (unit == 'ml') {
       final cups = _formatPieceFraction(value / _mlPerCup);
       return '$rawValue $unit (~$cups cup)';
     }
-    // Already a spoon measure (e.g. a secondaryComponent like "Seeds &
-    // Chana" - see Recipe.hasSecondaryComponent) - no further conversion,
-    // converting it again as if it were grams would be wrong.
-    if (unit == 'tbsp' || unit == 'tsp') {
-      return '$rawValue $unit';
-    }
-    if (unit.isNotEmpty) {
+    if (unit == 'g') {
       final tbsp = (value / _gramsPerTablespoon).round();
       return '$rawValue $unit (~$tbsp tbsp)';
     }
-    return rawValue;
+    if (unit.isEmpty) return rawValue;
+    return '${_formatPieceFraction(value)} $unit';
   }
 
   static String _formatPieceFraction(num value) {
@@ -113,6 +109,27 @@ class FoodCard extends StatelessWidget {
     if (whole == 0 && fracLabel.isNotEmpty) return fracLabel;
     if (fracLabel.isEmpty) return '$whole';
     return '$whole $fracLabel';
+  }
+
+  /// One formatted string per component for the unselected-state quantity
+  /// pill(s) - falls back to the legacy single grams/unit pair when a
+  /// caller doesn't pass [components] at all (e.g. update_patient_diet_
+  /// sheet.dart's read-only list, which has no per-component data).
+  /// Labeled per component only when there's more than one AND the label
+  /// isn't just the recipe's own name repeated (a migration artifact for
+  /// recipes predating the components model - see scripts/migrate-recipe-
+  /// components.js - where that would be redundant with the card title).
+  List<String> _unselectedQuantityLabels() {
+    if (components.isEmpty) {
+      return [_formatQuantityLabel(grams, unit)];
+    }
+    return components.map((c) {
+      final formatted = _formatQuantityLabel('${c.quantity}', c.unit);
+      if (components.length > 1 && c.label != name) {
+        return '${c.label}: $formatted';
+      }
+      return formatted;
+    }).toList();
   }
 
   @override
@@ -172,35 +189,44 @@ class FoodCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 6),
-                    Row(
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
-                        // The static quantity pill only makes sense when
+                        // The static quantity pill(s) only make sense when
                         // there's nothing else showing this recipe's
                         // quantity - once selected, the per-component
                         // stepper list below already shows each
                         // component's own live quantity, so repeating it
-                        // here would just be the same number twice.
-                        if (!isSelected) ...[
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 2,
+                        // here would just be the same number(s) twice. One
+                        // pill per component (labeled, when there's more
+                        // than one and the label isn't just the recipe's
+                        // own name) so a multi-part dish like "Banana: 1
+                        // nos, Oats Pancakes: 2 nos" isn't silently
+                        // collapsed down to only its first part - a Wrap
+                        // (not a Row) so any number of pills plus the
+                        // calorie text always lay out safely regardless of
+                        // card width.
+                        if (!isSelected)
+                          for (final pillText in _unselectedQuantityLabels())
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Color(0xffEF45B2)),
+                                color: const Color(0xffFCE7F6),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: CustomText(
+                                text: pillText,
+                                color: Color(0xff851653),
+                                fontWeight: FontWeight.w500,
+                                fontSize: 12,
+                              ),
                             ),
-                            decoration: BoxDecoration(
-                              border: Border.all(color: Color(0xffEF45B2)),
-                              color: const Color(0xffFCE7F6),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: CustomText(
-                              text: _formatQuantityLabel(grams, unit),
-
-                              color: Color(0xff851653),
-                              fontWeight: FontWeight.w500,
-                              fontSize: 12,
-                            ),
-                          ),
-                          if (!_isSupplement) const SizedBox(width: 5),
-                        ],
                         if (!_isSupplement)
                           CustomText(
                             text: "$calorie calorie",
@@ -224,16 +250,25 @@ class FoodCard extends StatelessWidget {
                           padding: const EdgeInsets.only(bottom: 6),
                           child: Row(
                             children: [
-                              if (components.length > 1) ...[
-                                Container(
-                                  constraints: const BoxConstraints(
-                                    minWidth: 56,
-                                  ),
+                              // Same redundant-label suppression as the
+                              // unselected pills above (see
+                              // _unselectedQuantityLabels) - a component
+                              // whose label just repeats the recipe's own
+                              // name (legacy-migrated data) adds nothing
+                              // the card title doesn't already say, and
+                              // for a genuinely long real label, Flexible +
+                              // ellipsis keeps the row from ever
+                              // overflowing regardless of card width.
+                              if (components.length > 1 &&
+                                  component.label != name) ...[
+                                Flexible(
                                   child: CustomText(
                                     text: component.label,
                                     color: Color(0xff6C737F),
                                     fontWeight: FontWeight.w400,
                                     fontSize: 12,
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 1,
                                   ),
                                 ),
                                 const SizedBox(width: 4),

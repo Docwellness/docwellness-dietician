@@ -492,14 +492,22 @@ class ReceipesController extends GetxController {
     }
   }
 
-  /// Writes back a dietician's manual edit of the recipe's components (see
-  /// EditComponentsSheet) - purely local/in-memory, same as every other
-  /// generatedRecipe.value edit; persisting happens via the existing Save
-  /// Recipe/Add to Database button, same as an ingredient edit would.
-  void updateComponents(List<RecipeComponent> components) {
+  /// Writes back a dietician's manual edit of the recipe's components and
+  /// the resulting recomputed nutrition (see EditComponentsSheet /
+  /// RecipePreview.scaleNutritionForComponentEdit) - purely local/in-
+  /// memory, same as every other generatedRecipe.value edit; persisting
+  /// happens via the existing Save Recipe/Add to Database button, same as
+  /// an ingredient edit would.
+  void updateComponentsAndNutrition(
+    List<RecipeComponent> components,
+    Nutrition nutrition,
+  ) {
     final current = generatedRecipe.value;
     if (current == null) return;
-    generatedRecipe.value = current.copyWithComponents(components);
+    generatedRecipe.value = current.copyWithComponentsAndNutrition(
+      components,
+      nutrition,
+    );
   }
 
   /// Clear the form

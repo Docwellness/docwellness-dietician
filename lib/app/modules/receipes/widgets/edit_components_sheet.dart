@@ -49,13 +49,16 @@ class _ComponentDraft {
   final TextEditingController quantityController;
   String unit;
 
-  _ComponentDraft({required String label, required num quantity, required this.unit})
-    : labelController = TextEditingController(text: label),
-      quantityController = TextEditingController(
-        text: quantity == quantity.roundToDouble()
-            ? quantity.toStringAsFixed(0)
-            : quantity.toString(),
-      );
+  _ComponentDraft({
+    required String label,
+    required num quantity,
+    required this.unit,
+  }) : labelController = TextEditingController(text: label),
+       quantityController = TextEditingController(
+         text: quantity == quantity.roundToDouble()
+             ? quantity.toStringAsFixed(0)
+             : quantity.toString(),
+       );
 
   void dispose() {
     labelController.dispose();
@@ -94,6 +97,19 @@ class _EditComponentsSheetState extends State<EditComponentsSheet> {
     setState(
       () => _drafts.add(_ComponentDraft(label: '', quantity: 1, unit: 'g')),
     );
+    // Scroll the new part into view once the list has actually laid it out
+    // (right after setState the ListView hasn't rebuilt yet, so the scroll
+    // extent wouldn't include the new row) - otherwise it's added off the
+    // bottom of the visible area and the dietician has to go hunting for
+    // it before they can even tap into it.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !widget.scrollController.hasClients) return;
+      widget.scrollController.animateTo(
+        widget.scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    });
   }
 
   void _removeComponent(int index) {
@@ -110,46 +126,61 @@ class _EditComponentsSheetState extends State<EditComponentsSheet> {
     final selected = await showModalBottomSheet<String>(
       context: context,
       backgroundColor: Colors.white,
+      // Without this, the sheet is capped at the framework's default
+      // (~half the screen) regardless of content, which is what was
+      // clipping the last couple of units off the bottom - the 10-unit
+      // list plus header genuinely doesn't fit in that on most phones.
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) {
         return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(height: 10),
-              Container(
-                width: 32,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: const Color(0xff79747E),
-                  borderRadius: BorderRadius.circular(100),
-                ),
-              ),
-              const SizedBox(height: 12),
-              const CustomText(
-                text: 'Choose a unit',
-                fontWeight: FontWeight.w500,
-                fontSize: 16,
-                color: Color(0xff1F2A37),
-              ),
-              const SizedBox(height: 8),
-              for (final u in _componentUnits)
-                ListTile(
-                  title: CustomText(
-                    text: u,
-                    fontWeight: FontWeight.w400,
-                    fontSize: 15,
-                    color: const Color(0xff384250),
+          // Bounded + scrollable rather than a plain min-size Column, so
+          // this never hard-overflows regardless of screen height or how
+          // many units are ever added to the list in the future.
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(ctx).size.height * 0.7,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SizedBox(height: 10),
+                  Container(
+                    width: 32,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: const Color(0xff79747E),
+                      borderRadius: BorderRadius.circular(100),
+                    ),
                   ),
-                  trailing: _drafts[index].unit == u
-                      ? const Icon(Icons.check, color: Color(0xff851653))
-                      : null,
-                  onTap: () => Navigator.pop(ctx, u),
-                ),
-              const SizedBox(height: 8),
-            ],
+                  const SizedBox(height: 12),
+                  const CustomText(
+                    text: 'Choose a unit',
+                    fontWeight: FontWeight.w500,
+                    fontSize: 16,
+                    color: Color(0xff1F2A37),
+                  ),
+                  const SizedBox(height: 8),
+                  for (final u in _componentUnits)
+                    ListTile(
+                      title: CustomText(
+                        text: u,
+                        fontWeight: FontWeight.w400,
+                        fontSize: 15,
+                        color: const Color(0xff384250),
+                      ),
+                      trailing: _drafts[index].unit == u
+                          ? const Icon(Icons.check, color: Color(0xff851653))
+                          : null,
+                      onTap: () => Navigator.pop(ctx, u),
+                    ),
+                  const SizedBox(height: 8),
+                ],
+              ),
+            ),
           ),
         );
       },
@@ -175,191 +206,215 @@ class _EditComponentsSheetState extends State<EditComponentsSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        // Drag handle
-        Center(
-          child: Container(
-            width: 32,
-            height: 4,
-            margin: const EdgeInsets.only(bottom: 10, top: 10),
-            decoration: BoxDecoration(
-              color: const Color(0xff79747E),
-              borderRadius: BorderRadius.circular(100),
+    // This sheet is a plain Column (no Scaffold) inside a DraggableScroll-
+    // ableSheet locked to full height (see recipe_details.dart's
+    // _openEditComponentsSheet) - none of that reacts to the keyboard on
+    // its own the way Scaffold(resizeToAvoidBottomInset: true) would, so a
+    // focused field's own built-in "scroll me into view" behavior had
+    // nothing to scroll within once the keyboard opened, and the Save
+    // button just sat pinned underneath it. Replicating that resize
+    // manually here - as the keyboard rises, this bottom padding grows,
+    // the Expanded ListView below shrinks to make room, and a focused
+    // TextField's default Scrollable.ensureVisible then has real space to
+    // scroll it into.
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: Column(
+        children: [
+          // Drag handle
+          Center(
+            child: Container(
+              width: 32,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 10, top: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xff79747E),
+                borderRadius: BorderRadius.circular(100),
+              ),
             ),
           ),
-        ),
 
-        // Header
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 13),
-          child: Row(
-            children: [
-              IconButton(
-                onPressed: () => Get.back(),
-                icon: const Icon(Icons.arrow_back, color: Color(0xff1F2A37)),
-              ),
-              const SizedBox(width: 8),
-              const CustomText(
-                text: 'Edit Portions',
-                fontWeight: FontWeight.w400,
-                fontSize: 19,
-                color: Color(0xff1F2A37),
-              ),
-            ],
-          ),
-        ),
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 16),
-          child: CustomText(
-            text:
-                'Break this dish into the real parts a patient would recognize '
-                'and count - e.g. Idli (nos), Sambar (bowl), Chutney (tbsp) - '
-                'instead of one gram total. A simple dish just needs one part.',
-            fontWeight: FontWeight.w400,
-            fontSize: 12.5,
-            color: Color(0xff6C737F),
-          ),
-        ),
-        const SizedBox(height: 8),
-        const Divider(color: Color(0xff9DA4AE)),
-
-        // Scrollable list of component rows
-        Expanded(
-          child: ListView.builder(
-            controller: widget.scrollController,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            itemCount: _drafts.length,
-            itemBuilder: (context, index) {
-              final draft = _drafts[index];
-              return Container(
-                margin: const EdgeInsets.only(bottom: 14),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: const Color(0xffFEF6FB),
-                  border: Border.all(color: const Color(0xffFDF2FA)),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: CustomText(
-                            text: 'Part ${index + 1}',
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13,
-                            color: const Color(0xff851653),
-                          ),
-                        ),
-                        if (_drafts.length > 1)
-                          GestureDetector(
-                            onTap: () => _removeComponent(index),
-                            child: const Icon(
-                              Icons.delete_outline,
-                              size: 20,
-                              color: Color(0xff98A2B3),
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    CustomField(
-                      controller: draft.labelController,
-                      lable: 'Name (e.g. Idli, Sambar, Chutney)',
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: CustomField(
-                            controller: draft.quantityController,
-                            lable: 'Quantity',
-                            keyboardType:
-                                const TextInputType.numberWithOptions(
-                                  decimal: true,
-                                ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: () => _pickUnit(index),
-                            child: InputDecorator(
-                              decoration: InputDecoration(
-                                labelText: 'Unit',
-                                labelStyle: const TextStyle(
-                                  color: Color(0xff6C737F),
-                                  fontSize: 13,
-                                ),
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 14,
-                                ),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                  borderSide: const BorderSide(
-                                    color: Color(0xffD0D5DD),
-                                  ),
-                                ),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                              ),
-                              child: Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  CustomText(
-                                    text: draft.unit,
-                                    fontWeight: FontWeight.w500,
-                                    fontSize: 14,
-                                    color: const Color(0xff384250),
-                                  ),
-                                  const Icon(
-                                    Icons.arrow_drop_down,
-                                    color: Color(0xff6C737F),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-        ),
-
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: GestureDetector(
-            onTap: _addComponent,
+          // Header
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 13),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: const [
-                Icon(Icons.add_circle_outline, color: Color(0xff851653)),
-                SizedBox(width: 6),
-                CustomText(
-                  text: 'Add another part',
-                  fontWeight: FontWeight.w500,
-                  fontSize: 14,
-                  color: Color(0xff851653),
+              children: [
+                IconButton(
+                  onPressed: () => Get.back(),
+                  icon: const Icon(Icons.arrow_back, color: Color(0xff1F2A37)),
+                ),
+                const SizedBox(width: 8),
+                const CustomText(
+                  text: 'Edit Portions',
+                  fontWeight: FontWeight.w400,
+                  fontSize: 19,
+                  color: Color(0xff1F2A37),
                 ),
               ],
             ),
           ),
-        ),
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: CustomButton(onTap: _save, text: 'Save Portions', isOutline: false),
-        ),
-      ],
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            child: CustomText(
+              text:
+                  'Break this dish into the real parts a patient would recognize '
+                  'and count - e.g. Idli (nos), Sambar (bowl), Chutney (tbsp) - '
+                  'instead of one gram total. A simple dish just needs one part.',
+              fontWeight: FontWeight.w400,
+              fontSize: 12.5,
+              color: Color(0xff6C737F),
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Divider(color: Color(0xff9DA4AE)),
+
+          // Scrollable list of component rows
+          Expanded(
+            child: ListView.builder(
+              controller: widget.scrollController,
+              // Extra bottom margin (beyond the usual vertical:12) so the
+              // last part's fields - especially a just-added one - have
+              // real breathing room to scroll up into once the keyboard
+              // opens, instead of landing flush against its edge.
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
+              itemCount: _drafts.length,
+              itemBuilder: (context, index) {
+                final draft = _drafts[index];
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 14),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xffFEF6FB),
+                    border: Border.all(color: const Color(0xffFDF2FA)),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: CustomText(
+                              text: 'Part ${index + 1}',
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                              color: const Color(0xff851653),
+                            ),
+                          ),
+                          if (_drafts.length > 1)
+                            GestureDetector(
+                              onTap: () => _removeComponent(index),
+                              child: const Icon(
+                                Icons.delete_outline,
+                                size: 20,
+                                color: Color(0xff98A2B3),
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      CustomField(
+                        controller: draft.labelController,
+                        lable: 'Name (e.g. Idli, Sambar, Chutney)',
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: CustomField(
+                              controller: draft.quantityController,
+                              lable: 'Quantity',
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () => _pickUnit(index),
+                              child: InputDecorator(
+                                decoration: InputDecoration(
+                                  labelText: 'Unit',
+                                  labelStyle: const TextStyle(
+                                    color: Color(0xff6C737F),
+                                    fontSize: 13,
+                                  ),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 14,
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                    borderSide: const BorderSide(
+                                      color: Color(0xffD0D5DD),
+                                    ),
+                                  ),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    CustomText(
+                                      text: draft.unit,
+                                      fontWeight: FontWeight.w500,
+                                      fontSize: 14,
+                                      color: const Color(0xff384250),
+                                    ),
+                                    const Icon(
+                                      Icons.arrow_drop_down,
+                                      color: Color(0xff6C737F),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: GestureDetector(
+              onTap: _addComponent,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: const [
+                  Icon(Icons.add_circle_outline, color: Color(0xff851653)),
+                  SizedBox(width: 6),
+                  CustomText(
+                    text: 'Add another part',
+                    fontWeight: FontWeight.w500,
+                    fontSize: 14,
+                    color: Color(0xff851653),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: CustomButton(
+              onTap: _save,
+              text: 'Save Portions',
+              isOutline: false,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -22,13 +22,13 @@ class _ClintLogDataSheetState extends State<ClintLogDataSheet> {
   int _selectedServingIndex = 0;
 
   static const List<String> _servingTimes = [
-    'Breakfast',
     'Morning Drink',
-    'Lunch',
+    'Breakfast',
     'Brunch',
     'Morning Snack',
-    'Dinner',
+    'Lunch',
     'Evening Snack',
+    'Dinner',
     'Night Drink',
   ];
 

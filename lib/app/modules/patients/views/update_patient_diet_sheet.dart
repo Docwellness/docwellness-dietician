@@ -189,22 +189,22 @@ class _SelectDietSheetState extends State<UpdatePatientDietSheet> {
                         ),
 
                         tabs: const [
-                          Tab(text: "Breakfast"),
                           Tab(text: "Morning Drink"),
-                          Tab(text: "Lunch"),
+                          Tab(text: "Breakfast"),
                           Tab(text: "Brunch"),
-                          Tab(text: "Dinner"),
+                          Tab(text: "Lunch"),
                           Tab(text: "Evening Snacks"),
+                          Tab(text: "Dinner"),
                           Tab(text: "Night Drink"),
                         ],
                         onTap: (index) {
                           final shifts = [
-                            "Breakfast",
                             "Morning Drink",
-                            "Lunch",
+                            "Breakfast",
                             "Brunch",
-                            "Dinner",
+                            "Lunch",
                             "Evening Snack",
+                            "Dinner",
                             "Night Drink",
                           ];
 

@@ -154,9 +154,15 @@ class RecipePreview {
     );
   }
 
-  /// Returns a copy with [components] overridden - used by
-  /// EditComponentsSheet to write back the dietician's edits.
-  RecipePreview copyWithComponents(List<RecipeComponent> newComponents) {
+  /// Returns a copy with [components] and [nutrition] both overridden -
+  /// used by EditComponentsSheet to write back the dietician's edits,
+  /// together with a recomputed nutrition so calories/macros don't stay
+  /// frozen at whatever the AI originally generated once a part's quantity
+  /// changes - see [scaleNutritionForComponentEdit].
+  RecipePreview copyWithComponentsAndNutrition(
+    List<RecipeComponent> newComponents,
+    Nutrition newNutrition,
+  ) {
     return RecipePreview(
       id: id,
       name: name,
@@ -172,13 +178,50 @@ class RecipePreview {
       freeFrom: freeFrom,
       ingredients: ingredients,
       servingSize: servingSize,
-      nutrition: nutrition,
+      nutrition: newNutrition,
       cookingSteps: cookingSteps,
       warnings: warnings,
       languages: languages,
       translations: translations,
       supplementFacts: supplementFacts,
       components: newComponents,
+    );
+  }
+
+  /// Scales [nutrition] by how much each component's quantity changed,
+  /// without any AI call - deterministic and instant. Mirrors the same
+  /// approximation already used diet-plan-side to scale a recipe's
+  /// nutrition for a dietician's servings adjustment (see
+  /// PatientsController._nutritionScaleRatio / weekNutritionSummary.js's
+  /// computeMealRatio): the scale factor is the average, across every
+  /// component present both before and after the edit, of (new quantity /
+  /// old quantity) - e.g. doubling just the Idli count in a 3-part dish
+  /// nudges calories up by roughly a third, not the full 2x, since Sambar
+  /// and Chutney didn't change. A newly-added part (no "before" quantity
+  /// to compare against) doesn't contribute a ratio - there's nothing to
+  /// scale for it, only existing parts being adjusted moves the number.
+  /// Never fabricates precision the ingredient list doesn't have, same
+  /// honesty tradeoff as the diet-plan-side version.
+  static Nutrition scaleNutritionForComponentEdit({
+    required List<RecipeComponent> oldComponents,
+    required List<RecipeComponent> newComponents,
+    required Nutrition baseNutrition,
+  }) {
+    final ratios = <num>[];
+    for (var i = 0; i < newComponents.length && i < oldComponents.length; i++) {
+      final oldQty = oldComponents[i].quantity;
+      if (oldQty <= 0) continue;
+      ratios.add(newComponents[i].quantity / oldQty);
+    }
+    if (ratios.isEmpty) return baseNutrition;
+    final scale = ratios.reduce((a, b) => a + b) / ratios.length;
+    num scaled(num? value) => value == null ? 0 : value * scale;
+    return Nutrition(
+      calories: scaled(baseNutrition.calories),
+      protein: scaled(baseNutrition.protein),
+      carbs: scaled(baseNutrition.carbs),
+      fats: scaled(baseNutrition.fats),
+      fiber: scaled(baseNutrition.fiber),
     );
   }
 

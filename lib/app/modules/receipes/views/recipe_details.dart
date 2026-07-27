@@ -254,14 +254,31 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
               scrollController: scrollCtrl,
               initialComponents: recipe!.components,
               onSaved: (components) {
+                // Captured before setState reassigns _editableRecipe, so
+                // these are genuinely the pre-edit values to scale from -
+                // see RecipePreview.scaleNutritionForComponentEdit.
+                final oldComponents = recipe!.components;
+                final baseNutrition = recipe!.nutrition;
+                final scaledNutrition =
+                    RecipePreview.scaleNutritionForComponentEdit(
+                      oldComponents: oldComponents,
+                      newComponents: components,
+                      baseNutrition: baseNutrition,
+                    );
                 setState(() {
-                  _editableRecipe = recipe!.copyWithComponents(components);
+                  _editableRecipe = recipe!.copyWithComponentsAndNutrition(
+                    components,
+                    scaledNutrition,
+                  );
                 });
                 if (widget.fromAddRecipeScreen) {
                   // Keep the shared controller's copy in sync too, since
                   // "Add to Database" reads generatedRecipe.value, not
                   // _editableRecipe (see saveRecipe in receipes_controller).
-                  Get.find<ReceipesController>().updateComponents(components);
+                  Get.find<ReceipesController>().updateComponentsAndNutrition(
+                    components,
+                    scaledNutrition,
+                  );
                 }
               },
             );
