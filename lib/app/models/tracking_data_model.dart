@@ -1,6 +1,13 @@
 /// Model for patient tracking data (calorie intake, weight trend, BMI)
 class TrackingData {
-  final String period;
+  final String granularity;
+  final DateTime? planStartDate;
+  // The actual [start, end] this response was computed for, after the
+  // server clamped whatever was requested to [planStartDate, today] -
+  // authoritative, so the UI's range picker should mirror this back rather
+  // than trusting whatever it originally asked for.
+  final DateTime? appliedStartDate;
+  final DateTime? appliedEndDate;
   final DateRangeLabel dateRange;
   final int currentIndex;
   final double currentWeight;
@@ -12,7 +19,10 @@ class TrackingData {
   final List<BmiDataPoint> bmiTrend;
 
   TrackingData({
-    required this.period,
+    required this.granularity,
+    this.planStartDate,
+    this.appliedStartDate,
+    this.appliedEndDate,
     required this.dateRange,
     required this.currentIndex,
     required this.currentWeight,
@@ -26,7 +36,16 @@ class TrackingData {
 
   factory TrackingData.fromJson(Map<String, dynamic> json) {
     return TrackingData(
-      period: json['period'] ?? 'week',
+      granularity: json['granularity'] ?? 'daily',
+      planStartDate: json['planStartDate'] != null
+          ? DateTime.tryParse(json['planStartDate'].toString())
+          : null,
+      appliedStartDate: json['startDate'] != null
+          ? DateTime.tryParse(json['startDate'].toString())
+          : null,
+      appliedEndDate: json['endDate'] != null
+          ? DateTime.tryParse(json['endDate'].toString())
+          : null,
       dateRange: DateRangeLabel.fromJson(json['dateRange'] ?? {}),
       currentIndex: json['currentIndex'] ?? 0,
       currentWeight: (json['currentWeight'] ?? 0).toDouble(),

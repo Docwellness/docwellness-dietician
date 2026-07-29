@@ -1,4 +1,5 @@
 import 'package:docwellnesdoc/app/models/tracking_data_model.dart';
+import 'package:docwellnesdoc/app/modules/patients/widgets/date_range_selector_button.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
@@ -6,16 +7,22 @@ import 'package:flutter/material.dart';
 class BmiChart extends StatelessWidget {
   final List<BmiDataPoint> bmiData;
   final double currentBmi;
-  final String selectedPeriod;
-  final ValueChanged<String> onPeriodChanged;
+  final DateTime rangeStart;
+  final DateTime rangeEnd;
+  final DateTime firstSelectableDate;
+  final DateTime lastSelectableDate;
+  final ValueChanged<DateTimeRange> onRangeSelected;
   final int currentIndex;
 
   const BmiChart({
     super.key,
     required this.bmiData,
     required this.currentBmi,
-    required this.selectedPeriod,
-    required this.onPeriodChanged,
+    required this.rangeStart,
+    required this.rangeEnd,
+    required this.firstSelectableDate,
+    required this.lastSelectableDate,
+    required this.onRangeSelected,
     this.currentIndex = -1,
   });
 
@@ -109,12 +116,12 @@ class BmiChart extends StatelessWidget {
               Spacer(),
               Padding(
                 padding: const EdgeInsets.only(bottom: 10),
-                child: TimePeriodDropdown(
-                  selectedPeriod: selectedPeriod,
-                  onChanged: onPeriodChanged,
-                  // BMI is derived from the weight log - a week-over-week
-                  // view isn't meaningful, so only offer month/year.
-                  periods: const ['month', 'year'],
+                child: DateRangeSelectorButton(
+                  selectedStart: rangeStart,
+                  selectedEnd: rangeEnd,
+                  firstDate: firstSelectableDate,
+                  lastDate: lastSelectableDate,
+                  onRangeSelected: onRangeSelected,
                 ),
               ),
             ],
@@ -275,80 +282,5 @@ class BmiChart extends StatelessWidget {
     if (raw <= 25) return 25;
     if (raw <= 50) return 50;
     return (raw / 10).ceilToDouble() * 10;
-  }
-}
-
-/// Time period dropdown widget (reusable)
-class TimePeriodDropdown extends StatelessWidget {
-  final String selectedPeriod;
-  final ValueChanged<String> onChanged;
-  // Which period options this instance offers - defaults to all three.
-  // Charts derived from the weight log (BMI, weight trend) only offer
-  // month/year, since a week-over-week view isn't meaningful for those.
-  final List<String> periods;
-
-  const TimePeriodDropdown({
-    super.key,
-    required this.selectedPeriod,
-    required this.onChanged,
-    this.periods = const ['week', 'month', 'year'],
-  });
-
-  static String _labelFor(String period) {
-    switch (period) {
-      case 'week':
-        return 'This week';
-      case 'month':
-        return 'This month';
-      case 'year':
-        return 'This year';
-      default:
-        return period;
-    }
-  }
-
-  String get _displayText => _labelFor(selectedPeriod);
-
-  @override
-  Widget build(BuildContext context) {
-    return PopupMenuButton<String>(
-      onSelected: onChanged,
-      offset: const Offset(0, 35),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      child: Container(
-        height: 32,
-        padding: const EdgeInsets.symmetric(horizontal: 10),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
-          color: Colors.white,
-          border: Border.all(color: Color(0xffE5E7EB)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Image.asset(
-              'assets/icons/petient_calendar.png',
-              height: 15.4,
-              width: 14,
-              color: Color(0xff111927),
-              fit: BoxFit.contain,
-              colorBlendMode: BlendMode.srcIn,
-            ),
-            SizedBox(width: 5),
-            CustomText(
-              text: _displayText,
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: Color(0xff111927),
-            ),
-            SizedBox(width: 4),
-            Icon(Icons.keyboard_arrow_down, size: 14, color: Color(0xff111927)),
-          ],
-        ),
-      ),
-      itemBuilder: (context) => periods
-          .map((p) => PopupMenuItem(value: p, child: Text(_labelFor(p))))
-          .toList(),
-    );
   }
 }

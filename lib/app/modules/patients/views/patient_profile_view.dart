@@ -14,6 +14,7 @@ import 'package:docwellnesdoc/app/modules/patients/views/questions_view.dart';
 import 'package:docwellnesdoc/app/modules/patients/widgets/bmi_and_body_fat_container.dart';
 import 'package:docwellnesdoc/app/modules/patients/widgets/bmi_card.dart';
 import 'package:docwellnesdoc/app/modules/patients/widgets/calorie_intake_container.dart';
+import 'package:docwellnesdoc/app/modules/patients/widgets/date_range_selector_button.dart';
 import 'package:docwellnesdoc/app/modules/patients/widgets/line_chart.dart';
 import 'package:docwellnesdoc/app/modules/patients/widgets/show_diet_level_sheet.dart';
 import 'package:docwellnesdoc/app/routes/app_pages.dart';
@@ -63,6 +64,14 @@ class _PatientProfileViewState extends State<PatientProfileView> {
     _stopAutoRefresh();
     super.dispose();
   }
+
+  /// Earliest date any chart's date-range picker allows - the patient's
+  /// diet plan's real start date (see PatientsController.dietStartDate,
+  /// populated from the tracking-data endpoint's weekSchedule-anchored
+  /// planStartDate). Falls back to today only in the brief window before
+  /// the first tracking-data response has come back.
+  DateTime _firstSelectableDate() =>
+      controller.dietStartDate.value ?? DateTime.now();
 
   void _startAutoRefresh() {
     _autoRefreshTimer?.cancel();
@@ -1804,16 +1813,22 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                               color: Color(0xff4D5761),
                             ),
                           ),
-                          Obx(
-                            () => TimePeriodDropdown(
-                              selectedPeriod: controller.caloriePeriod.value,
-                              onChanged: (period) =>
-                                  controller.changeCaloriePeriod(
+                          Obx(() {
+                            final now = DateTime.now();
+                            return DateRangeSelectorButton(
+                              selectedStart:
+                                  controller.calorieRangeStart.value ?? now,
+                              selectedEnd:
+                                  controller.calorieRangeEnd.value ?? now,
+                              firstDate: _firstSelectableDate(),
+                              lastDate: now,
+                              onRangeSelected: (range) =>
+                                  controller.changeCalorieRange(
                                     widget.patientId,
-                                    period,
+                                    range,
                                   ),
-                            ),
-                          ),
+                            );
+                          }),
                         ],
                       ),
                       SizedBox(height: 18),
@@ -1885,20 +1900,19 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                     ),
                   ),
 
-                  Obx(
-                    () => TimePeriodDropdown(
-                      selectedPeriod: controller.weightPeriod.value,
-                      onChanged: (period) =>
-                          controller.changeWeightPeriod(
-                            widget.patientId,
-                            period,
-                          ),
-                      // Weight trend is derived from the weight log - a
-                      // week-over-week view isn't meaningful, so only
-                      // offer month/year.
-                      periods: const ['month', 'year'],
-                    ),
-                  ),
+                  Obx(() {
+                    final now = DateTime.now();
+                    return DateRangeSelectorButton(
+                      selectedStart: controller.weightRangeStart.value ?? now,
+                      selectedEnd: controller.weightRangeEnd.value ?? now,
+                      firstDate: _firstSelectableDate(),
+                      lastDate: now,
+                      onRangeSelected: (range) => controller.changeWeightRange(
+                        widget.patientId,
+                        range,
+                      ),
+                    );
+                  }),
                 ],
               ),
             ),
@@ -1929,12 +1943,16 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                 if (td == null || td.bmiTrend.isEmpty) {
                   return SizedBox.shrink();
                 }
+                final now = DateTime.now();
                 return BmiChart(
                   bmiData: td.bmiTrend,
                   currentBmi: td.currentBmi,
-                  selectedPeriod: controller.bmiPeriod.value,
-                  onPeriodChanged: (period) =>
-                      controller.changeBmiPeriod(widget.patientId, period),
+                  rangeStart: controller.bmiRangeStart.value ?? now,
+                  rangeEnd: controller.bmiRangeEnd.value ?? now,
+                  firstSelectableDate: _firstSelectableDate(),
+                  lastSelectableDate: now,
+                  onRangeSelected: (range) =>
+                      controller.changeBmiRange(widget.patientId, range),
                   currentIndex: td.currentIndex,
                 );
               }),

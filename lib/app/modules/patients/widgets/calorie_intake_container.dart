@@ -1,7 +1,16 @@
 import 'package:docwellnesdoc/app/models/tracking_data_model.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
+/// Calorie intake bars - built on fl_chart's BarChart (same as BmiChart in
+/// this folder), so tapping a bar shows its value in the same default
+/// tooltip bubble BMI already has, instead of being untappable. The whole
+/// chart (bars + its own left-axis scale) lives in one horizontally-
+/// scrolling area, same structure as BmiChart - that also fixes bars
+/// sitting centered instead of left-anchored when there are only one or
+/// two of them (the old Row(mainAxisAlignment: spaceEvenly) stretched a
+/// handful of bars across the full available width instead).
 class CalorieIntakeContainer extends StatelessWidget {
   final List<CalorieDataPoint> data;
   final int plannedCalories;
@@ -14,9 +23,13 @@ class CalorieIntakeContainer extends StatelessWidget {
     this.currentIndex = -1,
   });
 
+  static const Color _consumedColor = Color(0xff4FEE7C);
+  static const Color _remainingColor = Color(0xffFCCEEF);
+  static const Color _overColor = Color(0xffFF3D3D);
+  static const Color _noDataColor = Color(0x80FCCEEF);
+
   @override
   Widget build(BuildContext context) {
-    // Normalize: bar height based on max of (consumed, planned)
     final maxCalories = data.fold<int>(plannedCalories, (prev, point) {
       final maxVal = point.calories > point.plannedCalories
           ? point.calories
@@ -24,229 +37,184 @@ class CalorieIntakeContainer extends StatelessWidget {
       return maxVal > prev ? maxVal : prev;
     });
     final effectiveMax = maxCalories > 0 ? maxCalories : 1;
-
-    double barTotalHeight = 160;
-
-    // Scale labels (4 ticks)
-    final scaleStep = (effectiveMax / 4).ceil();
-    final scaleLabels = List.generate(
-      5,
-      (i) => ((4 - i) * scaleStep).toString(),
-    );
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // LEFT SCALE
-            SizedBox(
-              height: 170,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: scaleLabels
-                    .map((label) => _ScaleText(label))
-                    .toList(),
-              ),
-            ),
-
-            const SizedBox(width: 20),
-
-            // BARS - spread evenly across the full available width instead
-            // of being packed left inside a scroll view, which left a large
-            // empty gap on the right for low bar-counts like "This week".
-            Expanded(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: List.generate(data.length, (index) {
-                  final point = data[index];
-                  // Determine bar color based on calorie comparison
-                  // Green = on track or under, Red = over planned
-                  final isOverPlanned = point.calories > point.plannedCalories;
-                  final hasData = point.calories > 0;
-
-                  return Column(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      _CalorieBar(
-                        consumed: point.calories,
-                        planned: point.plannedCalories,
-                        maxValue: effectiveMax,
-                        width: 8,
-                        totalHeight: barTotalHeight,
-                        isOverPlanned: isOverPlanned,
-                        hasData: hasData,
-                      ),
-                      const SizedBox(height: 8),
-                      CustomText(
-                        text: point.label,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w400,
-                        color:
-                            (currentIndex >= 0
-                                ? index == currentIndex
-                                : index == 0)
-                            ? const Color(0xffF670CA)
-                            : const Color(0xff94A3B8),
-                      ),
-                    ],
-                  );
-                }),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-// SCALE TEXT
-class _ScaleText extends StatelessWidget {
-  final String text;
-  const _ScaleText(this.text);
-
-  @override
-  Widget build(BuildContext context) {
-    return CustomText(
-      text: text,
-      color: Color(0xffF670CA),
-      fontSize: 10,
-      fontWeight: FontWeight.w400,
-    );
-  }
-}
-
-// CALORIE BAR WIDGET
-class _CalorieBar extends StatelessWidget {
-  final int consumed;
-  final int planned;
-  final int maxValue;
-  final double totalHeight;
-  final double width;
-  final bool isOverPlanned;
-  final bool hasData;
-
-  const _CalorieBar({
-    required this.consumed,
-    required this.planned,
-    required this.maxValue,
-    required this.totalHeight,
-    required this.width,
-    required this.isOverPlanned,
-    required this.hasData,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    if (!hasData) {
-      // No data - show faded bar at 10% height
-      final emptyHeight = totalHeight * 0.1;
-      return SizedBox(
-        height: totalHeight,
-        child: Column(
-          children: [
-            Expanded(child: SizedBox()),
-            Container(
-              height: emptyHeight,
-              width: width,
-              decoration: BoxDecoration(
-                color: const Color(0xffFCCEEF).withOpacity(0.5),
-                borderRadius: BorderRadius.circular(40),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    final consumedRatio = (consumed / maxValue).clamp(0.0, 1.0);
-
-    final consumedHeight = consumedRatio * (totalHeight - 8);
-
-    // Over-planned part (red) and on-track part (green)
-    if (isOverPlanned) {
-      final overAmount = consumed - planned;
-      final overRatio = (overAmount / maxValue).clamp(0.0, 1.0);
-      final overHeight = overRatio * (totalHeight - 8);
-      final onTrackHeight = consumedHeight - overHeight;
-
-      return SizedBox(
-        height: totalHeight,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            // Over part (red gradient)
-            Container(
-              height: overHeight,
-              width: width,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.vertical(top: Radius.circular(40)),
-                gradient: const LinearGradient(
-                  colors: [Color(0xffFF3D3D), Color(0xffFFC3C3)],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                ),
-              ),
-            ),
-            const SizedBox(height: 4),
-            // On-track part (green gradient)
-            Container(
-              height: onTrackHeight,
-              width: width,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.vertical(
-                  bottom: Radius.circular(40),
-                ),
-                gradient: const LinearGradient(
-                  colors: [Color(0xff4FEE7C), Color(0xffCFFFCF)],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    // Under or at planned (just green + pink planned indicator)
-    final remainingRatio = ((planned - consumed) / maxValue).clamp(0.0, 1.0);
-    final remainingHeight = remainingRatio * (totalHeight - 8);
+    final scaleStep = (effectiveMax / 4).ceil().clamp(1, effectiveMax);
+    final chartMax = (scaleStep * 4).toDouble();
 
     return SizedBox(
-      height: totalHeight,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          // Remaining planned (light pink)
-          Container(
-            height: remainingHeight,
-            width: width,
-            decoration: BoxDecoration(
-              color: const Color(0xffFCCEEF),
-              borderRadius: BorderRadius.vertical(top: Radius.circular(40)),
-            ),
-          ),
-          const SizedBox(height: 4),
-          // Consumed part (green gradient)
-          Container(
-            height: consumedHeight,
-            width: width,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.vertical(bottom: Radius.circular(40)),
-              gradient: const LinearGradient(
-                colors: [Color(0xff4FEE7C), Color(0xffCFFFCF)],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
+      height: 180,
+      // Without an explicit width, this shrinks to its (possibly narrow,
+      // single-bar) content and gets centered by whatever ambient Column
+      // wraps it in patient_profile_view.dart, instead of sitting flush
+      // against the left edge like the axis/bars should.
+      width: double.infinity,
+      child: data.isEmpty
+          ? const Center(
+              child: CustomText(
+                text: 'No calorie data',
+                fontSize: 12,
+                color: Color(0xff94A3B8),
+                fontWeight: FontWeight.w400,
+              ),
+            )
+          : SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: SizedBox(
+                width: data.length * 56,
+                child: BarChart(
+                  BarChartData(
+                    maxY: chartMax,
+                    minY: 0,
+                    alignment: BarChartAlignment.start,
+                    groupsSpace: 18,
+                    barTouchData: BarTouchData(
+                      enabled: true,
+                      touchTooltipData: BarTouchTooltipData(
+                        tooltipPadding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        tooltipMargin: 6,
+                        getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                          final point = data[groupIndex];
+                          return BarTooltipItem(
+                            '${point.calories} kcal',
+                            const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    gridData: FlGridData(
+                      show: true,
+                      drawVerticalLine: false,
+                      horizontalInterval: scaleStep.toDouble(),
+                      getDrawingHorizontalLine: (value) => const FlLine(
+                        color: Color(0xffFCE7F6),
+                        strokeWidth: 0.6,
+                        dashArray: [4, 4],
+                      ),
+                    ),
+                    borderData: FlBorderData(show: false),
+                    titlesData: FlTitlesData(
+                      leftTitles: AxisTitles(
+                        sideTitles: SideTitles(
+                          showTitles: true,
+                          interval: scaleStep.toDouble(),
+                          reservedSize: 36,
+                          getTitlesWidget: (value, meta) {
+                            return Padding(
+                              padding: const EdgeInsets.only(right: 4),
+                              child: CustomText(
+                                text: value.toInt().toString(),
+                                fontSize: 10,
+                                color: const Color(0xffF670CA),
+                                fontWeight: FontWeight.w400,
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      bottomTitles: AxisTitles(
+                        sideTitles: SideTitles(
+                          showTitles: true,
+                          interval: 1,
+                          getTitlesWidget: (value, meta) {
+                            final index = value.toInt();
+                            if (index < 0 || index >= data.length) {
+                              return const SizedBox.shrink();
+                            }
+                            final isHighlighted = currentIndex >= 0
+                                ? index == currentIndex
+                                : index == 0;
+                            return Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: CustomText(
+                                text: data[index].label,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w400,
+                                color: isHighlighted
+                                    ? const Color(0xffF670CA)
+                                    : const Color(0xff94A3B8),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      topTitles: const AxisTitles(),
+                      rightTitles: const AxisTitles(),
+                    ),
+                    barGroups: List.generate(data.length, (index) {
+                      final point = data[index];
+                      final hasData = point.calories > 0;
+                      final isOverPlanned = point.calories > point.plannedCalories;
+
+                      if (!hasData) {
+                        return BarChartGroupData(
+                          x: index,
+                          barRods: [
+                            BarChartRodData(
+                              toY: chartMax * 0.02,
+                              width: 10,
+                              borderRadius: BorderRadius.circular(20),
+                              color: _noDataColor,
+                            ),
+                          ],
+                        );
+                      }
+
+                      // Over-planned: bar height = actual consumed, with
+                      // the amount over plan stacked on top of the
+                      // on-plan portion. Under/at-planned: bar height =
+                      // the planned target, with how much was actually
+                      // consumed stacked below the remaining portion.
+                      final rodTop = isOverPlanned
+                          ? point.calories.toDouble()
+                          : point.plannedCalories.toDouble();
+                      final stackItems = isOverPlanned
+                          ? [
+                              BarChartRodStackItem(
+                                0,
+                                point.plannedCalories.toDouble(),
+                                _consumedColor,
+                              ),
+                              BarChartRodStackItem(
+                                point.plannedCalories.toDouble(),
+                                point.calories.toDouble(),
+                                _overColor,
+                              ),
+                            ]
+                          : [
+                              BarChartRodStackItem(
+                                0,
+                                point.calories.toDouble(),
+                                _consumedColor,
+                              ),
+                              BarChartRodStackItem(
+                                point.calories.toDouble(),
+                                point.plannedCalories.toDouble(),
+                                _remainingColor,
+                              ),
+                            ];
+
+                      return BarChartGroupData(
+                        x: index,
+                        barRods: [
+                          BarChartRodData(
+                            toY: rodTop,
+                            width: 10,
+                            borderRadius: BorderRadius.circular(20),
+                            rodStackItems: stackItems,
+                          ),
+                        ],
+                      );
+                    }),
+                  ),
+                ),
               ),
             ),
-          ),
-        ],
-      ),
     );
   }
 }

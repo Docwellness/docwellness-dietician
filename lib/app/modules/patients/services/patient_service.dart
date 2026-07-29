@@ -453,12 +453,20 @@ class PatientService {
   /// Fetch patient tracking data (calorie intake, weight trend, BMI)
   /// [period] can be 'week', 'month', or 'year'
   Future<dynamic> getPatientTrackingData(
-    String patientId,
-    String period,
-  ) async {
+    String patientId, {
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
     try {
+      String fmt(DateTime d) =>
+          '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+      final params = <String>[
+        if (startDate != null) 'startDate=${fmt(startDate)}',
+        if (endDate != null) 'endDate=${fmt(endDate)}',
+      ];
+      final query = params.isNotEmpty ? '?${params.join('&')}' : '';
       final response = await service.request(
-        endPoint: '/patients/$patientId/tracking-data?period=$period',
+        endPoint: '/patients/$patientId/tracking-data$query',
         method: 'GET',
         headers: {'Authorization': "Bearer $token"},
       );

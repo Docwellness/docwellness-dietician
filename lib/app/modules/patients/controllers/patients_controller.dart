@@ -215,18 +215,22 @@ class PatientsController extends GetxController {
   RxBool isProfileDeactivated = false.obs;
 
   // ===== Tracking Data (Charts) =====
-  // Each chart (Calorie Intake, Weight Trend, BMI) keeps its own period and
-  // fetches independently - Calorie Intake offers week/month/year, Weight
-  // Trend and BMI (both derived from the weight log) only offer month/year
-  // (see TimePeriodDropdown's `periods` param) - so changing one chart's
-  // period no longer changes the other two.
+  // Each chart (Calorie Intake, Weight Trend, BMI) keeps its own
+  // independently-selected date range and fetches independently - same
+  // model as the patient app's own Progress screen (ProgressController) -
+  // null until the first fetch for that chart resolves and reports back
+  // the actual [start, end] it applied (defaults to [dietStartDate, today]).
   Rx<TrackingData?> calorieTrackingData = Rx<TrackingData?>(null);
   Rx<TrackingData?> weightTrackingData = Rx<TrackingData?>(null);
   Rx<TrackingData?> bmiTrackingData = Rx<TrackingData?>(null);
   RxBool isTrackingLoading = false.obs;
-  RxString caloriePeriod = 'week'.obs;
-  RxString weightPeriod = 'month'.obs;
-  RxString bmiPeriod = 'month'.obs;
+  Rx<DateTime?> dietStartDate = Rx<DateTime?>(null);
+  Rx<DateTime?> calorieRangeStart = Rx<DateTime?>(null);
+  Rx<DateTime?> calorieRangeEnd = Rx<DateTime?>(null);
+  Rx<DateTime?> weightRangeStart = Rx<DateTime?>(null);
+  Rx<DateTime?> weightRangeEnd = Rx<DateTime?>(null);
+  Rx<DateTime?> bmiRangeStart = Rx<DateTime?>(null);
+  Rx<DateTime?> bmiRangeEnd = Rx<DateTime?>(null);
 
   // ===== Journey Images =====
   RxList<JourneyImageModel> journeyImages = <JourneyImageModel>[].obs;
@@ -1046,8 +1050,8 @@ class PatientsController extends GetxController {
   }
 
   /// Fetch calorie, weight, and BMI tracking data in parallel - each chart
-  /// keeps its own period, so this hits the shared tracking-data endpoint
-  /// once per chart with that chart's selected period.
+  /// keeps its own date range, so this hits the shared tracking-data
+  /// endpoint once per chart with that chart's selected range.
   Future<void> fetchAllTrackingData(String patientId) async {
     isTrackingLoading.value = true;
     try {
@@ -1065,10 +1069,17 @@ class PatientsController extends GetxController {
     try {
       final response = await service.getPatientTrackingData(
         patientId,
-        caloriePeriod.value,
+        startDate: calorieRangeStart.value,
+        endDate: calorieRangeEnd.value,
       );
       if (response != null && response['data'] != null) {
-        calorieTrackingData.value = TrackingData.fromJson(response['data']);
+        final tracking = TrackingData.fromJson(response['data']);
+        calorieTrackingData.value = tracking;
+        dietStartDate.value ??= tracking.planStartDate;
+        calorieRangeStart.value =
+            tracking.appliedStartDate ?? calorieRangeStart.value ?? DateTime.now();
+        calorieRangeEnd.value =
+            tracking.appliedEndDate ?? calorieRangeEnd.value ?? DateTime.now();
       }
     } catch (e) {
       debugPrint('fetchCalorieTrackingData error: $e');
@@ -1079,10 +1090,17 @@ class PatientsController extends GetxController {
     try {
       final response = await service.getPatientTrackingData(
         patientId,
-        weightPeriod.value,
+        startDate: weightRangeStart.value,
+        endDate: weightRangeEnd.value,
       );
       if (response != null && response['data'] != null) {
-        weightTrackingData.value = TrackingData.fromJson(response['data']);
+        final tracking = TrackingData.fromJson(response['data']);
+        weightTrackingData.value = tracking;
+        dietStartDate.value ??= tracking.planStartDate;
+        weightRangeStart.value =
+            tracking.appliedStartDate ?? weightRangeStart.value ?? DateTime.now();
+        weightRangeEnd.value =
+            tracking.appliedEndDate ?? weightRangeEnd.value ?? DateTime.now();
       }
     } catch (e) {
       debugPrint('fetchWeightTrackingData error: $e');
@@ -1093,28 +1111,38 @@ class PatientsController extends GetxController {
     try {
       final response = await service.getPatientTrackingData(
         patientId,
-        bmiPeriod.value,
+        startDate: bmiRangeStart.value,
+        endDate: bmiRangeEnd.value,
       );
       if (response != null && response['data'] != null) {
-        bmiTrackingData.value = TrackingData.fromJson(response['data']);
+        final tracking = TrackingData.fromJson(response['data']);
+        bmiTrackingData.value = tracking;
+        dietStartDate.value ??= tracking.planStartDate;
+        bmiRangeStart.value =
+            tracking.appliedStartDate ?? bmiRangeStart.value ?? DateTime.now();
+        bmiRangeEnd.value =
+            tracking.appliedEndDate ?? bmiRangeEnd.value ?? DateTime.now();
       }
     } catch (e) {
       debugPrint('fetchBmiTrackingData error: $e');
     }
   }
 
-  void changeCaloriePeriod(String patientId, String period) {
-    caloriePeriod.value = period;
+  void changeCalorieRange(String patientId, DateTimeRange range) {
+    calorieRangeStart.value = range.start;
+    calorieRangeEnd.value = range.end;
     fetchCalorieTrackingData(patientId);
   }
 
-  void changeWeightPeriod(String patientId, String period) {
-    weightPeriod.value = period;
+  void changeWeightRange(String patientId, DateTimeRange range) {
+    weightRangeStart.value = range.start;
+    weightRangeEnd.value = range.end;
     fetchWeightTrackingData(patientId);
   }
 
-  void changeBmiPeriod(String patientId, String period) {
-    bmiPeriod.value = period;
+  void changeBmiRange(String patientId, DateTimeRange range) {
+    bmiRangeStart.value = range.start;
+    bmiRangeEnd.value = range.end;
     fetchBmiTrackingData(patientId);
   }
 
