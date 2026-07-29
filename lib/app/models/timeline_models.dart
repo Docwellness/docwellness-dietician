@@ -10,6 +10,14 @@ enum MilestoneType { daily, weekly, monthly, endGoal }
 enum MilestoneStatus { completed, missed, active, upcoming }
 
 const Map<String, IconData> goalTaskIconMap = {
+  'morning_drink': Icons.local_cafe,
+  'breakfast': Icons.free_breakfast,
+  'brunch': Icons.brunch_dining,
+  'lunch': Icons.lunch_dining,
+  'evening_snack': Icons.cookie,
+  'dinner': Icons.dinner_dining,
+  'night_drink': Icons.nightlight_round,
+  'supplements': Icons.medication,
   'restaurant': Icons.restaurant_menu,
   'water_drop': Icons.water_drop,
   'walk': Icons.directions_walk,
@@ -25,6 +33,11 @@ class GoalTask {
   final String metric;
   final IconData icon;
   final bool done;
+  // See docwellness-user's timeline_models.dart's GoalTask.linked doc
+  // comment - true for a meal-linked task (done from the patient's real
+  // MealLog, not manually checked).
+  final bool linked;
+  final String? loggedNote;
 
   GoalTask({
     required this.id,
@@ -32,6 +45,8 @@ class GoalTask {
     required this.metric,
     required this.icon,
     required this.done,
+    this.linked = false,
+    this.loggedNote,
   });
 }
 

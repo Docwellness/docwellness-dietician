@@ -42,11 +42,10 @@ class PatientJourneyCard extends StatelessWidget {
 
           final goal = c.goal.value!;
           final stats = c.stats.value;
-          final last14 = c.milestones
-              .where((m) => m.type == MilestoneType.daily)
-              .where((m) => !m.date.isAfter(DateTime.now()))
-              .toList();
-          final recentWindow = last14.length > 14 ? last14.sublist(last14.length - 14) : last14;
+          final dailyMilestones =
+              c.milestones.where((m) => m.type == MilestoneType.daily).toList();
+          final todayIndex = dailyMilestones.indexWhere((m) => m.status == MilestoneStatus.active);
+          final recentWindow = _centeredWindow(dailyMilestones, todayIndex, 14);
 
           return GestureDetector(
             onTap: () => Get.to(
@@ -85,7 +84,7 @@ class PatientJourneyCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   CustomText(
-                    text: '${goal.title} · ${stats?.daysToGo ?? 0} days left',
+                    text: goal.title,
                     fontWeight: FontWeight.w400,
                     fontSize: 11.5,
                     color: const Color(0xff98A2AD),
@@ -108,6 +107,15 @@ class PatientJourneyCard extends StatelessWidget {
                         );
                       }).toList(),
                     ),
+                  if (stats != null) ...[
+                    const SizedBox(height: 6),
+                    CustomText(
+                      text: '${stats.daysElapsed} days completed · ${stats.daysToGo} days remaining',
+                      fontWeight: FontWeight.w500,
+                      fontSize: 10.5,
+                      color: const Color(0xff98A2AD),
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   Row(
                     children: [
@@ -196,4 +204,27 @@ class PatientJourneyCard extends StatelessWidget {
       builder: (_) => NudgeSheet(controller: c),
     );
   }
+}
+
+/// Same centered-window logic as docwellness-user's journey_card.dart -
+/// today's dot sits at the middle of the window as long as there's enough
+/// goal left on both sides, sliding right only once fewer than half the
+/// window's worth of future days remain.
+List<Milestone> _centeredWindow(List<Milestone> days, int todayIndex, int windowSize) {
+  if (days.isEmpty) return days;
+  final lastIndex = days.length - 1;
+  if (todayIndex < 0) {
+    final start = (days.length - windowSize).clamp(0, days.length);
+    return days.sublist(start);
+  }
+
+  final center = windowSize ~/ 2;
+  int start = todayIndex - center;
+  int end = start + windowSize - 1;
+  if (end > lastIndex) {
+    start -= (end - lastIndex);
+  }
+  if (start < 0) start = 0;
+  final clampedEnd = (start + windowSize - 1).clamp(0, lastIndex);
+  return days.sublist(start, clampedEnd + 1);
 }
