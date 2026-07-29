@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "69737284856",
+    "project_id": "docwellness-24fc0",
+    "storage_bucket": "docwellness-24fc0.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:69737284856:android:6fc369714dcee153fd270d",
+        "android_client_info": {
+          "package_name": "com.example.docwellnesdoc"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA4Qyzi6jqw0M_AtJOIquJOnulFSeuoHHk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:69737284856:android:8e3c874edaf6f5d6fd270d",
+        "android_client_info": {
+          "package_name": "com.example.docwellness"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA4Qyzi6jqw0M_AtJOIquJOnulFSeuoHHk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

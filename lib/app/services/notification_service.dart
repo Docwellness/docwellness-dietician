@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:docwellnesdoc/app/utils/functions/dio_function.dart';
+import 'package:docwellnesdoc/main.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
@@ -21,13 +23,29 @@ class NotificationService {
 
   NotificationService._internal();
 
-  final FirebaseMessaging _fcm = FirebaseMessaging.instance;
   final FlutterLocalNotificationsPlugin _localNotificationsPlugin =
       FlutterLocalNotificationsPlugin();
 
   Future<void> init() async {
+    // FirebaseMessaging.instance must never be touched before confirming a
+    // Firebase app actually exists - it throws '[core/no-app] No Firebase
+    // App has been created' when Firebase.initializeApp() hasn't succeeded
+    // (e.g. no google-services.json configured for this build yet). This
+    // exact bug (as an eager field initializer, evaluated at construction
+    // time before any guard could run) was caught and fixed in
+    // docwellness-user's equivalent PushNotificationService via a real
+    // device smoke test - fixed proactively here too, before it has a
+    // chance to bite whenever main.dart's enableFirebaseNotifications flag
+    // is turned on.
+    if (Firebase.apps.isEmpty) {
+      debugPrint('NotificationService: Firebase not initialized, push disabled');
+      return;
+    }
+
+    final fcm = FirebaseMessaging.instance;
+
     // 1. Request permissions for iOS and Android 13+
-    NotificationSettings settings = await _fcm.requestPermission(
+    NotificationSettings settings = await fcm.requestPermission(
       alert: true,
       announcement: false,
       badge: true,
@@ -41,14 +59,14 @@ class NotificationService {
     // 2. Initialize flutter_local_notifications
     const AndroidInitializationSettings initializationSettingsAndroid =
         AndroidInitializationSettings('@mipmap/ic_launcher');
-        
+
     const DarwinInitializationSettings initializationSettingsIOS =
         DarwinInitializationSettings(
       requestSoundPermission: true,
       requestBadgePermission: true,
       requestAlertPermission: true,
     );
-    
+
     const InitializationSettings initializationSettings = InitializationSettings(
       android: initializationSettingsAndroid,
       iOS: initializationSettingsIOS,
@@ -98,22 +116,32 @@ class NotificationService {
       // Handle navigation when app is opened from background state via notification
     });
 
-    // 5. Get the FCM Token
-    try {
-      String? token = await _fcm.getToken();
-      debugPrint('====================================');
-      debugPrint('FCM TOKEN: $token');
-      debugPrint('====================================');
-      // TODO: Send this token to your backend to save it for the user
-    } catch (e) {
-      debugPrint('Failed to get FCM token: $e');
-    }
+    // 5. Get the FCM Token and register it with the backend
+    // (POST /api/dietician/device-token - see deviceTokenController.js)
+    await _registerCurrentToken(fcm);
 
     // Listen for token refreshes
-    _fcm.onTokenRefresh.listen((String token) {
-      debugPrint('FCM TOKEN REFRESHED: $token');
-      // TODO: Send updated token to your backend
-    });
+    fcm.onTokenRefresh.listen((_) => _registerCurrentToken(fcm));
+  }
+
+  Future<void> _registerCurrentToken(FirebaseMessaging fcm) async {
+    try {
+      final fcmToken = await fcm.getToken();
+      if (fcmToken == null || fcmToken.isEmpty) return;
+      if (token == null || token!.isEmpty) return; // not logged in yet
+
+      debugPrint('FCM token obtained, registering with backend');
+      await ApiService().request(
+        endPoint: '/device-token',
+        method: 'POST',
+        data: {
+          'token': fcmToken,
+          'platform': Platform.isIOS ? 'ios' : 'android',
+        },
+      );
+    } catch (e) {
+      debugPrint('NotificationService: token registration failed (non-fatal): $e');
+    }
   }
 
   void _showLocalNotification(RemoteMessage message) {

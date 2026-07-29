@@ -5,6 +5,7 @@ import 'package:docwellnesdoc/app/models/patient_profile_model.dart';
 import 'package:docwellnesdoc/app/modules/chat/controllers/chat_controller.dart';
 import 'package:docwellnesdoc/app/modules/chat/services/service.dart';
 import 'package:docwellnesdoc/app/modules/chat/views/chat_screen.dart';
+import 'package:docwellnesdoc/app/modules/patient_journey/widgets/patient_journey_card.dart';
 import 'package:docwellnesdoc/app/modules/patients/controllers/patients_controller.dart';
 import 'package:docwellnesdoc/app/modules/patients/views/clint_log_data_sheet.dart';
 import 'package:docwellnesdoc/app/modules/patients/views/payment_status_view.dart';
@@ -1562,6 +1563,14 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                   },
                 ),
               ),
+            ),
+
+          // Goal Journey Timeline card - same gate as the Weekly Diet Plans
+          // section above (needs an active plan to have a goal to show).
+          if (status.firstConsultationId != null && status.activeDietPlanId != null)
+            PatientJourneyCard(
+              userId: widget.patientId,
+              patientName: controller.patientProfileModel.value?.basic?.fullName ?? 'this client',
             ),
 
           // Send Payment Request button — shown when diet plan exists but

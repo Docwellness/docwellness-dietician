@@ -56,6 +56,12 @@ class SocketService extends GetxService with WidgetsBindingObserver {
   final _mealLogController = StreamController<Map<String, dynamic>>.broadcast();
   final _notificationController =
       StreamController<Map<String, dynamic>>.broadcast();
+  // Goal Journey Timeline - live-refreshes PatientJourneyCard when a
+  // patient's adherence changes, without a manual pull-to-refresh. See
+  // docwellness-backend's controllers/patient/timelineController.js's
+  // check-in emit.
+  final _adherenceChangedController =
+      StreamController<Map<String, dynamic>>.broadcast();
 
   // Public streams
   Stream<Map<String, dynamic>> get onMessage => _messageController.stream;
@@ -65,6 +71,8 @@ class SocketService extends GetxService with WidgetsBindingObserver {
   Stream<Map<String, dynamic>> get onMealLogUpdate => _mealLogController.stream;
   Stream<Map<String, dynamic>> get onNotification =>
       _notificationController.stream;
+  Stream<Map<String, dynamic>> get onAdherenceChanged =>
+      _adherenceChangedController.stream;
 
   /// Initialize the socket service
   @override
@@ -275,6 +283,15 @@ class SocketService extends GetxService with WidgetsBindingObserver {
       log('🔔 New notification: $data');
       _notificationController.add(_toMap(data));
     });
+
+    // ==========================================
+    // Goal Journey Timeline Events
+    // ==========================================
+
+    _socket!.on('patient:adherence_changed', (data) {
+      log('🎯 Patient adherence changed: $data');
+      _adherenceChangedController.add(_toMap(data));
+    });
   }
 
   /// Helper to convert dynamic data to Map
@@ -392,6 +409,7 @@ class SocketService extends GetxService with WidgetsBindingObserver {
     _presenceController.close();
     _mealLogController.close();
     _notificationController.close();
+    _adherenceChangedController.close();
     super.onClose();
   }
 }
