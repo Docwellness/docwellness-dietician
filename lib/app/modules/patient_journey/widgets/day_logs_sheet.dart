@@ -120,43 +120,23 @@ class _DayLogsSheetState extends State<DayLogsSheet> {
                   color: _muted,
                 ),
                 const SizedBox(height: 8),
-                ...tasks.map((task) {
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: task.done ? const Color(0xffF0FBF6) : const Color(0xffFEF6FB),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: task.done ? const Color(0xffBEE8D4) : const Color(0xffFCE7F6),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          task.icon,
-                          size: 18,
-                          color: task.done ? const Color(0xff1F8A5B) : _maroon,
+                Builder(builder: (context) {
+                  final groups = TaskGroups.from(tasks);
+                  return Column(
+                    children: [
+                      if (groups.mealTotal > 0) _groupCard('Log Meal', Icons.restaurant_menu, groups.mealComplete, groups.mealDone, groups.mealTotal, subRows: groups.mealTasks),
+                      if (groups.waterTask != null)
+                        _groupCard(
+                          'Water Intake',
+                          groups.waterTask!.icon,
+                          groups.waterTask!.done,
+                          null,
+                          null,
+                          progress: groups.waterTask!.progress,
+                          progressLabel: groups.waterTask!.loggedNote,
                         ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: CustomText(
-                            text: task.title,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13,
-                            color: _deep,
-                          ),
-                        ),
-                        CustomText(
-                          text: task.linked
-                              ? (task.loggedNote ?? (task.done ? 'Logged' : 'Not logged'))
-                              : (task.done ? 'Done' : 'Not done'),
-                          fontWeight: FontWeight.w700,
-                          fontSize: 11,
-                          color: task.done ? const Color(0xff1F8A5B) : _muted,
-                        ),
-                      ],
-                    ),
+                      ...groups.otherTasks.map(_taskRow),
+                    ],
                   );
                 }),
                 const SizedBox(height: 8),
@@ -204,6 +184,118 @@ class _DayLogsSheetState extends State<DayLogsSheet> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _taskRow(GoalTask task) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: task.done ? const Color(0xffF0FBF6) : const Color(0xffFEF6FB),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: task.done ? const Color(0xffBEE8D4) : const Color(0xffFCE7F6)),
+      ),
+      child: Row(
+        children: [
+          Icon(task.icon, size: 18, color: task.done ? const Color(0xff1F8A5B) : _maroon),
+          const SizedBox(width: 10),
+          Expanded(
+            child: CustomText(text: task.title, fontWeight: FontWeight.w600, fontSize: 13, color: _deep),
+          ),
+          CustomText(
+            text: task.linked
+                ? (task.loggedNote ?? (task.done ? 'Logged' : 'Not logged'))
+                : (task.done ? 'Done' : 'Not done'),
+            fontWeight: FontWeight.w700,
+            fontSize: 11,
+            color: task.done ? const Color(0xff1F8A5B) : _muted,
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Read-only view of the "Log Meal"/"Water Intake" progress groups (see
+  /// TaskGroups in timeline_models.dart) - no expand/collapse needed since
+  /// the dietician never taps to check anything off; the sub-rows (meal
+  /// serving-times, or nothing for Water Intake) are always visible so the
+  /// dietician can see exactly what's missing before deciding to nudge.
+  Widget _groupCard(
+    String title,
+    IconData icon,
+    bool complete,
+    int? done,
+    int? total, {
+    List<GoalTask>? subRows,
+    double? progress,
+    String? progressLabel,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: complete ? const Color(0xffF0FBF6) : const Color(0xffFEF6FB),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: complete ? const Color(0xffBEE8D4) : const Color(0xffFCE7F6)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 18, color: complete ? const Color(0xff1F8A5B) : _maroon),
+              const SizedBox(width: 10),
+              Expanded(
+                child: CustomText(text: title, fontWeight: FontWeight.w600, fontSize: 13, color: _deep),
+              ),
+              CustomText(
+                text: complete ? 'Complete' : (done != null ? '$done/$total' : (progressLabel ?? '')),
+                fontWeight: FontWeight.w700,
+                fontSize: 11,
+                color: complete ? const Color(0xff1F8A5B) : _muted,
+              ),
+            ],
+          ),
+          if (!complete && progress != null) ...[
+            const SizedBox(height: 6),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: Stack(
+                children: [
+                  Container(height: 5, color: const Color(0xffFCE7F6)),
+                  FractionallySizedBox(
+                    widthFactor: progress.clamp(0, 1),
+                    child: Container(height: 5, color: _maroon),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          if (!complete && subRows != null && subRows.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            ...subRows.map((t) => Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Row(
+                    children: [
+                      Icon(
+                        t.done ? Icons.check_circle : Icons.circle_outlined,
+                        size: 13,
+                        color: t.done ? const Color(0xff1F8A5B) : const Color(0xffE9C6DC),
+                      ),
+                      const SizedBox(width: 6),
+                      CustomText(
+                        text: t.title,
+                        fontWeight: FontWeight.w500,
+                        fontSize: 11.5,
+                        color: t.done ? _deep : _muted,
+                      ),
+                    ],
+                  ),
+                )),
+          ],
+        ],
       ),
     );
   }

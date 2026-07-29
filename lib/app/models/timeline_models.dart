@@ -34,10 +34,12 @@ class GoalTask {
   final IconData icon;
   final bool done;
   // See docwellness-user's timeline_models.dart's GoalTask.linked doc
-  // comment - true for a meal-linked task (done from the patient's real
-  // MealLog, not manually checked).
+  // comment - true for a meal-linked task or Water Intake (done from the
+  // patient's real MealLog/WaterLog, not manually checked).
   final bool linked;
   final String? loggedNote;
+  // 0..1, only meaningful for the Water Intake task.
+  final double? progress;
 
   GoalTask({
     required this.id,
@@ -47,7 +49,51 @@ class GoalTask {
     required this.done,
     this.linked = false,
     this.loggedNote,
+    this.progress,
   });
+}
+
+/// See docwellness-user's timeline_models.dart's mealGroupTaskTitles/
+/// waterTaskTitle/TaskGroups doc comments - same grouping, duplicated here
+/// (no shared package between the two Flutter apps).
+const Set<String> mealGroupTaskTitles = {
+  'Morning Drink',
+  'Breakfast',
+  'Brunch',
+  'Lunch',
+  'Evening Snack',
+  'Dinner',
+  'Night Drink',
+  'Supplements',
+};
+
+const String waterTaskTitle = 'Water Intake';
+
+class TaskGroups {
+  final List<GoalTask> mealTasks;
+  final GoalTask? waterTask;
+  final List<GoalTask> otherTasks;
+
+  TaskGroups({required this.mealTasks, required this.waterTask, required this.otherTasks});
+
+  int get mealDone => mealTasks.where((t) => t.done).length;
+  int get mealTotal => mealTasks.length;
+  bool get mealComplete => mealTotal > 0 && mealDone == mealTotal;
+
+  factory TaskGroups.from(List<GoalTask> tasks) {
+    final meal = tasks.where((t) => mealGroupTaskTitles.contains(t.title)).toList();
+    GoalTask? water;
+    final others = <GoalTask>[];
+    for (final t in tasks) {
+      if (mealGroupTaskTitles.contains(t.title)) continue;
+      if (t.title == waterTaskTitle) {
+        water = t;
+      } else {
+        others.add(t);
+      }
+    }
+    return TaskGroups(mealTasks: meal, waterTask: water, otherTasks: others);
+  }
 }
 
 class Milestone {
