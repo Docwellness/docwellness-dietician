@@ -17,12 +17,14 @@ class DayLogsSheet extends StatefulWidget {
   final PatientTimelineController controller;
   final Milestone milestone;
   final VoidCallback onNudge;
+  final ScrollController? scrollController;
 
   const DayLogsSheet({
     super.key,
     required this.controller,
     required this.milestone,
     required this.onNudge,
+    this.scrollController,
   });
 
   @override
@@ -61,6 +63,7 @@ class _DayLogsSheetState extends State<DayLogsSheet> {
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
         child: SingleChildScrollView(
+          controller: widget.scrollController,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,

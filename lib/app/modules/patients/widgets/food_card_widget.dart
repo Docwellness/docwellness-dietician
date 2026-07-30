@@ -1,4 +1,5 @@
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
+import 'package:docwellnesdoc/app/utils/theme/app_shadows.dart';
 import 'package:flutter/material.dart';
 
 class FoodCard extends StatelessWidget {
@@ -137,9 +138,10 @@ class FoodCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
       decoration: BoxDecoration(
-        border: Border.all(color: Color(0xffFDF2FA)),
+        border: cardBorder,
         color: const Color(0xffFEF6FB),
         borderRadius: BorderRadius.circular(16),
+        boxShadow: cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

@@ -1,4 +1,5 @@
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
+import 'package:docwellnesdoc/app/utils/theme/app_shadows.dart';
 import 'package:flutter/material.dart';
 
 class LogMealContainer extends StatelessWidget {
@@ -27,8 +28,9 @@ class LogMealContainer extends StatelessWidget {
         padding: EdgeInsets.symmetric(horizontal: 12, vertical: 18),
         decoration: BoxDecoration(
           color: Color(0xffFEF6FB),
-          border: Border.all(color: Color(0xffFDF2FA)),
+          border: cardBorder,
           borderRadius: BorderRadius.circular(16),
+          boxShadow: cardShadow,
         ),
         child: Row(
           children: [

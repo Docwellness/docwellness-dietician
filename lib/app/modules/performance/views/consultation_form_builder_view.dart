@@ -2,6 +2,7 @@ import 'package:docwellnesdoc/app/modules/performance/controllers/consultation_f
 import 'package:docwellnesdoc/app/modules/performance/models/consultation_form_field.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_button.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
+import 'package:docwellnesdoc/app/utils/theme/app_shadows.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -101,6 +102,7 @@ class ConsultationFormBuilderView extends StatelessWidget {
           color: _accentSoft,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: _border),
+          boxShadow: cardShadow,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

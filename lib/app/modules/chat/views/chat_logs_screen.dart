@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:docwellnesdoc/app/models/activity_log_model.dart';
 import 'package:docwellnesdoc/app/models/meal_log_model.dart';
 import 'package:docwellnesdoc/app/modules/chat/controllers/chat_logs_controller.dart';
+import 'package:docwellnesdoc/app/utils/theme/app_shadows.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -410,14 +411,8 @@ class _ChatLogsScreenState extends State<ChatLogsScreen>
       decoration: BoxDecoration(
         color: const Color(0xffFEF6FB),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xffFCCEEF)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        border: cardBorder,
+        boxShadow: cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

@@ -1,4 +1,5 @@
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
+import 'package:docwellnesdoc/app/utils/theme/app_shadows.dart';
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
 
@@ -49,8 +50,9 @@ class _WaterIntakeContainerState extends State<WaterIntakeContainer>
     return Container(
       decoration: BoxDecoration(
         color: Color(0xffFEF6FB),
-        border: Border.all(color: Color(0xffFDF2FA)),
+        border: cardBorder,
         borderRadius: BorderRadius.circular(16),
+        boxShadow: cardShadow,
       ),
       padding: EdgeInsets.symmetric(vertical: 18, horizontal: 12),
       child: Row(

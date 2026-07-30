@@ -6,6 +6,7 @@ import 'package:docwellnesdoc/app/modules/receipes/services/recipe_service.dart'
 import 'package:docwellnesdoc/app/modules/receipes/views/recipe_details.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_button.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
+import 'package:docwellnesdoc/app/utils/theme/app_shadows.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -318,6 +319,7 @@ class _SelectDietSheetState extends State<SelectDietSheet>
                             color: const Color(0xffFFF4E5),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(color: const Color(0xffF0B429)),
+                            boxShadow: cardShadow,
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -557,7 +559,8 @@ class _SelectDietSheetState extends State<SelectDietSheet>
                           decoration: BoxDecoration(
                             color: Color(0xffFEF6FB),
                             borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: Color(0xffFDF2FA)),
+                            border: cardBorder,
+                            boxShadow: cardShadow,
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,

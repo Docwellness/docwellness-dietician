@@ -22,6 +22,7 @@ import 'package:docwellnesdoc/app/routes/app_pages.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/app_toast.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_button.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
+import 'package:docwellnesdoc/app/utils/theme/app_shadows.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
@@ -656,13 +657,7 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                 border: Border.all(
                   color: const Color(0xffFAA7E0).withOpacity(0.4),
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xffEF45B2).withOpacity(0.07),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
+                boxShadow: cardShadow,
               ),
               width: double.infinity,
               child: ClipRRect(
@@ -1207,6 +1202,7 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                     color: const Color(0xffFDF2FA),
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: const Color(0xffFAA7E0)),
+                    boxShadow: cardShadow,
                   ),
                   child: Row(
                     children: [
@@ -1345,6 +1341,7 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                               border: Border.all(
                                 color: const Color(0xffE5E7EB),
                               ),
+                              boxShadow: cardShadow,
                             ),
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
@@ -1420,6 +1417,7 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                                 color: colors['border']!,
                                 width: 1.5,
                               ),
+                              boxShadow: cardShadow,
                             ),
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
@@ -1509,6 +1507,7 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                               color: colors['border']!,
                               width: 1.5,
                             ),
+                            boxShadow: cardShadow,
                           ),
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
@@ -1666,7 +1665,8 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(16),
                     color: Color(0xffFEF6FB),
-                    border: Border.all(color: Color(0xffFDF2FA)),
+                    border: cardBorder,
+                    boxShadow: cardShadow,
                   ),
                   child: Row(
                     children: [
@@ -1800,6 +1800,8 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(10),
                   color: Color(0xffFDF2FA),
+                  border: cardBorder,
+                  boxShadow: cardShadow,
                 ),
 
                 child: Padding(
@@ -2190,6 +2192,7 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(color: Color(0xff9F1561)),
                         color: Color(0xffFCFCFD),
+                        boxShadow: cardShadow,
                       ),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -2257,6 +2260,7 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                               borderRadius: BorderRadius.circular(8),
                               border: Border.all(color: Color(0xff9F1561)),
                               color: Color(0xffFCFCFD),
+                              boxShadow: cardShadow,
                             ),
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
@@ -3279,7 +3283,8 @@ class _PatientProfileViewState extends State<PatientProfileView> {
       decoration: BoxDecoration(
         color: const Color(0xffFEF6FB),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xffFDF2FA)),
+        border: cardBorder,
+        boxShadow: cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -3352,6 +3357,7 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                 ? const Color(0xffFECACA)
                 : const Color(0xffBBF7D0),
           ),
+          boxShadow: cardShadow,
         ),
         child: Row(
           children: [

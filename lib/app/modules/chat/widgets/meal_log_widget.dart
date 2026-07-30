@@ -1,4 +1,5 @@
 import 'package:docwellnesdoc/app/models/meal_log_model.dart';
+import 'package:docwellnesdoc/app/utils/theme/app_shadows.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -30,13 +31,7 @@ class MealLogWidget extends StatelessWidget {
           color: const Color(0xffFEF6FB),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: _getBorderColor()),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
+          boxShadow: cardShadow,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

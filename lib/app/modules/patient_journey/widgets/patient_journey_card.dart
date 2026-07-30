@@ -3,6 +3,7 @@ import 'package:docwellnesdoc/app/modules/patient_journey/controllers/patient_ti
 import 'package:docwellnesdoc/app/modules/patient_journey/views/patient_timeline_screen.dart';
 import 'package:docwellnesdoc/app/modules/patient_journey/widgets/nudge_sheet.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
+import 'package:docwellnesdoc/app/utils/theme/app_shadows.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -18,7 +19,6 @@ class PatientJourneyCard extends StatelessWidget {
 
   static const _deep = Color(0xff530630);
   static const _maroon = Color(0xff851653);
-  static const _border = Color(0xffFCE7F6);
 
   @override
   Widget build(BuildContext context) {
@@ -58,14 +58,8 @@ class PatientJourneyCard extends StatelessWidget {
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: _border, width: 1.2),
-                boxShadow: [
-                  BoxShadow(
-                    color: _deep.withValues(alpha: 0.05),
-                    blurRadius: 14,
-                    offset: const Offset(0, 6),
-                  ),
-                ],
+                border: cardBorder,
+                boxShadow: cardShadow,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

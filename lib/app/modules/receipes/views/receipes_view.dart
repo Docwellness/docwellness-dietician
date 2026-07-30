@@ -2,6 +2,7 @@ import 'package:docwellnesdoc/app/modules/receipes/views/add_receipes.dart';
 import 'package:docwellnesdoc/app/modules/receipes/views/recipe_list_by_filter_view.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_button.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
+import 'package:docwellnesdoc/app/utils/theme/app_shadows.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -216,7 +217,8 @@ class _ReceipesViewState extends State<ReceipesView> {
                       decoration: BoxDecoration(
                         color: const Color(0xffFEF6FB),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xffFCE7F6)),
+                        border: cardBorder,
+                        boxShadow: cardShadow,
                       ),
                       padding: const EdgeInsets.all(10),
                       child: Column(

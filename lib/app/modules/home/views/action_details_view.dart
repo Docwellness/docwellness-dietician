@@ -6,6 +6,7 @@ import 'package:docwellnesdoc/app/modules/home/controllers/home_controller.dart'
 import 'package:docwellnesdoc/app/modules/home/widgets/patient_request_container.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/app_toast.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
+import 'package:docwellnesdoc/app/utils/theme/app_shadows.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -124,7 +125,8 @@ class ActionDetailsView extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: const Color(0xffFEF6FB),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xffFCE7F6)),
+                      border: cardBorder,
+                      boxShadow: cardShadow,
                     ),
                     child: Row(
                       children: [
@@ -336,6 +338,8 @@ class _PatientTile extends StatelessWidget {
         decoration: BoxDecoration(
           color: const Color(0xffFEF6FB),
           borderRadius: BorderRadius.circular(8),
+          border: cardBorder,
+          boxShadow: cardShadow,
         ),
         child: Row(
           children: [
@@ -483,7 +487,8 @@ class _NeedAttentionTabbedView extends StatelessWidget {
             decoration: BoxDecoration(
               color: const Color(0xffFEF6FB),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xffFCE7F6)),
+              border: cardBorder,
+              boxShadow: cardShadow,
             ),
             child: Row(
               children: [

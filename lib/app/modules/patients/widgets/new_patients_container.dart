@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
 import 'package:docwellnesdoc/app/utils/membership_badge.dart';
+import 'package:docwellnesdoc/app/utils/theme/app_shadows.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -57,6 +58,8 @@ class NewPatientsContainer extends StatelessWidget {
         decoration: BoxDecoration(
           color: const Color(0xffFFF5FA),
           borderRadius: BorderRadius.circular(20),
+          border: cardBorder,
+          boxShadow: cardShadow,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

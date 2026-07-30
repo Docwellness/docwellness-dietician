@@ -8,6 +8,7 @@ import 'package:docwellnesdoc/app/modules/performance/widgets/upload_video.dart'
 import 'package:docwellnesdoc/app/modules/performance/widgets/youtube_player_screen.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_button.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
+import 'package:docwellnesdoc/app/utils/theme/app_shadows.dart';
 import 'package:docwellnesdoc/main.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -268,6 +269,7 @@ class PerformanceView extends GetView<PerformanceController> {
                   color: const Color(0xffFEF6FB),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: const Color(0xffFAA7E0)),
+                  boxShadow: cardShadow,
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -358,6 +360,7 @@ class PerformanceView extends GetView<PerformanceController> {
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(16),
                           color: Color(0xffF3F4F6),
+                          boxShadow: cardShadow,
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.center,
@@ -947,6 +950,7 @@ class PerformanceView extends GetView<PerformanceController> {
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(16),
                           color: Color(0xffFDF2FA),
+                          boxShadow: cardShadow,
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.center,
@@ -1413,6 +1417,8 @@ class PerformanceView extends GetView<PerformanceController> {
                 decoration: BoxDecoration(
                   color: Color(0xffFEF6FB),
                   borderRadius: BorderRadius.circular(12),
+                  border: cardBorder,
+                  boxShadow: cardShadow,
                 ),
                 child: Center(
                   child: Column(

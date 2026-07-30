@@ -2,6 +2,7 @@ import 'package:docwellnesdoc/app/modules/receipes/models/recipe_model.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_button.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_field.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
+import 'package:docwellnesdoc/app/utils/theme/app_shadows.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -287,8 +288,9 @@ class _EditComponentsSheetState extends State<EditComponentsSheet> {
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: const Color(0xffFEF6FB),
-                    border: Border.all(color: const Color(0xffFDF2FA)),
+                    border: cardBorder,
                     borderRadius: BorderRadius.circular(14),
+                    boxShadow: cardShadow,
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,

@@ -4,6 +4,7 @@ import 'package:docwellnesdoc/app/modules/patients/controllers/patients_controll
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_button.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_field.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
+import 'package:docwellnesdoc/app/utils/theme/app_shadows.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -327,6 +328,7 @@ class PaymentStatusSheet extends StatelessWidget {
                     color: Color(0xffF9FAFB),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: Color(0xffE5E7EB)),
+                    boxShadow: cardShadow,
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -415,6 +417,7 @@ class PaymentStatusSheet extends StatelessWidget {
                         color: Color(0xffFFF3CD),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: Color(0xffFFE69C)),
+                        boxShadow: cardShadow,
                       ),
                       child: Row(
                         children: [

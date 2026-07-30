@@ -11,6 +11,7 @@ import 'package:docwellnesdoc/app/modules/receipes/widgets/receipe_container.dar
 import 'package:docwellnesdoc/app/routes/app_pages.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_button.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
+import 'package:docwellnesdoc/app/utils/theme/app_shadows.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -417,6 +418,8 @@ class HomeView extends GetView<HomeController> {
               decoration: BoxDecoration(
                 color: Color(0xffFEF6FB),
                 borderRadius: BorderRadius.circular(8),
+                border: cardBorder,
+                boxShadow: cardShadow,
               ),
               padding: EdgeInsets.only(left: 16, top: 12, bottom: 12, right: 9),
               child: Row(
@@ -493,6 +496,8 @@ class HomeView extends GetView<HomeController> {
               decoration: BoxDecoration(
                 color: Color(0xffFEF6FB),
                 borderRadius: BorderRadius.circular(12),
+                border: cardBorder,
+                boxShadow: cardShadow,
               ),
               child: Center(
                 child: Column(
@@ -577,6 +582,7 @@ class HomeView extends GetView<HomeController> {
           color: Color(0xffFEF6FB),
           border: Border.all(color: Color(0xff9F1561)),
           borderRadius: BorderRadius.circular(8),
+          boxShadow: cardShadow,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

@@ -3,6 +3,7 @@ import 'package:docwellnesdoc/app/modules/performance/models/consultation_form_f
 import 'package:docwellnesdoc/app/utils/common_widgets/app_toast.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_button.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
+import 'package:docwellnesdoc/app/utils/theme/app_shadows.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -263,6 +264,7 @@ class QuestionsView extends StatelessWidget {
         color: bg,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: border),
+        boxShadow: cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

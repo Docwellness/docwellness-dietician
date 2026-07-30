@@ -1,6 +1,7 @@
 import 'package:docwellnesdoc/app/models/tracking_data_model.dart';
 import 'package:docwellnesdoc/app/modules/patients/widgets/date_range_selector_button.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
+import 'package:docwellnesdoc/app/utils/theme/app_shadows.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
@@ -58,6 +59,8 @@ class BmiChart extends StatelessWidget {
       decoration: BoxDecoration(
         color: Color(0xffFDF2FA),
         borderRadius: BorderRadius.circular(10),
+        border: cardBorder,
+        boxShadow: cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

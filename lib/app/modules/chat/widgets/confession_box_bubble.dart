@@ -1,4 +1,5 @@
 import 'package:docwellnesdoc/app/models/chat_model.dart';
+import 'package:docwellnesdoc/app/utils/theme/app_shadows.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -22,14 +23,8 @@ class ConfessionBoxBubble extends StatelessWidget {
         decoration: BoxDecoration(
           color: const Color(0xffFDF2FA),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xffFCE7F6), width: 1.5),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xff851653).withOpacity(0.08),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
+          border: cardBorder,
+          boxShadow: cardShadow,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

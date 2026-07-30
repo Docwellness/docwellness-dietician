@@ -4,6 +4,7 @@ import 'package:docwellnesdoc/app/modules/home/controllers/doctor_profile_contro
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_button.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_field.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
+import 'package:docwellnesdoc/app/utils/theme/app_shadows.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -332,6 +333,8 @@ class DoctorProfileView extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: const Color(0xffFEF6FB),
                       borderRadius: BorderRadius.circular(12),
+                      border: cardBorder,
+                      boxShadow: cardShadow,
                     ),
                     child: const CustomText(
                       text: 'No posts yet. Add your first post above.',
@@ -354,7 +357,8 @@ class DoctorProfileView extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xffF3D9E9)),
+                        border: cardBorder,
+                        boxShadow: cardShadow,
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,

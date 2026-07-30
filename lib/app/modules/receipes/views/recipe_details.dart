@@ -10,6 +10,7 @@ import 'package:docwellnesdoc/app/modules/receipes/widgets/update_ai_inputs_shee
 import 'package:docwellnesdoc/app/utils/common_widgets/app_toast.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_button.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
+import 'package:docwellnesdoc/app/utils/theme/app_shadows.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
@@ -628,6 +629,8 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
                           decoration: BoxDecoration(
                             color: Color(0xffFEF6FB),
                             borderRadius: BorderRadius.circular(12),
+                            border: cardBorder,
+                            boxShadow: cardShadow,
                           ),
                           child: Row(
                             children: [

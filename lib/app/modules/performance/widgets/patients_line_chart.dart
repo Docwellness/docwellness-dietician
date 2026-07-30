@@ -1,4 +1,5 @@
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
+import 'package:docwellnesdoc/app/utils/theme/app_shadows.dart';
 import 'package:flutter/material.dart';
 
 class PatientCard extends StatelessWidget {
@@ -24,6 +25,8 @@ class PatientCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xffFEF6FB),
         borderRadius: BorderRadius.circular(16),
+        border: cardBorder,
+        boxShadow: cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

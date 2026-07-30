@@ -26,9 +26,18 @@ class PatientTimelineScreen extends StatelessWidget {
     final userId = args['userId'] as String? ?? '';
     final name = args['name'] as String? ?? 'Patient';
 
+    // Same tag as PatientJourneyCard (just `userId`, not a separate
+    // '${userId}_screen' namespace) - GetBuilder reuses whatever controller
+    // is already registered under that tag, so if the card already loaded
+    // this patient's timeline, opening the screen shows that data
+    // immediately instead of spinning up a brand-new controller and
+    // cold-fetching from scratch every single tap (the same "why does this
+    // take forever to open" symptom fixed in the patient app's
+    // GoalTimelineScreen, just caused here by a tag mismatch instead of a
+    // redundant non-silent load()).
     return GetBuilder<PatientTimelineController>(
       init: PatientTimelineController(userId: userId, patientName: name),
-      tag: '${userId}_screen',
+      tag: userId,
       builder: (c) {
         return Scaffold(
           backgroundColor: const Color(0xffFEF6FB),
@@ -201,15 +210,26 @@ class PatientTimelineScreen extends StatelessWidget {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (_) => DayLogsSheet(
-        controller: c,
-        milestone: m,
-        onNudge: () {
-          Navigator.pop(context);
-          _openNudge(context, c, milestoneId: m.id);
-        },
+      // Capped below full height (same fix as the patient app's
+      // MilestoneSheet) so a day with many tasks doesn't stretch this sheet
+      // flush to the top of the screen with no margin.
+      builder: (_) => DraggableScrollableSheet(
+        initialChildSize: 0.8,
+        maxChildSize: 0.9,
+        minChildSize: 0.5,
+        expand: false,
+        builder: (context, scrollController) => DayLogsSheet(
+          controller: c,
+          milestone: m,
+          scrollController: scrollController,
+          onNudge: () {
+            Navigator.pop(context);
+            _openNudge(context, c, milestoneId: m.id);
+          },
+        ),
       ),
     );
   }

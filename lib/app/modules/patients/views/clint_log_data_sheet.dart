@@ -3,6 +3,7 @@ import 'package:docwellnesdoc/app/modules/patients/widgets/log_meal_container.da
 import 'package:docwellnesdoc/app/modules/patients/widgets/progress_card_for_sheet.dart';
 import 'package:docwellnesdoc/app/modules/patients/widgets/water_intake_container.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
+import 'package:docwellnesdoc/app/utils/theme/app_shadows.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -104,8 +105,9 @@ class _ClintLogDataSheetState extends State<ClintLogDataSheet> {
                 width: double.infinity,
                 decoration: BoxDecoration(
                   color: Color(0xffFEF6FB),
-                  border: Border.all(color: Color(0xffFDF2FA)),
+                  border: cardBorder,
                   borderRadius: BorderRadius.circular(12),
+                  boxShadow: cardShadow,
                 ),
                 child: Row(
                   children: [

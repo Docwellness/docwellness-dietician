@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
 import 'package:docwellnesdoc/app/utils/membership_badge.dart';
+import 'package:docwellnesdoc/app/utils/theme/app_shadows.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -114,8 +115,13 @@ class PatientWidget extends StatelessWidget {
           Get.toNamed('/patient-profile/${patientId!}');
         }
       },
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
+      child: Container(
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          border: cardBorder,
+          boxShadow: cardShadow,
+        ),
         child: Stack(
           children: [
             Container(
