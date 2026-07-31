@@ -155,6 +155,281 @@ class DoctorProfileService {
     return false;
   }
 
+  // ---- Social Media (About Doctor page - YouTube/Instagram) ----
+
+  Future<List<Map<String, dynamic>>> getSocialPosts() async {
+    try {
+      final response = await _apiService.request(
+        endPoint: '/social-media',
+        method: 'GET',
+        headers: _headers,
+      );
+      if (response != null &&
+          response.statusCode == 200 &&
+          response.data['success'] == true) {
+        return List<Map<String, dynamic>>.from(response.data['data'] ?? []);
+      }
+    } catch (e) {
+      log('❌ Error fetching social posts: $e');
+    }
+    return [];
+  }
+
+  Future<bool> addSocialPost({
+    required String platform,
+    required String url,
+    String? imagePath,
+    String? caption,
+  }) async {
+    try {
+      final formData = FormData.fromMap({
+        'platform': platform,
+        'url': url,
+        'caption': caption ?? '',
+        if (imagePath != null) 'image': await MultipartFile.fromFile(imagePath),
+      });
+
+      final response = await _apiService.request(
+        endPoint: '/social-media',
+        method: 'POST',
+        data: formData,
+        headers: _headers,
+      );
+      return response != null &&
+          response.statusCode == 201 &&
+          response.data['success'] == true;
+    } catch (e) {
+      log('❌ Error adding social post: $e');
+      return false;
+    }
+  }
+
+  Future<bool> deleteSocialPost(String id) async {
+    try {
+      final response = await _apiService.request(
+        endPoint: '/social-media/$id',
+        method: 'DELETE',
+        headers: _headers,
+      );
+      return response != null &&
+          response.statusCode == 200 &&
+          response.data['success'] == true;
+    } catch (e) {
+      log('❌ Error deleting social post: $e');
+      return false;
+    }
+  }
+
+  Future<bool> reorderSocialPosts(String platform, List<String> orderedIds) async {
+    try {
+      final response = await _apiService.request(
+        endPoint: '/social-media/reorder',
+        method: 'PUT',
+        data: {'platform': platform, 'orderedIds': orderedIds},
+        headers: _headers,
+      );
+      return response != null &&
+          response.statusCode == 200 &&
+          response.data['success'] == true;
+    } catch (e) {
+      log('❌ Error reordering social posts: $e');
+      return false;
+    }
+  }
+
+  // ---- Articles (About Doctor page) ----
+
+  Future<List<Map<String, dynamic>>> getArticles() async {
+    try {
+      final response = await _apiService.request(
+        endPoint: '/articles',
+        method: 'GET',
+        headers: _headers,
+      );
+      if (response != null &&
+          response.statusCode == 200 &&
+          response.data['success'] == true) {
+        return List<Map<String, dynamic>>.from(response.data['data'] ?? []);
+      }
+    } catch (e) {
+      log('❌ Error fetching articles: $e');
+    }
+    return [];
+  }
+
+  Future<bool> addArticle({
+    required String title,
+    required String imagePath,
+    String? category,
+    String? excerpt,
+    String? content,
+  }) async {
+    try {
+      final formData = FormData.fromMap({
+        'title': title,
+        'category': category ?? '',
+        'excerpt': excerpt ?? '',
+        'content': content ?? '',
+        'image': await MultipartFile.fromFile(imagePath),
+      });
+
+      final response = await _apiService.request(
+        endPoint: '/articles',
+        method: 'POST',
+        data: formData,
+        headers: _headers,
+      );
+      return response != null &&
+          response.statusCode == 201 &&
+          response.data['success'] == true;
+    } catch (e) {
+      log('❌ Error adding article: $e');
+      return false;
+    }
+  }
+
+  Future<bool> deleteArticle(String id) async {
+    try {
+      final response = await _apiService.request(
+        endPoint: '/articles/$id',
+        method: 'DELETE',
+        headers: _headers,
+      );
+      return response != null &&
+          response.statusCode == 200 &&
+          response.data['success'] == true;
+    } catch (e) {
+      log('❌ Error deleting article: $e');
+      return false;
+    }
+  }
+
+  Future<bool> reorderArticles(List<String> orderedIds) async {
+    try {
+      final response = await _apiService.request(
+        endPoint: '/articles/reorder',
+        method: 'PUT',
+        data: {'orderedIds': orderedIds},
+        headers: _headers,
+      );
+      return response != null &&
+          response.statusCode == 200 &&
+          response.data['success'] == true;
+    } catch (e) {
+      log('❌ Error reordering articles: $e');
+      return false;
+    }
+  }
+
+  // ---- Reviews (About Doctor page - patient-submitted, dietician-sorted) ----
+
+  Future<List<Map<String, dynamic>>> getReviews() async {
+    try {
+      final response = await _apiService.request(
+        endPoint: '/reviews',
+        method: 'GET',
+        headers: _headers,
+      );
+      if (response != null &&
+          response.statusCode == 200 &&
+          response.data['success'] == true) {
+        return List<Map<String, dynamic>>.from(response.data['data'] ?? []);
+      }
+    } catch (e) {
+      log('❌ Error fetching reviews: $e');
+    }
+    return [];
+  }
+
+  Future<bool> deleteReview(String id) async {
+    try {
+      final response = await _apiService.request(
+        endPoint: '/reviews/$id',
+        method: 'DELETE',
+        headers: _headers,
+      );
+      return response != null &&
+          response.statusCode == 200 &&
+          response.data['success'] == true;
+    } catch (e) {
+      log('❌ Error deleting review: $e');
+      return false;
+    }
+  }
+
+  Future<bool> reorderReviews(List<String> orderedIds) async {
+    try {
+      final response = await _apiService.request(
+        endPoint: '/reviews/reorder',
+        method: 'PUT',
+        data: {'orderedIds': orderedIds},
+        headers: _headers,
+      );
+      return response != null &&
+          response.statusCode == 200 &&
+          response.data['success'] == true;
+    } catch (e) {
+      log('❌ Error reordering reviews: $e');
+      return false;
+    }
+  }
+
+  // ---- Photo Gallery (About Doctor page - auto-scrolling carousel) ----
+
+  Future<List<Map<String, dynamic>>> getGalleryImages() async {
+    try {
+      final response = await _apiService.request(
+        endPoint: '/profile',
+        method: 'GET',
+        headers: _headers,
+      );
+      if (response != null &&
+          response.statusCode == 200 &&
+          response.data['success'] == true) {
+        return List<Map<String, dynamic>>.from(response.data['data']?['galleryImages'] ?? []);
+      }
+    } catch (e) {
+      log('❌ Error fetching gallery images: $e');
+    }
+    return [];
+  }
+
+  Future<bool> addGalleryImage(String imagePath) async {
+    try {
+      final formData = FormData.fromMap({
+        'image': await MultipartFile.fromFile(imagePath),
+      });
+      final response = await _apiService.request(
+        endPoint: '/profile/gallery',
+        method: 'POST',
+        data: formData,
+        headers: _headers,
+      );
+      return response != null &&
+          response.statusCode == 201 &&
+          response.data['success'] == true;
+    } catch (e) {
+      log('❌ Error adding gallery image: $e');
+      return false;
+    }
+  }
+
+  Future<bool> deleteGalleryImage(String id) async {
+    try {
+      final response = await _apiService.request(
+        endPoint: '/profile/gallery/$id',
+        method: 'DELETE',
+        headers: _headers,
+      );
+      return response != null &&
+          response.statusCode == 200 &&
+          response.data['success'] == true;
+    } catch (e) {
+      log('❌ Error deleting gallery image: $e');
+      return false;
+    }
+  }
+
   Future<String?> uploadProfileImage(String filePath) async {
     try {
       final formData = FormData.fromMap({
