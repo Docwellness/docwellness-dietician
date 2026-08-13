@@ -72,6 +72,22 @@ Future<void> _bootstrap() async {
       url: EnvService.supabaseUrl,
       publishableKey: EnvService.supabasePublishableKey,
     );
+
+    // The SDK auto-refreshes the access token in the background using the
+    // refresh token, shortly before the current one expires (~1hr default
+    // TTL) - but that refreshed token only lives inside the SDK's own
+    // session state. SessionService/token above holds a copy taken once at
+    // sign-in for attaching to backend API calls, and without this
+    // listener that copy goes stale the moment the original token expires:
+    // every backend call then starts failing with 401 "token invalid"
+    // until the app is killed and relaunched, even though the user was
+    // never actually signed out.
+    Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+      final session = data.session;
+      if (session != null) {
+        token = session.accessToken;
+      }
+    });
   }
 
   // Toggle to enable/disable Firebase push notification wiring.
@@ -110,40 +126,82 @@ Future<void> _autoLoginDietician() async {
     return;
   }
 
-  try {
-    final authRes = await Supabase.instance.client.auth.signInWithPassword(
-      email: EnvService.dieticianAutoLoginEmail,
-      password: EnvService.dieticianAutoLoginPassword,
-    );
-    final session = authRes.session;
-    if (session == null) {
-      debugPrint('Dietician auto-login: no session returned');
-      return;
-    }
-    token = session.accessToken;
+  // A previous boot already signed in and SessionService restored that
+  // session from secure storage above - trust it instead of re-authenticating
+  // over the network on every single launch. Re-authenticating unconditionally
+  // meant a transient network hiccup at boot (DNS not resolved yet, brief
+  // Wi-Fi reconnect blip, etc.) hit the catch block below and nulled out an
+  // otherwise-perfectly-valid token, silently breaking every screen's data
+  // for the rest of the session until the next successful login.
+  if ((token?.isNotEmpty ?? false) && (userId?.isNotEmpty ?? false)) {
+    return;
+  }
 
-    final response = await ApiService().request(
-      endPoint: '/auth/me',
-      method: 'GET',
-      headers: {'Authorization': 'Bearer $token'},
-    );
-    if (response != null &&
-        response.statusCode == 200 &&
-        response.data['success'] == true) {
-      userId = response.data['data']['_id'];
-      debugPrint('🧪 Auto-logged in as dietician: userId=$userId');
-      // AI_EXECUTION_PLAN.md Phase 8, P8-04 - no PHI: no properties, same
-      // shape as the user app's login_success.
-      await Posthog().capture(eventName: 'login_success');
-    } else {
-      debugPrint(
-        'Dietician auto-login: /auth/me failed (${response?.statusCode})',
+  // We only reach here with no persisted session, so retrying a few times
+  // on transient failures (and leaving token/userId untouched in between)
+  // is safe - there's nothing valid yet to accidentally wipe out.
+  //
+  // Backoff is deliberately a few seconds (not milliseconds): the observed
+  // failure mode is the device's DNS resolver not being ready yet for the
+  // very first outbound request right after cold boot (especially right
+  // after a network interface change, e.g. Wi-Fi reconnecting) - it
+  // consistently fails for a couple of seconds and then works, so a short
+  // retry loop clears it without the user ever noticing.
+  const maxAttempts = 4;
+  for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      final authRes = await Supabase.instance.client.auth.signInWithPassword(
+        email: EnvService.dieticianAutoLoginEmail,
+        password: EnvService.dieticianAutoLoginPassword,
       );
-      token = null;
+      final session = authRes.session;
+      if (session == null) {
+        debugPrint('Dietician auto-login: no session returned');
+        return;
+      }
+      token = session.accessToken;
+
+      final response = await ApiService().request(
+        endPoint: '/auth/me',
+        method: 'GET',
+        headers: {'Authorization': 'Bearer $token'},
+      );
+      if (response != null &&
+          response.statusCode == 200 &&
+          response.data['success'] == true) {
+        userId = response.data['data']['_id'];
+        debugPrint('🧪 Auto-logged in as dietician: userId=$userId');
+        // AI_EXECUTION_PLAN.md Phase 8, P8-04 - no PHI: no properties, same
+        // shape as the user app's login_success.
+        await Posthog().capture(eventName: 'login_success');
+      } else {
+        debugPrint(
+          'Dietician auto-login: /auth/me failed (${response?.statusCode})',
+        );
+        token = null;
+      }
+      return;
+    } catch (e) {
+      debugPrint('Dietician auto-login attempt $attempt/$maxAttempts failed: $e');
+      if (attempt == maxAttempts) {
+        break;
+      }
+      await Future.delayed(Duration(seconds: attempt * 2));
     }
-  } catch (e) {
-    debugPrint('Dietician auto-login failed: $e');
-    token = null;
+  }
+
+  // Exhausted the boot-time retries - the device was likely fully offline,
+  // not just slow to resolve DNS. Rather than leaving the app stuck with no
+  // session until the next manual restart, retry once connectivity actually
+  // comes back (same reconnect signal screens use to refetch stale data).
+  if (Get.isRegistered<ConnectivityService>()) {
+    final connectivity = Get.find<ConnectivityService>();
+    late final VoidCallback retry;
+    retry = () {
+      connectivity.unregister(retry);
+      unawaited(_autoLoginDietician());
+    };
+    connectivity.registerOnReconnected(retry);
   }
 }
 

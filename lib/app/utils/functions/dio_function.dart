@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:docwellnesdoc/main.dart';
 import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ApiService {
   late Dio _dio;
@@ -42,6 +43,7 @@ class ApiService {
     Object? data,
     Map<String, dynamic>? queryParameters,
     Map<String, dynamic>? headers,
+    bool isRetryAfterRefresh = false,
   }) async {
     try {
       if (kDebugMode) {
@@ -70,6 +72,27 @@ class ApiService {
       }
       return response;
     } on DioException catch (e) {
+      // A 401 here usually means the access token expired mid-session -
+      // Supabase auto-refreshes it in the background, but Android can
+      // suspend that timer while the app is backgrounded, so the copy in
+      // SessionService can still be stale at the moment a request goes out.
+      // One refresh-and-retry covers that gap instead of the request (and
+      // every one after it, since nothing else re-triggers a refresh)
+      // failing until the app is killed and relaunched.
+      if (e.response?.statusCode == 401 && !isRetryAfterRefresh) {
+        final refreshedToken = await _tryRefreshToken();
+        if (refreshedToken != null) {
+          return request(
+            endPoint: endPoint,
+            method: method,
+            data: data,
+            queryParameters: queryParameters,
+            headers: headers,
+            isRetryAfterRefresh: true,
+          );
+        }
+      }
+
       if (kDebugMode) {
         debugPrint("❌ Dio Error");
         debugPrint("URL: ${e.requestOptions.uri}");
@@ -79,5 +102,19 @@ class ApiService {
       }
       return e.response;
     }
+  }
+
+  Future<String?> _tryRefreshToken() async {
+    try {
+      final res = await Supabase.instance.client.auth.refreshSession();
+      final session = res.session;
+      if (session != null) {
+        token = session.accessToken;
+        return session.accessToken;
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('Token refresh failed: $e');
+    }
+    return null;
   }
 }

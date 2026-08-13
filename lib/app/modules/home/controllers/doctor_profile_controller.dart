@@ -29,6 +29,20 @@ class DoctorProfileController extends GetxController {
   final articleExcerptController = TextEditingController();
   final articleContentController = TextEditingController();
 
+  /// Options for the title dropdown above Full Name - fullName is saved to
+  /// the backend as "$selectedTitlePrefix $nameController.text" (there's no
+  /// separate prefix field in the backend schema), and split back apart in
+  /// loadProfile so the dropdown and name field don't show the title
+  /// twice-concatenated on the next load.
+  static const List<String> titlePrefixOptions = [
+    'Dr.',
+    'Mr.',
+    'Ms.',
+    'Mrs.',
+    'Prof.',
+  ];
+  RxString selectedTitlePrefix = 'Dr.'.obs;
+
   RxString selectedGender = ''.obs;
   RxString profileImageUrl = ''.obs;
   RxBool isLoading = false.obs;
@@ -101,7 +115,20 @@ class DoctorProfileController extends GetxController {
       final data = await _service.getProfile();
       if (data != null) {
         profile.value = data;
-        nameController.text = data.fullName;
+        final rawName = data.fullName.trim();
+        String? matchedPrefix;
+        for (final p in titlePrefixOptions) {
+          if (rawName.startsWith('$p ')) {
+            matchedPrefix = p;
+            break;
+          }
+        }
+        if (matchedPrefix != null) {
+          selectedTitlePrefix.value = matchedPrefix;
+          nameController.text = rawName.substring(matchedPrefix.length).trim();
+        } else {
+          nameController.text = rawName;
+        }
         if (data.dateOfBirth != null) {
           dobController.text =
               '${data.dateOfBirth!.day.toString().padLeft(2, '0')}-${data.dateOfBirth!.month.toString().padLeft(2, '0')}-${data.dateOfBirth!.year}';
@@ -125,8 +152,10 @@ class DoctorProfileController extends GetxController {
   Future<void> saveProfile() async {
     isSaving.value = true;
     try {
+      final prefix = selectedTitlePrefix.value.trim();
+      final name = nameController.text.trim();
       final data = <String, dynamic>{
-        'fullName': nameController.text.trim(),
+        'fullName': prefix.isEmpty ? name : '$prefix $name',
         'gender': selectedGender.value,
         'specialization': specializationController.text.trim(),
         'qualification': qualificationController.text.trim(),

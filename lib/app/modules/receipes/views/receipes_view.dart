@@ -9,20 +9,50 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../controllers/receipes_controller.dart';
 
-/// Landing screen for the "Receipes" bottom-nav tab: a top-level cuisine
-/// filter (All/Indian/Continental/Western/Supplements - a curated grouping
-/// over the full 24-value Recipe.category enum, see
-/// utils/recipeCategoryGroups.js) followed by a grid of real, per-serving-
-/// time recipe counts, plus a Supplements shortcut card. Tapping a card
-/// drills into RecipeListByFilterView's flat recipe grid.
-class ReceipesView extends StatefulWidget {
+/// Standalone screen wrapper around RecipesTabBody - kept for the dormant
+/// /receipes named route. The bottom-nav tab itself now uses
+/// DietAndExerciseView (home/views/diet_and_exercise_view.dart), which
+/// embeds RecipesTabBody directly inside a swipeable Recipes/Exercises
+/// PageView instead of this Scaffold.
+class ReceipesView extends StatelessWidget {
   const ReceipesView({super.key});
 
+  static const _headerColor = Color(0xffFDF2FA);
+
   @override
-  State<ReceipesView> createState() => _ReceipesViewState();
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: _headerColor,
+        title: CustomText(
+          text: 'Recipes & Supplements',
+          color: Color(0xff1F2A37),
+          fontWeight: FontWeight.w400,
+          fontSize: 21,
+        ),
+      ),
+      body: const RecipesTabBody(),
+    );
+  }
 }
 
-class _ReceipesViewState extends State<ReceipesView> {
+/// The "Recipes & Supplements" content: a top-level cuisine filter (All/
+/// Indian/Continental/Western/Supplements - a curated grouping over the full
+/// 24-value Recipe.category enum, see utils/recipeCategoryGroups.js)
+/// followed by a grid of real, per-serving-time recipe counts, plus
+/// Supplements/Sides/Salad shortcut cards. Tapping a card drills into
+/// RecipeListByFilterView's flat recipe grid. Extracted from ReceipesView
+/// (formerly that screen's whole body) so DietAndExerciseView can embed it
+/// as one page of its Recipes/Exercises PageView.
+class RecipesTabBody extends StatefulWidget {
+  const RecipesTabBody({super.key});
+
+  @override
+  State<RecipesTabBody> createState() => _RecipesTabBodyState();
+}
+
+class _RecipesTabBodyState extends State<RecipesTabBody> {
   late final ReceipesController controller;
 
   @override
@@ -58,217 +88,195 @@ class _ReceipesViewState extends State<ReceipesView> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: _headerColor,
-        title: CustomText(
-          text: 'Recipes & Supplements',
-          color: Color(0xff1F2A37),
-          fontWeight: FontWeight.w400,
-          fontSize: 21,
-        ),
-      ),
-      body: Column(
-        children: [
-          // Top-level category chip strip lives directly in the body (not
-          // AppBar.bottom) so its background always matches the AppBar
-          // exactly and its left inset lines up with the title above it.
-          Container(
-            width: double.infinity,
-            color: _headerColor,
-            padding: const EdgeInsets.only(top: 8, bottom: 16),
-            child: Obx(
-              () => SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  children: ReceipesController.topCategories.map((catName) {
-                    final isSelected =
-                        controller.selectedTopCategory.value == catName;
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: GestureDetector(
-                        onTap: () => controller.changeTopCategory(catName),
-                        child: Container(
-                          height: 38,
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
-                          decoration: BoxDecoration(
+    return Column(
+      children: [
+        // Top-level category chip strip lives directly in the body (not
+        // AppBar.bottom) so its background always matches the AppBar
+        // exactly and its left inset lines up with the title above it.
+        Container(
+          width: double.infinity,
+          color: _headerColor,
+          padding: const EdgeInsets.only(top: 8, bottom: 16),
+          child: Obx(
+            () => SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: ReceipesController.topCategories.map((catName) {
+                  final isSelected =
+                      controller.selectedTopCategory.value == catName;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: GestureDetector(
+                      onTap: () => controller.changeTopCategory(catName),
+                      child: Container(
+                        height: 38,
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? const Color(0xffFCCEEF)
+                              : Colors.transparent,
+                          border: Border.all(
                             color: isSelected
                                 ? const Color(0xffFCCEEF)
-                                : Colors.transparent,
-                            border: Border.all(
-                              color: isSelected
-                                  ? const Color(0xffFCCEEF)
-                                  : const Color(0xffD2D6DB),
-                              width: 1,
-                            ),
-                            borderRadius: BorderRadius.circular(8),
+                                : const Color(0xffD2D6DB),
+                            width: 1,
                           ),
-                          alignment: Alignment.center,
-                          child: Text(
-                            catName,
-                            style: GoogleFonts.roboto(
-                              color: isSelected
-                                  ? Color(0xff530630)
-                                  : Color(0xff4D5761),
-                              fontWeight: FontWeight.w500,
-                              fontSize: 14,
-                            ),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          catName,
+                          style: GoogleFonts.roboto(
+                            color: isSelected
+                                ? Color(0xff530630)
+                                : Color(0xff4D5761),
+                            fontWeight: FontWeight.w500,
+                            fontSize: 14,
                           ),
                         ),
                       ),
-                    );
-                  }).toList(),
-                ),
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-            child: Obx(
-              () => CustomText(
-                text: '${controller.totalRecipeCount} recipe${controller.totalRecipeCount == 1 ? '' : 's'} total',
-                color: const Color(0xff6C737F),
-                fontWeight: FontWeight.w500,
-                fontSize: 13,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Obx(() {
-              if (controller.isLoadingServingTimeSummary.value) {
-                return const Center(
-                  child: CircularProgressIndicator(color: Color(0xffFCCEEF)),
-                );
-              }
-
-              final summary = controller.servingTimeSummary.value;
-              // 7 real serving-time buckets + the Supplements shortcut card.
-              final cards = [
-                ..._servingTimeIcons.keys.map(
-                  (st) => _CategoryCardData(
-                    title: st,
-                    count: summary.countFor(st),
-                    icon: _servingTimeIcons[st]!,
-                    onTap: () => Get.to(
-                      () => RecipeListByFilterView(
-                        title: st,
-                        topCategory: controller.selectedTopCategory.value,
-                        servingTime: st,
-                      ),
-                    ),
-                  ),
-                ),
-                _CategoryCardData(
-                  title: 'Supplements',
-                  count: summary.supplementsCount,
-                  icon: Icons.medication_outlined,
-                  onTap: () => Get.to(
-                    () => const RecipeListByFilterView(
-                      title: 'Supplements',
-                      topCategory: 'Supplements',
-                      servingTime: null,
-                    ),
-                  ),
-                ),
-                _CategoryCardData(
-                  title: 'Sides',
-                  count: summary.sidesCount,
-                  icon: Icons.rice_bowl_outlined,
-                  onTap: () => Get.to(
-                    () => const RecipeListByFilterView(
-                      title: 'Sides',
-                      topCategory: 'All',
-                      servingTime: null,
-                      tag: 'side',
-                    ),
-                  ),
-                ),
-                _CategoryCardData(
-                  title: 'Salad',
-                  count: summary.saladCount,
-                  icon: Icons.eco_outlined,
-                  onTap: () => Get.to(
-                    () => const RecipeListByFilterView(
-                      title: 'Salad',
-                      topCategory: 'All',
-                      servingTime: null,
-                      tag: 'salad',
-                    ),
-                  ),
-                ),
-              ];
-
-              return GridView.builder(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                itemCount: cards.length,
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 3,
-                  mainAxisSpacing: 12,
-                  crossAxisSpacing: 12,
-                  mainAxisExtent: 130,
-                ),
-                itemBuilder: (context, index) {
-                  final card = cards[index];
-                  return GestureDetector(
-                    onTap: card.onTap,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: const Color(0xffFEF6FB),
-                        borderRadius: BorderRadius.circular(12),
-                        border: cardBorder,
-                        boxShadow: cardShadow,
-                      ),
-                      padding: const EdgeInsets.all(10),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Container(
-                            width: 36,
-                            height: 36,
-                            decoration: const BoxDecoration(
-                              color: Color(0xffFCE7F6),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(card.icon, color: _accent, size: 20),
-                          ),
-                          const Spacer(),
-                          CustomText(
-                            text: card.title,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13,
-                            color: const Color(0xff1F2A37),
-                          ),
-                          const SizedBox(height: 2),
-                          CustomText(
-                            text:
-                                '${card.count} recipe${card.count == 1 ? '' : 's'}',
-                            fontWeight: FontWeight.w400,
-                            fontSize: 11,
-                            color: const Color(0xff6C737F),
-                          ),
-                        ],
-                      ),
                     ),
                   );
-                },
-              );
-            }),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: CustomButton(
-              onTap: () async {
-                await Get.to(() => AddRecipeScreen());
-                controller.fetchServingTimeSummary();
-              },
-              text: 'Add New Recipe',
-              isOutline: false,
+                }).toList(),
+              ),
             ),
           ),
-        ],
-      ),
+        ),
+        const SizedBox(height: 12),
+        Expanded(
+          child: Obx(() {
+            if (controller.isLoadingServingTimeSummary.value) {
+              return const Center(
+                child: CircularProgressIndicator(color: Color(0xffFCCEEF)),
+              );
+            }
+
+            final summary = controller.servingTimeSummary.value;
+            // 7 real serving-time buckets + the Supplements shortcut card.
+            final cards = [
+              ..._servingTimeIcons.keys.map(
+                (st) => _CategoryCardData(
+                  title: st,
+                  count: summary.countFor(st),
+                  icon: _servingTimeIcons[st]!,
+                  onTap: () => Get.to(
+                    () => RecipeListByFilterView(
+                      title: st,
+                      topCategory: controller.selectedTopCategory.value,
+                      servingTime: st,
+                    ),
+                  ),
+                ),
+              ),
+              _CategoryCardData(
+                title: 'Supplements',
+                count: summary.supplementsCount,
+                icon: Icons.medication_outlined,
+                onTap: () => Get.to(
+                  () => const RecipeListByFilterView(
+                    title: 'Supplements',
+                    topCategory: 'Supplements',
+                    servingTime: null,
+                  ),
+                ),
+              ),
+              _CategoryCardData(
+                title: 'Sides',
+                count: summary.sidesCount,
+                icon: Icons.rice_bowl_outlined,
+                onTap: () => Get.to(
+                  () => const RecipeListByFilterView(
+                    title: 'Sides',
+                    topCategory: 'All',
+                    servingTime: null,
+                    tag: 'side',
+                  ),
+                ),
+              ),
+              _CategoryCardData(
+                title: 'Salad',
+                count: summary.saladCount,
+                icon: Icons.eco_outlined,
+                onTap: () => Get.to(
+                  () => const RecipeListByFilterView(
+                    title: 'Salad',
+                    topCategory: 'All',
+                    servingTime: null,
+                    tag: 'salad',
+                  ),
+                ),
+              ),
+            ];
+
+            return GridView.builder(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+              itemCount: cards.length,
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                mainAxisSpacing: 12,
+                crossAxisSpacing: 12,
+                mainAxisExtent: 130,
+              ),
+              itemBuilder: (context, index) {
+                final card = cards[index];
+                return GestureDetector(
+                  onTap: card.onTap,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xffFEF6FB),
+                      borderRadius: BorderRadius.circular(12),
+                      border: cardBorder,
+                      boxShadow: cardShadow,
+                    ),
+                    padding: const EdgeInsets.all(10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 36,
+                          height: 36,
+                          decoration: const BoxDecoration(
+                            color: Color(0xffFCE7F6),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(card.icon, color: _accent, size: 20),
+                        ),
+                        const Spacer(),
+                        CustomText(
+                          text: card.title,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                          color: const Color(0xff1F2A37),
+                        ),
+                        const SizedBox(height: 2),
+                        CustomText(
+                          text:
+                              '${card.count} recipe${card.count == 1 ? '' : 's'}',
+                          fontWeight: FontWeight.w400,
+                          fontSize: 11,
+                          color: const Color(0xff6C737F),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            );
+          }),
+        ),
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: CustomButton(
+            onTap: () async {
+              await Get.to(() => AddRecipeScreen());
+              controller.fetchServingTimeSummary();
+            },
+            text: 'Add New Recipe',
+            isOutline: false,
+          ),
+        ),
+      ],
     );
   }
 }

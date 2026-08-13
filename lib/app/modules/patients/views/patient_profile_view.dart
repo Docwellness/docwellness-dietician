@@ -12,6 +12,7 @@ import 'package:docwellnesdoc/app/modules/patients/views/payment_status_view.dar
 import 'package:docwellnesdoc/app/utils/membership_badge.dart';
 import 'package:docwellnesdoc/app/modules/patients/views/profile_options_sheet.dart';
 import 'package:docwellnesdoc/app/modules/patients/views/questions_view.dart';
+import 'package:docwellnesdoc/app/modules/patients/views/select_exercise_sheet.dart';
 import 'package:docwellnesdoc/app/modules/patients/widgets/bmi_and_body_fat_container.dart';
 import 'package:docwellnesdoc/app/modules/patients/widgets/bmi_card.dart';
 import 'package:docwellnesdoc/app/modules/patients/widgets/calorie_intake_container.dart';
@@ -1226,6 +1227,25 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                 ),
               ),
           ],
+          // ── Exercise Plan entry point ─────────────────────────────
+          // Gated only on firstConsultationId, independent of the diet
+          // plan's own existence/consent state above - an exercise plan
+          // doesn't require a diet plan to exist first (see the Exercise
+          // Plan feature plan's Phase 1).
+          if (status.firstConsultationId != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+              child: CustomButton(
+                onTap: () async {
+                  await Get.to(
+                    () => SelectExerciseSheet(patientId: widget.patientId),
+                  );
+                },
+                text: 'Create Exercise Plan',
+                isOutline: true,
+                fontSize: 14,
+              ),
+            ),
           // ── Weekly Diet Plan section ──────────────────────────────
           if (status.firstConsultationId != null &&
               status.activeDietPlanId != null)

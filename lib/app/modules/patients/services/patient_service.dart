@@ -684,4 +684,30 @@ class PatientService {
     }
     return null;
   }
+
+  /// Fetch patient exercise stats (calories burned, completion) for a
+  /// specific date - mirrors fetchPatientMealLogStats/
+  /// fetchPatientWaterIntake exactly.
+  Future<dynamic> fetchPatientExerciseStats(
+    String patientId, {
+    String? date,
+  }) async {
+    try {
+      final dateQuery = date != null ? '?date=$date' : '';
+      final response = await service.request(
+        endPoint: '/patients/$patientId/exercise-log/today-stats$dateQuery',
+        method: 'GET',
+        headers: {'Authorization': "Bearer $token"},
+      );
+
+      if (response != null &&
+          response.statusCode == 200 &&
+          response.data['success'] == true) {
+        return response.data;
+      }
+    } catch (e) {
+      debugPrint('fetchPatientExerciseStats error: $e');
+    }
+    return null;
+  }
 }

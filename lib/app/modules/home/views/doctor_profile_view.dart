@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:docwellnesdoc/app/modules/home/controllers/doctor_profile_controller.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_button.dart';
+import 'package:docwellnesdoc/app/utils/common_widgets/custom_dropdown.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_field.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
 import 'package:docwellnesdoc/app/utils/theme/app_shadows.dart';
@@ -89,6 +90,24 @@ class DoctorProfileView extends StatelessWidget {
 
               const SizedBox(height: 24),
 
+              // Title
+              Obx(
+                () => CustomDropdown(
+                  label: 'Title',
+                  items: DoctorProfileController.titlePrefixOptions,
+                  value: controller.selectedTitlePrefix.value,
+                  onChanged: (value) {
+                    if (value != null) {
+                      controller.selectedTitlePrefix.value = value;
+                    }
+                  },
+                  isRounded: true,
+                  suffixIconColor: const Color(0xff851653),
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
               // Full Name
               CustomField(
                 lable: 'Full Name',
@@ -139,15 +158,25 @@ class DoctorProfileView extends StatelessWidget {
                         selected: isSelected,
                         selectedColor: const Color(0xffFDF2FA),
                         backgroundColor: Colors.white,
+                        // Unselected options must still read as enabled/
+                        // tappable, not disabled - previously
+                        // Colors.grey/grey.shade300 (very light, washed-out)
+                        // made Male/Other look inactive next to whichever
+                        // option was actually selected. Uses the same
+                        // neutral text/border colors as the rest of this
+                        // form (0xff1F2A37 heading text, 0xffD0D5DD border)
+                        // so all three read as equally selectable by
+                        // default, with only the selected one getting the
+                        // brand-colored border/checkmark/fill.
                         side: BorderSide(
                           color: isSelected
                               ? const Color(0xff851653)
-                              : Colors.grey.shade300,
+                              : const Color(0xffD0D5DD),
                         ),
                         labelStyle: TextStyle(
                           color: isSelected
                               ? const Color(0xff851653)
-                              : Colors.grey,
+                              : const Color(0xff1F2A37),
                         ),
                         onSelected: (_) => controller.selectedGender.value = g,
                       ),

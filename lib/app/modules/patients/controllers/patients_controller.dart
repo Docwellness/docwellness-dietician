@@ -250,6 +250,7 @@ class PatientsController extends GetxController {
   RxBool isClientLogLoading = false.obs;
   RxMap<String, dynamic> clientMealStats = <String, dynamic>{}.obs;
   RxMap<String, dynamic> clientWaterData = <String, dynamic>{}.obs;
+  RxMap<String, dynamic> clientExerciseStats = <String, dynamic>{}.obs;
   RxList<Map<String, dynamic>> clientMeals = <Map<String, dynamic>>[].obs;
 
   /// questions
@@ -3611,10 +3612,12 @@ class PatientsController extends GetxController {
       final results = await Future.wait([
         service.fetchPatientMealLogStats(patientId, date: dateStr),
         service.fetchPatientWaterIntake(patientId, date: dateStr),
+        service.fetchPatientExerciseStats(patientId, date: dateStr),
       ]);
 
       final mealResponse = results[0];
       final waterResponse = results[1];
+      final exerciseResponse = results[2];
 
       if (mealResponse != null && mealResponse['success'] == true) {
         final data = Map<String, dynamic>.from(mealResponse['data'] ?? {});
@@ -3634,6 +3637,14 @@ class PatientsController extends GetxController {
         );
       } else {
         clientWaterData.value = {};
+      }
+
+      if (exerciseResponse != null && exerciseResponse['success'] == true) {
+        clientExerciseStats.value = Map<String, dynamic>.from(
+          exerciseResponse['data'] ?? {},
+        );
+      } else {
+        clientExerciseStats.value = {};
       }
     } catch (e) {
       debugPrint('fetchClientLogData error: $e');
