@@ -1,4 +1,4 @@
-package com.example.docwellnesdoc
+package fit.docdesk.app
 
 import io.flutter.embedding.android.FlutterActivity
 

@@ -165,7 +165,7 @@ class _ClintLogDataSheetState extends State<ClintLogDataSheet> {
                 child: ProgressCard(
                   intake: _toInt(summary['totalConsumedCalories']),
                   remaining: _toInt(summary['remainingCalories']),
-                  exercise: 0,
+                  exercise: _toInt(controller.clientExerciseStats['totalCaloriesBurned']),
                   totalPlanned: _toInt(summary['totalPlannedCalories']),
                   carbsConsumed: _toDouble(consumed['carbs']),
                   carbsPlanned: _toDouble(planned['carbs']),

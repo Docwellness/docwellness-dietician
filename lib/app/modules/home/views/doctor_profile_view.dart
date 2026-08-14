@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:docwellnesdoc/app/modules/home/controllers/doctor_profile_controller.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_button.dart';
+import 'package:docwellnesdoc/app/utils/common_widgets/custom_dropdown.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_field.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
 import 'package:docwellnesdoc/app/utils/theme/app_shadows.dart';
@@ -109,6 +110,24 @@ class DoctorProfileView extends StatelessWidget {
 
               const SizedBox(height: 24),
 
+              // Title
+              Obx(
+                () => CustomDropdown(
+                  label: 'Title',
+                  items: DoctorProfileController.titlePrefixOptions,
+                  value: controller.selectedTitlePrefix.value,
+                  onChanged: (value) {
+                    if (value != null) {
+                      controller.selectedTitlePrefix.value = value;
+                    }
+                  },
+                  isRounded: true,
+                  suffixIconColor: const Color(0xff851653),
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
               // Full Name
               CustomField(
                 lable: 'Full Name',
@@ -159,15 +178,25 @@ class DoctorProfileView extends StatelessWidget {
                         selected: isSelected,
                         selectedColor: const Color(0xffFDF2FA),
                         backgroundColor: Colors.white,
+                        // Unselected options must still read as enabled/
+                        // tappable, not disabled - previously
+                        // Colors.grey/grey.shade300 (very light, washed-out)
+                        // made Male/Other look inactive next to whichever
+                        // option was actually selected. Uses the same
+                        // neutral text/border colors as the rest of this
+                        // form (0xff1F2A37 heading text, 0xffD0D5DD border)
+                        // so all three read as equally selectable by
+                        // default, with only the selected one getting the
+                        // brand-colored border/checkmark/fill.
                         side: BorderSide(
                           color: isSelected
                               ? const Color(0xff851653)
-                              : Colors.grey.shade300,
+                              : const Color(0xffD0D5DD),
                         ),
                         labelStyle: TextStyle(
                           color: isSelected
                               ? const Color(0xff851653)
-                              : Colors.grey,
+                              : const Color(0xff1F2A37),
                         ),
                         onSelected: (_) => controller.selectedGender.value = g,
                       ),
@@ -486,11 +515,649 @@ class DoctorProfileView extends StatelessWidget {
                 );
               }),
 
+              const SizedBox(height: 30),
+              const Divider(color: Color(0xffE5E7EB)),
+              const SizedBox(height: 20),
+
+              _PhotoGalleryManager(controller: controller),
+
+              const SizedBox(height: 30),
+              const Divider(color: Color(0xffE5E7EB)),
+              const SizedBox(height: 20),
+
+              _SocialMediaManager(controller: controller),
+
+              const SizedBox(height: 30),
+              const Divider(color: Color(0xffE5E7EB)),
+              const SizedBox(height: 20),
+
+              _ArticlesManager(controller: controller),
+
+              const SizedBox(height: 30),
+              const Divider(color: Color(0xffE5E7EB)),
+              const SizedBox(height: 20),
+
+              _ReviewsManager(controller: controller),
+
               const SizedBox(height: 20),
             ],
           ),
         );
       }),
+    );
+  }
+}
+
+class _PhotoGalleryManager extends StatelessWidget {
+  final DoctorProfileController controller;
+  const _PhotoGalleryManager({required this.controller});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        CustomText(
+          text: 'Photo Gallery',
+          fontWeight: FontWeight.w600,
+          fontSize: 18,
+          color: const Color(0xff1F2A37),
+        ),
+        const SizedBox(height: 4),
+        CustomText(
+          text: 'Auto-scrolling carousel at the top of your About Doctor page - add 5-6 photos of yourself for the best effect.',
+          fontWeight: FontWeight.w400,
+          fontSize: 12,
+          color: const Color(0xff6C737F),
+        ),
+        const SizedBox(height: 14),
+        Obx(() {
+          final images = controller.galleryImages;
+          return Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              ...images.map((img) {
+                final id = img['id']?.toString() ?? '';
+                final url = img['url']?.toString() ?? '';
+                return Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Image.network(
+                        url,
+                        width: 90,
+                        height: 90,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          width: 90,
+                          height: 90,
+                          color: const Color(0xffFEF6FB),
+                          child: const Icon(Icons.image_outlined, color: Color(0xff9DA4AE)),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      top: -8,
+                      right: -8,
+                      child: GestureDetector(
+                        onTap: () => controller.deleteGalleryImage(id),
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: const BoxDecoration(
+                            color: Colors.red,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.close, size: 14, color: Colors.white),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              }),
+              GestureDetector(
+                onTap: controller.isGalleryUploading.value ? null : controller.addGalleryImage,
+                child: Container(
+                  width: 90,
+                  height: 90,
+                  decoration: BoxDecoration(
+                    color: const Color(0xffFEF6FB),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xffF3D9E9)),
+                  ),
+                  child: controller.isGalleryUploading.value
+                      ? const Center(
+                          child: SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xff851653)),
+                          ),
+                        )
+                      : const Icon(Icons.add_a_photo_outlined, color: Color(0xff851653)),
+                ),
+              ),
+            ],
+          );
+        }),
+      ],
+    );
+  }
+}
+
+class _SocialMediaManager extends StatelessWidget {
+  final DoctorProfileController controller;
+  const _SocialMediaManager({required this.controller});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        CustomText(
+          text: 'Social Media',
+          fontWeight: FontWeight.w600,
+          fontSize: 18,
+          color: const Color(0xff1F2A37),
+        ),
+        const SizedBox(height: 4),
+        CustomText(
+          text: 'Shown on your About Doctor page - YouTube scrolls horizontally, Instagram as vertical cards. Drag to reorder.',
+          fontWeight: FontWeight.w400,
+          fontSize: 12,
+          color: const Color(0xff6C737F),
+        ),
+        const SizedBox(height: 16),
+
+        // --- YouTube ---
+        CustomText(
+          text: 'YouTube',
+          fontWeight: FontWeight.w600,
+          fontSize: 14,
+          color: const Color(0xff851653),
+        ),
+        const SizedBox(height: 10),
+        CustomField(
+          lable: 'YouTube link',
+          controller: controller.youtubeUrlController,
+          hintText: 'https://youtube.com/watch?v=...',
+        ),
+        const SizedBox(height: 10),
+        CustomField(
+          lable: 'Caption (optional)',
+          controller: controller.youtubeCaptionController,
+          hintText: 'What is this video about?',
+        ),
+        const SizedBox(height: 10),
+        Obx(
+          () => controller.isSocialSaving.value
+              ? const Center(child: CircularProgressIndicator(color: Color(0xff851653)))
+              : CustomButton(
+                  text: 'Add YouTube Link',
+                  isOutline: true,
+                  onTap: controller.addYoutubePost,
+                ),
+        ),
+        const SizedBox(height: 14),
+        Obx(() {
+          final list = controller.youtubePosts;
+          if (list.isEmpty) return const SizedBox.shrink();
+          return ReorderableListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: list.length,
+            onReorder: controller.reorderYoutube,
+            itemBuilder: (context, index) {
+              final post = list[index];
+              return _SocialPostTile(
+                key: ValueKey(post['_id']),
+                thumbnailUrl: post['thumbnailUrl']?.toString() ?? '',
+                caption: post['caption']?.toString() ?? '',
+                onDelete: () => controller.deleteSocialPost(post['_id'].toString(), 'youtube'),
+              );
+            },
+          );
+        }),
+
+        const SizedBox(height: 20),
+
+        // --- Instagram ---
+        CustomText(
+          text: 'Instagram',
+          fontWeight: FontWeight.w600,
+          fontSize: 14,
+          color: const Color(0xff851653),
+        ),
+        const SizedBox(height: 10),
+        GestureDetector(
+          onTap: controller.pickInstagramImage,
+          child: Obx(
+            () => Container(
+              width: double.infinity,
+              height: 140,
+              decoration: BoxDecoration(
+                color: const Color(0xffFEF6FB),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xffF3D9E9)),
+              ),
+              child: controller.pickedInstagramImage.value == null
+                  ? const Center(
+                      child: Icon(Icons.add_a_photo_outlined, color: Color(0xff851653), size: 30),
+                    )
+                  : ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Image.file(
+                        File(controller.pickedInstagramImage.value!.path),
+                        width: double.infinity,
+                        height: 140,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        CustomField(
+          lable: 'Instagram link',
+          controller: controller.instagramUrlController,
+          hintText: 'https://instagram.com/...',
+        ),
+        const SizedBox(height: 10),
+        CustomField(
+          lable: 'Caption (optional)',
+          controller: controller.instagramCaptionController,
+          hintText: 'What is this post about?',
+        ),
+        const SizedBox(height: 10),
+        Obx(
+          () => controller.isSocialSaving.value
+              ? const Center(child: CircularProgressIndicator(color: Color(0xff851653)))
+              : CustomButton(
+                  text: 'Add Instagram Post',
+                  isOutline: true,
+                  onTap: controller.addInstagramPost,
+                ),
+        ),
+        const SizedBox(height: 14),
+        Obx(() {
+          final list = controller.instagramPosts;
+          if (list.isEmpty) return const SizedBox.shrink();
+          return ReorderableListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: list.length,
+            onReorder: controller.reorderInstagram,
+            itemBuilder: (context, index) {
+              final post = list[index];
+              return _SocialPostTile(
+                key: ValueKey(post['_id']),
+                thumbnailUrl: post['thumbnailUrl']?.toString() ?? '',
+                caption: post['caption']?.toString() ?? '',
+                onDelete: () => controller.deleteSocialPost(post['_id'].toString(), 'instagram'),
+              );
+            },
+          );
+        }),
+      ],
+    );
+  }
+}
+
+class _SocialPostTile extends StatelessWidget {
+  final String thumbnailUrl;
+  final String caption;
+  final VoidCallback onDelete;
+
+  const _SocialPostTile({
+    super.key,
+    required this.thumbnailUrl,
+    required this.caption,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: cardBorder,
+        boxShadow: cardShadow,
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.drag_indicator, color: Color(0xff9DA4AE)),
+          const SizedBox(width: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: thumbnailUrl.isNotEmpty
+                ? Image.network(
+                    thumbnailUrl,
+                    width: 56,
+                    height: 56,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      width: 56,
+                      height: 56,
+                      color: const Color(0xffFEF6FB),
+                      child: const Icon(Icons.image_outlined, color: Color(0xff9DA4AE)),
+                    ),
+                  )
+                : Container(
+                    width: 56,
+                    height: 56,
+                    color: const Color(0xffFEF6FB),
+                    child: const Icon(Icons.image_outlined, color: Color(0xff9DA4AE)),
+                  ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: CustomText(
+              text: caption.isNotEmpty ? caption : '(no caption)',
+              fontWeight: FontWeight.w400,
+              fontSize: 12,
+              color: const Color(0xff4D5761),
+              maxLines: 2,
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+            onPressed: onDelete,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ArticlesManager extends StatelessWidget {
+  final DoctorProfileController controller;
+  const _ArticlesManager({required this.controller});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        CustomText(
+          text: 'Articles',
+          fontWeight: FontWeight.w600,
+          fontSize: 18,
+          color: const Color(0xff1F2A37),
+        ),
+        const SizedBox(height: 4),
+        CustomText(
+          text: 'Nutrition/wellness articles shown on your About Doctor page. Drag to reorder.',
+          fontWeight: FontWeight.w400,
+          fontSize: 12,
+          color: const Color(0xff6C737F),
+        ),
+        const SizedBox(height: 16),
+        GestureDetector(
+          onTap: controller.pickArticleImage,
+          child: Obx(
+            () => Container(
+              width: double.infinity,
+              height: 160,
+              decoration: BoxDecoration(
+                color: const Color(0xffFEF6FB),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xffF3D9E9)),
+              ),
+              child: controller.pickedArticleImage.value == null
+                  ? const Center(
+                      child: Icon(Icons.add_a_photo_outlined, color: Color(0xff851653), size: 30),
+                    )
+                  : ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Image.file(
+                        File(controller.pickedArticleImage.value!.path),
+                        width: double.infinity,
+                        height: 160,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        CustomField(
+          lable: 'Title',
+          controller: controller.articleTitleController,
+          hintText: 'e.g. 5 Sustainable Weight-Loss Habits',
+        ),
+        const SizedBox(height: 10),
+        CustomField(
+          lable: 'Category',
+          controller: controller.articleCategoryController,
+          hintText: 'e.g. Weight Loss',
+        ),
+        const SizedBox(height: 10),
+        CustomField(
+          lable: 'Excerpt',
+          controller: controller.articleExcerptController,
+          hintText: 'One or two sentence teaser',
+          maxLines: 2,
+        ),
+        const SizedBox(height: 10),
+        CustomField(
+          lable: 'Full content',
+          controller: controller.articleContentController,
+          hintText: 'The full article text patients will read',
+          maxLines: 6,
+        ),
+        const SizedBox(height: 10),
+        Obx(
+          () => controller.isArticleSaving.value
+              ? const Center(child: CircularProgressIndicator(color: Color(0xff851653)))
+              : CustomButton(
+                  text: 'Add Article',
+                  isOutline: true,
+                  onTap: controller.addArticle,
+                ),
+        ),
+        const SizedBox(height: 16),
+        Obx(() {
+          if (controller.articles.isEmpty) {
+            return Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 22, horizontal: 16),
+              decoration: BoxDecoration(
+                color: const Color(0xffFEF6FB),
+                borderRadius: BorderRadius.circular(12),
+                border: cardBorder,
+                boxShadow: cardShadow,
+              ),
+              child: const CustomText(
+                text: 'No articles yet. Add your first one above.',
+                fontSize: 13,
+                fontWeight: FontWeight.w400,
+                color: Color(0xff6C737F),
+              ),
+            );
+          }
+          final list = controller.articles;
+          return ReorderableListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: list.length,
+            onReorder: controller.reorderArticles,
+            itemBuilder: (context, index) {
+              final article = list[index];
+              return Container(
+                key: ValueKey(article['_id']),
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: cardBorder,
+                  boxShadow: cardShadow,
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.drag_indicator, color: Color(0xff9DA4AE)),
+                    const SizedBox(width: 8),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.network(
+                        article['imageUrl']?.toString() ?? '',
+                        width: 56,
+                        height: 56,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          width: 56,
+                          height: 56,
+                          color: const Color(0xffFEF6FB),
+                          child: const Icon(Icons.image_outlined, color: Color(0xff9DA4AE)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: CustomText(
+                        text: article['title']?.toString() ?? '',
+                        fontWeight: FontWeight.w500,
+                        fontSize: 13,
+                        color: const Color(0xff1F2A37),
+                        maxLines: 2,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                      onPressed: () => controller.deleteArticle(article['_id'].toString()),
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
+        }),
+      ],
+    );
+  }
+}
+
+class _ReviewsManager extends StatelessWidget {
+  final DoctorProfileController controller;
+  const _ReviewsManager({required this.controller});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        CustomText(
+          text: 'Reviews',
+          fontWeight: FontWeight.w600,
+          fontSize: 18,
+          color: const Color(0xff1F2A37),
+        ),
+        const SizedBox(height: 4),
+        CustomText(
+          text: 'Submitted by patients. Drag to reorder how they appear on your About Doctor page.',
+          fontWeight: FontWeight.w400,
+          fontSize: 12,
+          color: const Color(0xff6C737F),
+        ),
+        const SizedBox(height: 16),
+        Obx(() {
+          if (controller.isReviewsLoading.value) {
+            return const Center(child: CircularProgressIndicator(color: Color(0xff851653)));
+          }
+          if (controller.reviews.isEmpty) {
+            return Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 22, horizontal: 16),
+              decoration: BoxDecoration(
+                color: const Color(0xffFEF6FB),
+                borderRadius: BorderRadius.circular(12),
+                border: cardBorder,
+                boxShadow: cardShadow,
+              ),
+              child: const CustomText(
+                text: 'No reviews yet.',
+                fontSize: 13,
+                fontWeight: FontWeight.w400,
+                color: Color(0xff6C737F),
+              ),
+            );
+          }
+          final list = controller.reviews;
+          return ReorderableListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: list.length,
+            onReorder: controller.reorderReviews,
+            itemBuilder: (context, index) {
+              final review = list[index];
+              final rating = (review['rating'] as num?)?.toInt() ?? 0;
+              return Container(
+                key: ValueKey(review['_id']),
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: cardBorder,
+                  boxShadow: cardShadow,
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.drag_indicator, color: Color(0xff9DA4AE)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: CustomText(
+                                  text: review['patientName']?.toString() ?? 'Patient',
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
+                                  color: const Color(0xff1F2A37),
+                                ),
+                              ),
+                              Row(
+                                children: List.generate(
+                                  5,
+                                  (i) => Icon(
+                                    i < rating ? Icons.star : Icons.star_border,
+                                    size: 14,
+                                    color: const Color(0xffF670CA),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          if ((review['text']?.toString() ?? '').isNotEmpty) ...[
+                            const SizedBox(height: 6),
+                            CustomText(
+                              text: review['text'].toString(),
+                              fontWeight: FontWeight.w400,
+                              fontSize: 12,
+                              color: const Color(0xff4D5761),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                      onPressed: () => controller.deleteReview(review['_id'].toString()),
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
+        }),
+      ],
     );
   }
 }

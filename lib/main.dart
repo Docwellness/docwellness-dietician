@@ -72,6 +72,22 @@ Future<void> _bootstrap() async {
       url: EnvService.supabaseUrl,
       publishableKey: EnvService.supabasePublishableKey,
     );
+
+    // The SDK auto-refreshes the access token in the background using the
+    // refresh token, shortly before the current one expires (~1hr default
+    // TTL) - but that refreshed token only lives inside the SDK's own
+    // session state. SessionService/token above holds a copy taken once at
+    // sign-in for attaching to backend API calls, and without this
+    // listener that copy goes stale the moment the original token expires:
+    // every backend call then starts failing with 401 "token invalid"
+    // until the app is killed and relaunched, even though the user was
+    // never actually signed out.
+    Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+      final session = data.session;
+      if (session != null) {
+        token = session.accessToken;
+      }
+    });
   }
 
   // Toggle to enable/disable Firebase push notification wiring.

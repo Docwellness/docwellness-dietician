@@ -7,9 +7,9 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:69737284856:android:6fc369714dcee153fd270d",
+        "mobilesdk_app_id": "1:69737284856:android:8b9e680c23dbc72ffd270d",
         "android_client_info": {
-          "package_name": "com.example.docwellnesdoc"
+          "package_name": "fit.docdesk.app"
         }
       },
       "oauth_client": [],
@@ -26,9 +26,9 @@
     },
     {
       "client_info": {
-        "mobilesdk_app_id": "1:69737284856:android:8e3c874edaf6f5d6fd270d",
+        "mobilesdk_app_id": "1:69737284856:android:779c2fa7f88d0b72fd270d",
         "android_client_info": {
-          "package_name": "com.example.docwellness"
+          "package_name": "fit.docwellness.app"
         }
       },
       "oauth_client": [],

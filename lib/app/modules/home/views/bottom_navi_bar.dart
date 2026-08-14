@@ -1,9 +1,9 @@
 import 'package:docwellnesdoc/app/modules/chat/views/chat_view.dart';
 import 'package:docwellnesdoc/app/modules/home/controllers/home_controller.dart';
+import 'package:docwellnesdoc/app/modules/home/views/diet_and_exercise_view.dart';
 import 'package:docwellnesdoc/app/modules/home/views/home_view.dart';
 import 'package:docwellnesdoc/app/modules/patients/views/patients_view.dart';
 import 'package:docwellnesdoc/app/modules/performance/views/performance_view.dart';
-import 'package:docwellnesdoc/app/modules/receipes/views/receipes_view.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -18,7 +18,7 @@ class BottomNaviBar extends StatelessWidget {
   final screens = [
     HomeView(),
     const PatientsView(),
-    const ReceipesView(),
+    const DietAndExerciseView(),
     const PerformanceView(),
     const ChatView(),
   ];
@@ -26,12 +26,12 @@ class BottomNaviBar extends StatelessWidget {
   final icons = [
     'assets/icons/Vector.png',
     'assets/icons/Frame.png',
-    'assets/icons/Vector(1).png',
+    'assets/icons/diet_exercise_icon.png',
     'assets/icons/Frame(1).png',
     'assets/icons/Frame(2).png',
   ];
 
-  final labels = ["Home", "Patients", "Receipes", "Performance", "Chat"];
+  final labels = ["Home", "Patients", "Diet & Exercise", "Performance", "Chat"];
 
   @override
   Widget build(BuildContext context) {
@@ -83,22 +83,34 @@ class BottomNaviBar extends StatelessWidget {
                                 : Colors.transparent,
                             borderRadius: BorderRadius.circular(20),
                           ),
-                          child: Image.asset(
-                            icons[index],
-                            height: 22,
-                            colorBlendMode: BlendMode.srcIn,
-                            color: isSelected ? Colors.white : Colors.grey[700],
-                          ),
+                          // diet_exercise_icon.png is a full-color line-art
+                          // badge with an opaque (non-transparent) cream
+                          // background - unlike the other nav icons it can't
+                          // be tint-recolored via colorBlendMode (that would
+                          // paint the whole square solid), so it renders at
+                          // its own natural colors always, clipped to a
+                          // circle to crop away the square's cream corners.
+                          child: index == 2
+                              ? ClipOval(
+                                  child: Image.asset(icons[index], height: 26, width: 26, fit: BoxFit.cover),
+                                )
+                              : Image.asset(
+                                  icons[index],
+                                  height: 22,
+                                  colorBlendMode: BlendMode.srcIn,
+                                  color: isSelected ? Colors.white : Colors.grey[700],
+                                ),
                         ),
                         const SizedBox(height: 4),
                         CustomText(
                           text: labels[index],
-
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
                           color: isSelected ? maroonColor : Colors.grey[700]!,
                           fontWeight: isSelected
                               ? FontWeight.w600
                               : FontWeight.w500,
-                          fontSize: 10.5,
+                          fontSize: 11,
                         ),
                       ],
                     ),

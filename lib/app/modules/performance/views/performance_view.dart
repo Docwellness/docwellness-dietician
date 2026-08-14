@@ -58,6 +58,55 @@ class PerformanceView extends GetView<PerformanceController> {
     return '\$${_formatInt(value.round())}';
   }
 
+  void _confirmDeleteQuote(BuildContext context, String quoteId) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: CustomText(
+            text: 'Delete Quote',
+            fontWeight: FontWeight.w600,
+            fontSize: 18,
+            color: const Color(0xff1F2A37),
+          ),
+          content: CustomText(
+            text: 'Are you sure you want to delete this quote?',
+            fontWeight: FontWeight.w400,
+            fontSize: 14,
+            color: const Color(0xff4D5761),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: CustomText(
+                text: 'Cancel',
+                fontWeight: FontWeight.w500,
+                fontSize: 14,
+                color: const Color(0xff851653),
+              ),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+                controller.deleteQuoteById(quoteId);
+              },
+              child: CustomText(
+                text: 'Delete',
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+                color: const Color(0xffB42318),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1129,30 +1178,19 @@ class PerformanceView extends GetView<PerformanceController> {
                                           ListTile(
                                             leading: Icon(
                                               Icons.delete_outline,
-                                              color: Colors.red,
+                                              color: Color(0xffB42318),
                                             ),
                                             title: Text(
                                               'Delete Quote',
                                               style: TextStyle(
-                                                color: Colors.red,
+                                                color: Color(0xffB42318),
                                               ),
                                             ),
                                             onTap: () {
                                               Navigator.pop(context);
-                                              Get.defaultDialog(
-                                                title: 'Delete Quote',
-                                                middleText:
-                                                    'Are you sure you want to delete this quote?',
-                                                textConfirm: 'Delete',
-                                                textCancel: 'Cancel',
-                                                confirmTextColor: Colors.white,
-                                                buttonColor: Colors.red,
-                                                onConfirm: () {
-                                                  Get.back();
-                                                  controller.deleteQuoteById(
-                                                    quoteId,
-                                                  );
-                                                },
+                                              _confirmDeleteQuote(
+                                                context,
+                                                quoteId,
                                               );
                                             },
                                           ),
@@ -1346,32 +1384,21 @@ class PerformanceView extends GetView<PerformanceController> {
                                                   ListTile(
                                                     leading: Icon(
                                                       Icons.delete_outline,
-                                                      color: Colors.red,
+                                                      color: Color(0xffB42318),
                                                     ),
                                                     title: Text(
                                                       'Delete Quote',
                                                       style: TextStyle(
-                                                        color: Colors.red,
+                                                        color: Color(
+                                                          0xffB42318,
+                                                        ),
                                                       ),
                                                     ),
                                                     onTap: () {
                                                       Navigator.pop(context);
-                                                      Get.defaultDialog(
-                                                        title: 'Delete Quote',
-                                                        middleText:
-                                                            'Are you sure you want to delete this quote?',
-                                                        textConfirm: 'Delete',
-                                                        textCancel: 'Cancel',
-                                                        confirmTextColor:
-                                                            Colors.white,
-                                                        buttonColor: Colors.red,
-                                                        onConfirm: () {
-                                                          Get.back();
-                                                          controller
-                                                              .deleteQuoteById(
-                                                                quoteId,
-                                                              );
-                                                        },
+                                                      _confirmDeleteQuote(
+                                                        context,
+                                                        quoteId,
                                                       );
                                                     },
                                                   ),
