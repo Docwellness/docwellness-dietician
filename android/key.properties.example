@@ -1,0 +1,4 @@
+storePassword=<keystore-password>
+keyPassword=<key-password>
+keyAlias=upload
+storeFile=<path-to-upload-keystore.jks, e.g. /Users/you/keys/docdesk-upload-keystore.jks>

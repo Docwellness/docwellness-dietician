@@ -13,7 +13,6 @@ import 'app/routes/app_pages.dart';
 import 'app/services/connectivity_service.dart';
 import 'app/services/notification_service.dart';
 import 'app/services/socket_service.dart';
-import 'app/utils/functions/dio_function.dart';
 import 'core/config/env_service.dart';
 import 'core/session/session_service.dart';
 
@@ -61,8 +60,9 @@ Future<void> _bootstrap() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Registered before anything else - the token/userId getters/setters
-  // above delegate to this immediately, including from deep inside
-  // _autoLoginDietician() further down this same function.
+  // above delegate to this immediately, and AuthController.login() (see
+  // app/modules/auth/controllers/auth_controller.dart) writes through them
+  // as soon as it runs.
   await Get.putAsync(() => SessionService().init(), permanent: true);
 
   await Get.putAsync(() => ConnectivityService().init(), permanent: true);
@@ -89,8 +89,6 @@ Future<void> _bootstrap() async {
     }
   }
 
-  await _autoLoginDietician();
-
   // Initialize Socket Service
   await Get.putAsync(() => SocketService().init());
 
@@ -102,49 +100,6 @@ Future<void> _initPostHog() async {
   final config = PostHogConfig(EnvService.posthogApiKey)
     ..host = EnvService.posthogHost;
   await Posthog().setup(config);
-}
-
-Future<void> _autoLoginDietician() async {
-  if (EnvService.dieticianAutoLoginEmail.isEmpty ||
-      EnvService.dieticianAutoLoginPassword.isEmpty) {
-    return;
-  }
-
-  try {
-    final authRes = await Supabase.instance.client.auth.signInWithPassword(
-      email: EnvService.dieticianAutoLoginEmail,
-      password: EnvService.dieticianAutoLoginPassword,
-    );
-    final session = authRes.session;
-    if (session == null) {
-      debugPrint('Dietician auto-login: no session returned');
-      return;
-    }
-    token = session.accessToken;
-
-    final response = await ApiService().request(
-      endPoint: '/auth/me',
-      method: 'GET',
-      headers: {'Authorization': 'Bearer $token'},
-    );
-    if (response != null &&
-        response.statusCode == 200 &&
-        response.data['success'] == true) {
-      userId = response.data['data']['_id'];
-      debugPrint('🧪 Auto-logged in as dietician: userId=$userId');
-      // AI_EXECUTION_PLAN.md Phase 8, P8-04 - no PHI: no properties, same
-      // shape as the user app's login_success.
-      await Posthog().capture(eventName: 'login_success');
-    } else {
-      debugPrint(
-        'Dietician auto-login: /auth/me failed (${response?.statusCode})',
-      );
-      token = null;
-    }
-  } catch (e) {
-    debugPrint('Dietician auto-login failed: $e');
-    token = null;
-  }
 }
 
 class MyApp extends StatelessWidget {

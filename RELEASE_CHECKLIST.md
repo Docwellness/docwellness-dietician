@@ -17,11 +17,11 @@ verified (out of this session's scope)
 - ✅ Fixed a hardcoded production IP (`http://65.20.81.44:5001`) in `custom_food_bubble.dart` - now resolves via `EnvService.apiHost` like everything else (Phase 7)
 - ✅ Fixed `dio_function.dart` unconditionally printing a JWT-prefix slice plus full request/response bodies (can carry patient health data) to console **in release builds too** - now gated to `kDebugMode`, and the token itself is never printed even partially (Phase 7)
 - ✅ Secure storage used - `SessionService` backed by `flutter_secure_storage`
-- ⚠️ There is no real login screen - the app auto-logs in as a single hardcoded dietician account (`EnvService.dieticianAutoLoginEmail`/`Password`, sourced from a gitignored `lib/dev_credentials.dart`). This is a deliberate single-dietician-per-deployment design, not an oversight, but confirm that's still the intended model before any release that assumes multi-dietician support.
+- ✅ Real login screen added (`app/modules/auth`) ahead of the public Play Store release - the previous auto-login baked a real password into the compiled binary via `--dart-define`/`lib/dev_credentials.dart`, which is a genuine credential leak once the APK is publicly downloadable, unlike the Supabase anon key (designed to be public). `SplashView` now checks for a persisted session and routes to `Routes.AUTH` when there isn't one; a logout entry point was added to `DoctorProfileView`'s AppBar (there was previously no way to log out at all).
 
 ## Dietician App
 
-- ✅ Login works (auto-login), session persists securely, logout clears session
+- ✅ Login works (real email/password screen, not auto-login), session persists securely, logout (see `DoctorProfileController.logout()`) clears both the Supabase session and local session state
 - ✅ Patient list works - loading/empty states pre-existing; **error state with retry added** (Phase 7, was previously indistinguishable from "no patients")
 - ✅ Patient detail works
 - ✅ Diet plan builder works - generate → draft review → explicit finalize → activate pipeline confirmed intact and unmodified in its core flow
