@@ -9,6 +9,7 @@ import 'package:docwellnesdoc/app/models/patient_list_model.dart';
 import 'package:docwellnesdoc/app/models/patient_profile_model.dart';
 import 'package:docwellnesdoc/app/models/tracking_data_model.dart';
 import 'package:docwellnesdoc/app/models/update_ai_diet_plain_model.dart';
+import 'package:docwellnesdoc/app/modules/exercises/services/exercise_service.dart';
 import 'package:docwellnesdoc/app/modules/patients/services/consultation_mock_fill_service.dart';
 import 'package:docwellnesdoc/app/modules/patients/services/patient_service.dart';
 import 'package:docwellnesdoc/app/modules/patients/views/questions_view.dart';
@@ -1002,6 +1003,36 @@ class PatientsController extends GetxController {
       debugPrint('-------------$e');
     }
     isProfileLoading.value = false;
+  }
+
+  final ExerciseService _exerciseService = ExerciseService();
+
+  // The patient's one evergreen exercise plan (see backend's ExercisePlan.js -
+  // there's no per-week variation like diet plans have, just 4 day-groups).
+  // Null until fetchExercisePlan() resolves, and stays null forever if the
+  // dietician has never created one yet - see hasExercisePlan below.
+  Rx<Map<String, dynamic>?> exercisePlan = Rx<Map<String, dynamic>?>(null);
+
+  bool get hasExercisePlan => exercisePlan.value != null;
+
+  Future<void> fetchExercisePlan(String patientId) async {
+    exercisePlan.value = await _exerciseService.getCurrentExercisePlan(
+      patientId,
+    );
+  }
+
+  /// This plan's dailyExercises entries for one of utils/dayGroups.js's 4
+  /// groups ('Monday'/'Tuesday'/'Wednesday'/'Thursday') - see
+  /// patient_profile_view.dart's day-group cards, which show one of these
+  /// per card via the same "Mon & Fri" etc. labeling select_diet_sheet.dart
+  /// already uses.
+  List<Map<String, dynamic>> exercisesForDayGroup(String dayGroup) {
+    final entries = exercisePlan.value?['dailyExercises'] as List? ?? [];
+    return entries
+        .whereType<Map>()
+        .where((e) => e['dayGroup'] == dayGroup)
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
   }
 
   Future<void> togglePatientActive(String patientId) async {

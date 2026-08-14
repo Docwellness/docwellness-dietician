@@ -31,6 +31,27 @@ import 'package:intl/intl.dart';
 
 enum _WeekCardState { generated, eligible, locked }
 
+// Same 4 day-groups the exercise assignment sheet and diet plan both use
+// (see backend's utils/dayGroups.js) - an exercise plan has no per-week
+// variation, so unlike Weekly Diet Plans' week cards, these 4 cards are
+// always the same 4 groups regardless of the patient's actual calendar week.
+const List<String> _exerciseDayGroups = ['Monday', 'Tuesday', 'Wednesday', 'Thursday'];
+
+String _exerciseDayGroupLabel(String dayGroup) {
+  switch (dayGroup) {
+    case 'Monday':
+      return 'Mon & Fri';
+    case 'Tuesday':
+      return 'Tue & Sat';
+    case 'Wednesday':
+      return 'Wed & Sun';
+    case 'Thursday':
+      return 'Thu';
+    default:
+      return dayGroup;
+  }
+}
+
 class PatientProfileView extends StatefulWidget {
   final String patientId;
   const PatientProfileView({super.key, required this.patientId});
@@ -53,6 +74,7 @@ class _PatientProfileViewState extends State<PatientProfileView> {
     controller.showFirstConsultationiInfo.value = false;
     controller.showPaymentInfo.value = false;
     controller.getPatientProfile(widget.patientId);
+    controller.fetchExercisePlan(widget.patientId);
     controller.fetchAllTrackingData(widget.patientId);
     controller.fetchJourneyImages(widget.patientId);
     controller.fetchAutoJourneyMilestones(widget.patientId);
@@ -425,6 +447,106 @@ class _PatientProfileViewState extends State<PatientProfileView> {
       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
     ];
     return '${date.day} ${months[date.month - 1]}';
+  }
+
+  /// Lists one day-group's assigned exercises (tapped from a card in the
+  /// Exercise Plan section) - read-only, "Edit Exercise Plan" above is the
+  /// only place to actually change assignments (see SelectExerciseSheet).
+  void _showExerciseDayGroupSheet(
+    BuildContext context,
+    String dayGroup,
+    List<Map<String, dynamic>> entries,
+  ) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(ctx).size.height * 0.7,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  CustomText(
+                    text: _exerciseDayGroupLabel(dayGroup),
+                    fontWeight: FontWeight.w600,
+                    fontSize: 18,
+                    color: const Color(0xff530630),
+                  ),
+                  const SizedBox(height: 12),
+                  if (entries.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 20),
+                      child: CustomText(
+                        text: 'No exercises assigned for this day yet.',
+                        fontWeight: FontWeight.w400,
+                        fontSize: 13,
+                        color: Color(0xff6C737F),
+                      ),
+                    )
+                  else
+                    Flexible(
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        itemCount: entries.length,
+                        separatorBuilder: (_, __) =>
+                            const Divider(color: Color(0xffE5E7EB)),
+                        itemBuilder: (context, index) {
+                          final entry = entries[index];
+                          final exercise =
+                              entry['exerciseId'] as Map? ?? const {};
+                          final name = exercise['name']?.toString() ?? 'Exercise';
+                          final duration = entry['durationMinutes'];
+                          final sets = entry['sets'];
+                          final reps = entry['reps'];
+                          final parts = <String>[
+                            if (duration != null)
+                              '$duration min${sets != null ? '/set' : ''}',
+                            if (sets != null) '$sets sets',
+                            if (reps != null) '$reps reps',
+                          ];
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                CustomText(
+                                  text: name,
+                                  fontWeight: FontWeight.w500,
+                                  fontSize: 14,
+                                  color: const Color(0xff1F2A37),
+                                ),
+                                if (parts.isNotEmpty) ...[
+                                  const SizedBox(height: 2),
+                                  CustomText(
+                                    text: parts.join(' • '),
+                                    fontWeight: FontWeight.w400,
+                                    fontSize: 12,
+                                    color: const Color(0xff6C737F),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   /// Formats an ISO date string (e.g. "1995-08-14") to "14 Aug 1995"
@@ -1235,17 +1357,116 @@ class _PatientProfileViewState extends State<PatientProfileView> {
           if (status.firstConsultationId != null)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-              child: CustomButton(
-                onTap: () async {
-                  await Get.to(
-                    () => SelectExerciseSheet(patientId: widget.patientId),
-                  );
-                },
-                text: 'Create Exercise Plan',
-                isOutline: true,
-                fontSize: 14,
+              child: Obx(
+                () => CustomButton(
+                  onTap: () async {
+                    await Get.to(
+                      () => SelectExerciseSheet(patientId: widget.patientId),
+                    );
+                    await controller.fetchExercisePlan(widget.patientId);
+                  },
+                  text: controller.hasExercisePlan
+                      ? 'Edit Exercise Plan'
+                      : 'Create Exercise Plan',
+                  isOutline: true,
+                  fontSize: 14,
+                ),
               ),
             ),
+          // ── Exercise Plan display ─────────────────────────────────
+          // Only shown once the dietician has actually assigned something
+          // (see the button above) - 4 cards for the same day-group
+          // rotation the assignment sheet and diet plan both use (there's
+          // no per-calendar-week variation for exercise plans, unlike diet).
+          Obx(() {
+            if (!controller.hasExercisePlan) return const SizedBox.shrink();
+            return Padding(
+              padding: const EdgeInsets.only(left: 16, top: 12),
+              child: CustomText(
+                text: 'Exercise Plan',
+                fontWeight: FontWeight.w600,
+                fontSize: 18,
+                color: Color(0xff530630),
+              ),
+            );
+          }),
+          Obx(() {
+            if (!controller.hasExercisePlan) return const SizedBox.shrink();
+            return Padding(
+              padding: const EdgeInsets.only(top: 10, left: 16, bottom: 8),
+              child: SizedBox(
+                height: 130,
+                child: ListView.builder(
+                  itemCount: _exerciseDayGroups.length,
+                  shrinkWrap: true,
+                  scrollDirection: Axis.horizontal,
+                  itemBuilder: (context, index) {
+                    final dayGroup = _exerciseDayGroups[index];
+                    final entries = controller.exercisesForDayGroup(dayGroup);
+                    final isEmpty = entries.isEmpty;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 12),
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () =>
+                            _showExerciseDayGroupSheet(context, dayGroup, entries),
+                        child: Container(
+                          width: 120,
+                          height: 130,
+                          decoration: BoxDecoration(
+                            color: isEmpty
+                                ? const Color(0xffF3F4F6)
+                                : const Color(0xffFEF6FB),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: isEmpty
+                                  ? const Color(0xffE5E7EB)
+                                  : const Color(0xff851653),
+                              width: isEmpty ? 1 : 1.5,
+                            ),
+                            boxShadow: cardShadow,
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.fitness_center_rounded,
+                                color: isEmpty
+                                    ? const Color(0xff9DA4AE)
+                                    : const Color(0xff851653),
+                                size: 26,
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                _exerciseDayGroupLabel(dayGroup),
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xff1F2A37),
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                isEmpty
+                                    ? 'No exercises'
+                                    : '${entries.length} exercise${entries.length == 1 ? '' : 's'}',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: isEmpty
+                                      ? const Color(0xff9DA4AE)
+                                      : const Color(0xff851653),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            );
+          }),
           // ── Weekly Diet Plan section ──────────────────────────────
           if (status.firstConsultationId != null &&
               status.activeDietPlanId != null)

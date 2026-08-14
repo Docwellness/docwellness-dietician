@@ -133,6 +133,31 @@ class ExerciseService {
     }
   }
 
+  /// GET /api/dietician/patients/:patientId/exercise-plans/current
+  /// Returns the patient's one evergreen exercise plan (raw JSON, including
+  /// dailyExercises with each entry's exerciseId populated to a full
+  /// Exercise object) or null if nothing has been assigned yet.
+  Future<Map<String, dynamic>?> getCurrentExercisePlan(String patientId) async {
+    try {
+      final response = await _apiService.request(
+        endPoint: '/patients/$patientId/exercise-plans/current',
+        method: 'GET',
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      if (response != null &&
+          response.statusCode == 200 &&
+          response.data['success'] == true &&
+          response.data['data'] != null) {
+        return Map<String, dynamic>.from(response.data['data']);
+      }
+      return null;
+    } catch (e) {
+      print('❌ getCurrentExercisePlan exception: $e');
+      return null;
+    }
+  }
+
   /// POST /api/dietician/patients/:patientId/exercise-plans/:id/activate
   Future<bool> activateExercisePlan({
     required String patientId,
