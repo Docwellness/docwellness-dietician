@@ -3581,8 +3581,24 @@ class PatientsController extends GetxController {
 
       if (response != null && response['success'] == true) {
         debugPrint("Selected Diet Updated Successfully");
-        // Refresh the patient profile data so the UI reflects changes
-        await getPatientProfile(patientId);
+        // getPatientProfile() only refreshes patientProfileModel/
+        // weeklyDietPlans (the profile-level summary) - it never touches
+        // dietPlanData, which is the actual week/day/recipe structure
+        // select_diet_sheet.dart and update_patient_diet_sheet.dart render
+        // portions from. Without re-fetching it here too, a just-saved
+        // portion change kept showing the pre-save value until something
+        // else happened to reload the plan (leaving and re-entering the
+        // patient's profile, etc).
+        await Future.wait([
+          getPatientProfile(patientId),
+          getAiGeneratedDietPlan(patientId, dietPlanId),
+        ]);
+        // getAiGeneratedDietPlan() always resets to Week 1 as a side effect
+        // of its own default-load behavior - re-select the week that was
+        // actually just edited so the dietician isn't jarringly bounced
+        // back to Week 1 after saving changes to, say, Week 3.
+        selectedWeek.value = "Week $week";
+        updateSelectedWeekData(week);
         Get.back();
         showAppToast(
           Get.overlayContext!,
