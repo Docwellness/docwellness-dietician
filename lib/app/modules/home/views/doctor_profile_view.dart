@@ -25,6 +25,26 @@ class DoctorProfileView extends StatelessWidget {
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Get.back(),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout, color: Color(0xff851653)),
+            tooltip: 'Log out',
+            onPressed: () {
+              Get.defaultDialog(
+                title: 'Log Out',
+                middleText: 'Are you sure you want to log out?',
+                textConfirm: 'Log Out',
+                textCancel: 'Cancel',
+                confirmTextColor: Colors.white,
+                buttonColor: const Color(0xff851653),
+                onConfirm: () {
+                  Get.back();
+                  controller.logout();
+                },
+              );
+            },
+          ),
+        ],
       ),
       body: Obx(() {
         if (controller.isLoading.value && controller.profile.value == null) {

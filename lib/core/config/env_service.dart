@@ -1,5 +1,3 @@
-import '../../dev_credentials.dart';
-
 /// Centralized compile-time environment configuration - every
 /// --dart-define value this app reads lives here instead of scattered
 /// String.fromEnvironment calls across main.dart and elsewhere. Fields are
@@ -29,23 +27,6 @@ class EnvService {
   static const String supabasePublishableKey = String.fromEnvironment(
     'SUPABASE_PUBLISHABLE_KEY',
     defaultValue: 'sb_publishable_FmRYCR40VTVGDsHxK7Z9jQ_67UZ-t-o',
-  );
-
-  // TEMPORARY, until a real login screen exists: since there's only one
-  // dietician account, auto-sign-in as them at boot rather than build a
-  // login UI for a single user (see main.dart's _autoLoginDietician).
-  // Credentials come from either a --dart-define at launch time, or
-  // (falling back, for a plain `flutter run` with no defines)
-  // lib/dev_credentials.dart - a gitignored, uncommitted local file (see
-  // dev_credentials.example.dart for the template) so the real password
-  // never enters git history or the compiled app's committed source.
-  static const String dieticianAutoLoginEmail = String.fromEnvironment(
-    'DIETICIAN_AUTO_LOGIN_EMAIL',
-    defaultValue: kDevDieticianEmail,
-  );
-  static const String dieticianAutoLoginPassword = String.fromEnvironment(
-    'DIETICIAN_AUTO_LOGIN_PASSWORD',
-    defaultValue: kDevDieticianPassword,
   );
 
   // Sentry/PostHog are only enabled once a real DSN/API key is supplied via

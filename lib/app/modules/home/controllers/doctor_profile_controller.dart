@@ -2,10 +2,14 @@ import 'dart:developer';
 
 import 'package:docwellnesdoc/app/models/doctor_profile_model.dart';
 import 'package:docwellnesdoc/app/modules/home/services/doctor_profile_service.dart';
+import 'package:docwellnesdoc/app/routes/app_pages.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/app_toast.dart';
+import 'package:docwellnesdoc/core/session/session_service.dart';
+import 'package:docwellnesdoc/main.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class DoctorProfileController extends GetxController {
   final DoctorProfileService _service = DoctorProfileService();
@@ -107,6 +111,23 @@ class DoctorProfileController extends GetxController {
     articleExcerptController.dispose();
     articleContentController.dispose();
     super.onClose();
+  }
+
+  /// Only logout entry point in the app - see auth/controllers/auth_controller.dart
+  /// for the login side of this. Clears the Supabase session (best-effort;
+  /// a network failure here shouldn't block the user from getting logged out
+  /// locally) and local session state, then sends the dietician back to the
+  /// real login screen instead of leaving stale credentials usable.
+  Future<void> logout() async {
+    try {
+      await Supabase.instance.client.auth.signOut();
+    } catch (_) {
+      // Best-effort - proceed with clearing local state regardless.
+    }
+    token = null;
+    userId = null;
+    await SessionService.to.clear();
+    Get.offAllNamed(Routes.AUTH);
   }
 
   Future<void> loadProfile() async {

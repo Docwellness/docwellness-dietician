@@ -1,4 +1,5 @@
 import 'package:docwellnesdoc/app/routes/app_pages.dart';
+import 'package:docwellnesdoc/core/session/session_service.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -19,7 +20,15 @@ class _SplashViewState extends State<SplashView> {
   void initState() {
     super.initState();
     Future.delayed(const Duration(milliseconds: 1200), () {
-      if (mounted) Get.offNamed(Routes.HOME);
+      if (!mounted) return;
+      // A previous login already persisted a session (see SessionService) -
+      // go straight to Home instead of making Tejasvini log in every single
+      // launch. No session yet (first install, or a previous logout) sends
+      // her to the real login screen (see auth/views/auth_view.dart) - there
+      // is no more auto-login with a baked-in password (see main.dart).
+      final hasSession = (SessionService.to.token?.isNotEmpty ?? false) &&
+          (SessionService.to.userId?.isNotEmpty ?? false);
+      Get.offNamed(hasSession ? Routes.HOME : Routes.AUTH);
     });
   }
 

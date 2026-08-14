@@ -4,4 +4,11 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+
+    <!-- Debug-only: local dev points at plain http://localhost or a LAN IP
+         (see core/config/env_service.dart's API_BASE_URL default) - the
+         release manifest no longer allows cleartext traffic since prod is
+         HTTPS-only, so this override keeps local/dev builds working without
+         weakening the real release build. -->
+    <application android:usesCleartextTraffic="true" />
 </manifest>
