@@ -75,4 +75,47 @@ class AuthController extends GetxController {
       isLoading.value = false;
     }
   }
+
+  /// Requests a password-reset code via the backend (not a direct Supabase
+  /// call - see routes/dietician.js's forgot-password/reset-password, which
+  /// reuse the patient app's role-agnostic Supabase-OTP-via-Resend flow).
+  /// Always resolves quietly on failure, matching docwellness-user's
+  /// AuthService.forgotPassword() - the backend responds with the same
+  /// generic message regardless of whether the email is registered, so
+  /// there's nothing meaningful to show differently either way.
+  Future<void> requestPasswordReset(String email) async {
+    try {
+      await ApiService().request(
+        endPoint: '/auth/forgot-password',
+        method: 'POST',
+        data: {'email': email},
+      );
+    } catch (_) {
+      // Silent - see doc comment above.
+    }
+  }
+
+  /// Verifies the code from requestPasswordReset above and sets the new
+  /// password, in one backend call - no session needed client-side.
+  Future<String?> confirmPasswordReset({
+    required String email,
+    required String code,
+    required String newPassword,
+  }) async {
+    try {
+      final response = await ApiService().request(
+        endPoint: '/auth/reset-password',
+        method: 'POST',
+        data: {'email': email, 'code': code, 'newPassword': newPassword},
+      );
+      if (response != null &&
+          response.statusCode == 200 &&
+          response.data['success'] == true) {
+        return null;
+      }
+      return response?.data?['message'] ?? 'Invalid or expired code. Please try again.';
+    } catch (e) {
+      return 'Something went wrong - check your connection and try again';
+    }
+  }
 }

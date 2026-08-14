@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../controllers/auth_controller.dart';
+import 'forgot_password_view.dart';
 
 class AuthView extends GetView<AuthController> {
   const AuthView({super.key});
@@ -75,6 +76,18 @@ class AuthView extends GetView<AuthController> {
                       isOutline: false,
                       isLoading: controller.isLoading.value,
                       onTap: controller.login,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Center(
+                    child: TextButton(
+                      onPressed: () => Get.to(() => const ForgotPasswordView()),
+                      child: const CustomText(
+                        text: 'Forgot password?',
+                        fontWeight: FontWeight.w500,
+                        fontSize: 14,
+                        color: Color(0xff851653),
+                      ),
                     ),
                   ),
                 ],
