@@ -1,0 +1,82 @@
+name: Build release AAB
+
+# Manual only, on purpose - this produces a signed production release build
+# (prod API/Supabase/Sentry/PostHog dart-defines below), not something that
+# should fire on every push. Run it from the Actions tab when you actually
+# want a new release build; upload to Play Console (Internal testing track)
+# is still a manual step.
+on:
+  workflow_dispatch:
+    inputs:
+      build_name:
+        description: 'Override versionName (e.g. 1.0.0) - leave blank to use pubspec.yaml'
+        required: false
+      build_number:
+        description: 'Override versionCode (e.g. 2) - leave blank to use pubspec.yaml'
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          # Pinned to the version this app was already tested against,
+          # rather than "stable", so a new Flutter release can't silently
+          # change build output here.
+          flutter-version: '3.44.4'
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      # The real upload keystore + key.properties are gitignored (see
+      # android/.gitignore, android/key.properties.example) - reconstructed
+      # here from repo secrets for the duration of this job only. Without
+      # these, android/app/build.gradle.kts falls back to debug signing,
+      # which Play Console will reject.
+      - name: Decode signing keystore
+        run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/upload-keystore.jks
+
+      - name: Write key.properties
+        run: |
+          cat > android/key.properties <<EOF
+          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
+          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
+          storeFile=upload-keystore.jks
+          EOF
+
+      - name: Build release AAB
+        run: |
+          ARGS="--release"
+          if [ -n "${{ github.event.inputs.build_name }}" ]; then
+            ARGS="$ARGS --build-name=${{ github.event.inputs.build_name }}"
+          fi
+          if [ -n "${{ github.event.inputs.build_number }}" ]; then
+            ARGS="$ARGS --build-number=${{ github.event.inputs.build_number }}"
+          fi
+          flutter build appbundle $ARGS \
+            --dart-define=ENV=production \
+            --dart-define=API_BASE_URL=https://api.docwellness.fit \
+            --dart-define=SENTRY_DSN=https://24d8ba47f43fc752850f3fb3a1deda59@o4511762128896000.ingest.de.sentry.io/4511762171822160 \
+            --dart-define=POSTHOG_API_KEY=phc_r36BW82kcdGPitJRk34vb2fNnxMamUVaHRcBPzeebVMe \
+            --dart-define=POSTHOG_HOST=https://eu.i.posthog.com \
+            --dart-define=SUPABASE_URL=https://frczivcwrgfsbkmrioux.supabase.co \
+            --dart-define=SUPABASE_PUBLISHABLE_KEY=sb_publishable_8RtU4F1YHk16PzrVjjsiyA_uYaG_arn
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: docwellness-dietician-release-aab
+          path: build/app/outputs/bundle/release/app-release.aab
+          retention-days: 30
