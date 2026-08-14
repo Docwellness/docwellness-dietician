@@ -38,6 +38,15 @@ jobs:
           channel: stable
           cache: true
 
+      # Gitignored, never committed (see lib/groq_dev_credentials.example.dart) -
+      # but the import itself fails to compile if the file is missing
+      # entirely, not just empty (despite that file's own doc comment
+      # claiming "absent is fine" - it isn't, on a fresh checkout like this
+      # one). An empty key is fine at runtime: the "magic fill" button just
+      # shows an error toast instead of failing to build.
+      - name: Create empty groq_dev_credentials.dart
+        run: cp lib/groq_dev_credentials.example.dart lib/groq_dev_credentials.dart
+
       - run: flutter pub get
 
       # The real upload keystore + key.properties are gitignored (see
