@@ -158,7 +158,14 @@ class RecipePreview {
   /// used by EditComponentsSheet to write back the dietician's edits,
   /// together with a recomputed nutrition so calories/macros don't stay
   /// frozen at whatever the AI originally generated once a part's quantity
-  /// changes - see [scaleNutritionForComponentEdit].
+  /// changes - see [scaleNutritionForComponentEdit]. Also carries each
+  /// edited component's new quantity/unit onto the matching ingredient (by
+  /// name) - components and ingredients used to be two entirely independent
+  /// lists, so editing "Brown Bread" to 2 slices via Edit Portions left the
+  /// Ingredients tab's own "Brown Bread" row silently showing its old,
+  /// un-synced quantity. Best-effort: a component with no same-named
+  /// ingredient (e.g. one recipe part built from several ingredients) is
+  /// simply not reflected in the ingredient list, same as before.
   RecipePreview copyWithComponentsAndNutrition(
     List<RecipeComponent> newComponents,
     Nutrition newNutrition,
@@ -176,7 +183,7 @@ class RecipePreview {
       cookingTime: cookingTime,
       dietaryHabits: dietaryHabits,
       freeFrom: freeFrom,
-      ingredients: ingredients,
+      ingredients: _syncedIngredients(ingredients, newComponents),
       servingSize: servingSize,
       nutrition: newNutrition,
       cookingSteps: cookingSteps,
@@ -186,6 +193,23 @@ class RecipePreview {
       supplementFacts: supplementFacts,
       components: newComponents,
     );
+  }
+
+  static List<Ingredient> _syncedIngredients(
+    List<Ingredient> ingredients,
+    List<RecipeComponent> components,
+  ) {
+    return ingredients.map((ingredient) {
+      RecipeComponent? match;
+      for (final c in components) {
+        if (c.label.trim().toLowerCase() == ingredient.name.trim().toLowerCase()) {
+          match = c;
+          break;
+        }
+      }
+      if (match == null) return ingredient;
+      return ingredient.copyWith(quantity: match.quantity, unit: match.unit);
+    }).toList();
   }
 
   /// Scales [nutrition] by how much each component's quantity changed,
@@ -467,6 +491,19 @@ class Ingredient {
       'isScalable': isScalable,
       'image': image,
     };
+  }
+
+  Ingredient copyWith({num? quantity, String? unit}) {
+    return Ingredient(
+      name: name,
+      quantity: quantity ?? this.quantity,
+      unit: unit ?? this.unit,
+      category: category,
+      priceLevel: priceLevel,
+      description: description,
+      isScalable: isScalable,
+      image: image,
+    );
   }
 }
 
