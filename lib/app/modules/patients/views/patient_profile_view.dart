@@ -12,8 +12,8 @@ import 'package:docwellnesdoc/app/modules/patients/views/payment_status_view.dar
 import 'package:docwellnesdoc/app/utils/membership_badge.dart';
 import 'package:docwellnesdoc/app/modules/patients/views/profile_options_sheet.dart';
 import 'package:docwellnesdoc/app/modules/patients/views/questions_view.dart';
-import 'package:docwellnesdoc/app/modules/patients/views/select_exercise_sheet.dart';
 import 'package:docwellnesdoc/app/modules/patients/widgets/bmi_and_body_fat_container.dart';
+import 'package:docwellnesdoc/app/modules/patients/widgets/edit_exercise_day_sheet.dart';
 import 'package:docwellnesdoc/app/modules/patients/widgets/bmi_card.dart';
 import 'package:docwellnesdoc/app/modules/patients/widgets/calorie_intake_container.dart';
 import 'package:docwellnesdoc/app/modules/patients/widgets/date_range_selector_button.dart';
@@ -449,105 +449,6 @@ class _PatientProfileViewState extends State<PatientProfileView> {
     return '${date.day} ${months[date.month - 1]}';
   }
 
-  /// Lists one day-group's assigned exercises (tapped from a card in the
-  /// Exercise Plan section) - read-only, "Edit Exercise Plan" above is the
-  /// only place to actually change assignments (see SelectExerciseSheet).
-  void _showExerciseDayGroupSheet(
-    BuildContext context,
-    String dayGroup,
-    List<Map<String, dynamic>> entries,
-  ) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) {
-        return SafeArea(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(ctx).size.height * 0.7,
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  CustomText(
-                    text: _exerciseDayGroupLabel(dayGroup),
-                    fontWeight: FontWeight.w600,
-                    fontSize: 18,
-                    color: const Color(0xff530630),
-                  ),
-                  const SizedBox(height: 12),
-                  if (entries.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 20),
-                      child: CustomText(
-                        text: 'No exercises assigned for this day yet.',
-                        fontWeight: FontWeight.w400,
-                        fontSize: 13,
-                        color: Color(0xff6C737F),
-                      ),
-                    )
-                  else
-                    Flexible(
-                      child: ListView.separated(
-                        shrinkWrap: true,
-                        itemCount: entries.length,
-                        separatorBuilder: (_, __) =>
-                            const Divider(color: Color(0xffE5E7EB)),
-                        itemBuilder: (context, index) {
-                          final entry = entries[index];
-                          final exercise =
-                              entry['exerciseId'] as Map? ?? const {};
-                          final name = exercise['name']?.toString() ?? 'Exercise';
-                          final duration = entry['durationMinutes'];
-                          final sets = entry['sets'];
-                          final reps = entry['reps'];
-                          final parts = <String>[
-                            if (duration != null)
-                              '$duration min${sets != null ? '/set' : ''}',
-                            if (sets != null) '$sets sets',
-                            if (reps != null) '$reps reps',
-                          ];
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                CustomText(
-                                  text: name,
-                                  fontWeight: FontWeight.w500,
-                                  fontSize: 14,
-                                  color: const Color(0xff1F2A37),
-                                ),
-                                if (parts.isNotEmpty) ...[
-                                  const SizedBox(height: 2),
-                                  CustomText(
-                                    text: parts.join(' • '),
-                                    fontWeight: FontWeight.w400,
-                                    fontSize: 12,
-                                    color: const Color(0xff6C737F),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
 
   /// Formats an ISO date string (e.g. "1995-08-14") to "14 Aug 1995"
   String _formatDob(String raw) {
@@ -1349,38 +1250,17 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                 ),
               ),
           ],
-          // ── Exercise Plan entry point ─────────────────────────────
-          // Gated only on firstConsultationId, independent of the diet
-          // plan's own existence/consent state above - an exercise plan
-          // doesn't require a diet plan to exist first (see the Exercise
-          // Plan feature plan's Phase 1).
+          // ── Exercise Plan section ─────────────────────────────────
+          // Always shown once firstConsultationId exists (same gate the old
+          // separate Create/Edit button used) - independent of the diet
+          // plan's own existence/consent state, an exercise plan doesn't
+          // require a diet plan to exist first. No separate entry-point
+          // button anymore: tapping any card (even an empty one) opens
+          // EditExerciseDayGroupSheet directly, which both creates the
+          // plan on first use and edits it after - see that widget's doc
+          // comment.
           if (status.firstConsultationId != null)
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-              child: Obx(
-                () => CustomButton(
-                  onTap: () async {
-                    await Get.to(
-                      () => SelectExerciseSheet(patientId: widget.patientId),
-                    );
-                    await controller.fetchExercisePlan(widget.patientId);
-                  },
-                  text: controller.hasExercisePlan
-                      ? 'Edit Exercise Plan'
-                      : 'Create Exercise Plan',
-                  isOutline: true,
-                  fontSize: 14,
-                ),
-              ),
-            ),
-          // ── Exercise Plan display ─────────────────────────────────
-          // Only shown once the dietician has actually assigned something
-          // (see the button above) - 4 cards for the same day-group
-          // rotation the assignment sheet and diet plan both use (there's
-          // no per-calendar-week variation for exercise plans, unlike diet).
-          Obx(() {
-            if (!controller.hasExercisePlan) return const SizedBox.shrink();
-            return Padding(
               padding: const EdgeInsets.only(left: 16, top: 12),
               child: CustomText(
                 text: 'Exercise Plan',
@@ -1388,29 +1268,50 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                 fontSize: 18,
                 color: Color(0xff530630),
               ),
-            );
-          }),
-          Obx(() {
-            if (!controller.hasExercisePlan) return const SizedBox.shrink();
-            return Padding(
-              padding: const EdgeInsets.only(top: 10, left: 16, bottom: 8),
-              child: SizedBox(
-                height: 130,
-                child: ListView.builder(
-                  itemCount: _exerciseDayGroups.length,
-                  shrinkWrap: true,
-                  scrollDirection: Axis.horizontal,
-                  itemBuilder: (context, index) {
-                    final dayGroup = _exerciseDayGroups[index];
-                    final entries = controller.exercisesForDayGroup(dayGroup);
-                    final isEmpty = entries.isEmpty;
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 12),
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: () =>
-                            _showExerciseDayGroupSheet(context, dayGroup, entries),
-                        child: Container(
+            ),
+          if (status.firstConsultationId != null)
+            Obx(() {
+              // GetX's Obx only tracks observable reads that happen
+              // synchronously inside its own builder - exercisesForDayGroup()
+              // is only ever called from ListView.builder's lazy itemBuilder,
+              // a separate closure Obx can't see into, so without reading
+              // exercisePlan directly here too, Obx sees no observable at all
+              // and throws "the improper use of a GetX has been detected"
+              // (same idiom diet_view.dart's _buildFoodList already uses).
+              final _ = controller.exercisePlan.value;
+              return Padding(
+                padding: const EdgeInsets.only(top: 10, left: 16, bottom: 8),
+                child: SizedBox(
+                  height: 130,
+                  child: ListView.builder(
+                    itemCount: _exerciseDayGroups.length,
+                    shrinkWrap: true,
+                    scrollDirection: Axis.horizontal,
+                    itemBuilder: (context, index) {
+                      final dayGroup = _exerciseDayGroups[index];
+                      final entries = controller.exercisesForDayGroup(dayGroup);
+                      final isEmpty = entries.isEmpty;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 12),
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () async {
+                            await showModalBottomSheet(
+                              context: context,
+                              backgroundColor: Colors.white,
+                              isScrollControlled: true,
+                              shape: const RoundedRectangleBorder(
+                                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                              ),
+                              builder: (ctx) => EditExerciseDayGroupSheet(
+                                patientId: widget.patientId,
+                                dayGroup: dayGroup,
+                                dayGroupLabel: _exerciseDayGroupLabel(dayGroup),
+                                initialEntries: entries,
+                              ),
+                            );
+                          },
+                          child: Container(
                           width: 120,
                           height: 130,
                           decoration: BoxDecoration(

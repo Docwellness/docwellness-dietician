@@ -1035,6 +1035,52 @@ class PatientsController extends GetxController {
         .toList();
   }
 
+  /// Saves [dayGroupEntries] as [dayGroup]'s full assignment, preserving
+  /// every other day-group's entries exactly as they were - upsertExercisePlan
+  /// replaces the plan's *entire* dailyExercises array in one call (see its
+  /// own doc comment), so naively sending just this day's entries would wipe
+  /// out the other 3 day-groups' assignments. Re-reads the other days from
+  /// the currently-loaded exercisePlan (already populated with full Exercise
+  /// objects for display), collapsing each back down to a plain exerciseId
+  /// string the backend expects.
+  Future<bool> saveExerciseDayGroupEntries(
+    String patientId,
+    String dayGroup,
+    List<Map<String, dynamic>> dayGroupEntries,
+  ) async {
+    final existing = exercisePlan.value?['dailyExercises'] as List? ?? [];
+    final otherDays = existing.whereType<Map>().where((e) => e['dayGroup'] != dayGroup).map((e) {
+      final exerciseField = e['exerciseId'];
+      final id = exerciseField is Map
+          ? (exerciseField['_id'] ?? exerciseField['id'])
+          : exerciseField;
+      return {
+        'exerciseId': id,
+        if (e['durationMinutes'] != null) 'durationMinutes': e['durationMinutes'],
+        if (e['sets'] != null) 'sets': e['sets'],
+        if (e['reps'] != null) 'reps': e['reps'],
+        'dayGroup': e['dayGroup'],
+      };
+    }).toList();
+
+    final merged = [...otherDays, ...dayGroupEntries];
+
+    final result = await _exerciseService.upsertExercisePlan(
+      patientId: patientId,
+      dailyExercises: merged,
+    );
+    if (result == null) return false;
+
+    if (result['_id'] != null) {
+      await _exerciseService.activateExercisePlan(
+        patientId: patientId,
+        exercisePlanId: result['_id'].toString(),
+      );
+    }
+    await fetchExercisePlan(patientId);
+    return true;
+  }
+
   Future<void> togglePatientActive(String patientId) async {
     final newIsActive = isProfileDeactivated
         .value; // toggling: deactivated means isActive=true now
