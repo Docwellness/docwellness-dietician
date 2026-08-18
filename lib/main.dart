@@ -91,7 +91,7 @@ Future<void> _bootstrap() async {
   }
 
   // Toggle to enable/disable Firebase push notification wiring.
-  const bool enableFirebaseNotifications = false;
+  const bool enableFirebaseNotifications = true;
 
   // Try to initialize Firebase; notification init is optional and controlled by flag.
   if (enableFirebaseNotifications) {
