@@ -4,6 +4,10 @@
 	<dict>
 		<key>NSMicrophoneUsageDescription</key>
 		<string>We need access to your microphone to record voice messages.</string>
+		<!-- Phase 9, P9-D7: local_auth's biometric step-up gate (see
+		     PatientsController.deletePatient) -->
+		<key>NSFaceIDUsageDescription</key>
+		<string>Confirm your identity before deleting a patient.</string>
 		<key>CFBundleDevelopmentRegion</key>
 		<string>$(DEVELOPMENT_LANGUAGE)</string>
 		<key>CFBundleDisplayName</key>

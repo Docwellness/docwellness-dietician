@@ -16,6 +16,7 @@ import 'package:docwellnesdoc/app/modules/patients/views/questions_view.dart';
 import 'package:docwellnesdoc/app/modules/performance/models/consultation_form_field.dart';
 import 'package:docwellnesdoc/app/modules/performance/services/consultation_form_service.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/app_toast.dart';
+import 'package:docwellnesdoc/core/security/device_security_service.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
@@ -78,8 +79,13 @@ class PatientsController extends GetxController {
   RxBool showBasicInfo = false.obs;
   RxBool showBmiCard = false.obs;
 
-  RxBool showAllDietSendingLoading = false.obs;
   RxBool showWeekDietSendingLoading = false.obs;
+  // AI_EXECUTION_PLAN.md Phase 7, P7-05: save-draft loading state - separate
+  // from showWeekDietSendingLoading since Save Draft and Finalize are two
+  // independent actions the dietician could plausibly trigger from the
+  // same screen (though not literally concurrently, given both come from
+  // the same overflow-menu/button tap flow).
+  RxBool saveDraftLoading = false.obs;
 
   RxBool showFirstConsultationiInfo = false.obs;
   RxBool showPaymentInfo = false.obs;
@@ -96,8 +102,13 @@ class PatientsController extends GetxController {
   // `queued` exists for spec-completeness but is never actually set today
   // - diet plan generation is a synchronous HTTP call in this codebase,
   // not a background job with a queue; `published` is set once the
-  // dietician finalizes a week (finalizeWeek/finalizeAll), which is this
-  // app's human-approval gate - see those methods.
+  // dietician finalizes a week (finalizeWeek), which is this app's
+  // human-approval gate - see that method. A whole-plan "finalize all
+  // weeks at once" action existed (finalizeAll/buildFinalizeAllPayload,
+  // backend PUT .../finalize-all) but had no UI entry point anywhere in
+  // this app - removed as dead code rather than wired up, since
+  // week-by-week finalization (which does have a UI, via finalizeWeek)
+  // is this app's actual, intended workflow.
   Rx<AiGenerationStatus> aiGenerationStatus = AiGenerationStatus.idle.obs;
   RxBool activateDietPlanLoading = false.obs;
   RxBool rejectPaymentLoading = false.obs;
@@ -1109,7 +1120,24 @@ class PatientsController extends GetxController {
   /// backend's specific message (e.g. an email mismatch, caught even
   /// though the dialog already checks it client-side) is shown instead of
   /// a generic error.
+  ///
+  /// Phase 9, P9-D7: gated behind a biometric/device-credential step-up on
+  /// top of the existing email-retype confirmation - this is the app's
+  /// most destructive single action (permanent PHI deletion), so a second,
+  /// device-level factor sits in front of it.
   Future<bool> deletePatient(String patientId, String confirmEmail) async {
+    final stepUpOk = await DeviceSecurityService.requireStepUp(
+      'Confirm your identity to permanently delete this patient',
+    );
+    if (!stepUpOk) {
+      showAppToast(
+        Get.overlayContext!,
+        message: 'Identity verification required to delete a patient',
+        type: AppToastType.error,
+      );
+      return false;
+    }
+
     final data = await service.deletePatient(patientId, confirmEmail);
     if (data != null && data['success'] == true) {
       // Refresh every tab so the deleted patient disappears everywhere,
@@ -1861,8 +1889,8 @@ class PatientsController extends GetxController {
 
           patientProfileModel.refresh();
           // AI produced a draft - still requires the dietician to review
-          // and finalize before a patient ever sees it (see finalizeWeek/
-          // finalizeAll below), never auto-published.
+          // and finalize before a patient ever sees it (see finalizeWeek
+          // below), never auto-published.
           aiGenerationStatus.value = AiGenerationStatus.reviewDraft;
         } else {
           lastDietPlanGenerationError = response['message']?.toString();
@@ -2058,27 +2086,29 @@ class PatientsController extends GetxController {
           // `secondaryServings` of exactly 1 means "never explicitly set" -
           // see cleanSelectedMeals' default - not a genuine "1 gram" or
           // "exactly 1 piece"), and the trend-aware default for any other
-          // component. Only applies to a not-yet-finalized week though -
-          // once data.isFinalized is true, these came from the dietician's
-          // actual finalizeWeekPlan save (see getDraftWeekOptions'
-          // finalizedPlan preference), so an explicit "1" must be trusted
-          // as-is or "Update Diet Plan" would silently reset it back to the
-          // trend default on every re-open.
+          // component. Only applies to a not-yet-saved week though - once
+          // data.isFinalized or data.isDraftSaved is true, these came from
+          // the dietician's actual finalizeWeekPlan/save-draft submission
+          // (see getDraftWeekOptions' finalizedPlan/draftPlan preference),
+          // so an explicit "1" must be trusted as-is or "Update Diet Plan"
+          // would silently reset it back to the trend default on every
+          // re-open.
           selectedComponentServings[servingsKey(recipe)] = List<num>.generate(
             recipe.components.length,
             (i) {
               final explicit = r.componentServings;
               if (explicit != null && i < explicit.length) return explicit[i];
+              final hasExplicitServings = data.isFinalized || data.isDraftSaved;
               if (i == 0) {
                 final isUnexplicitDefault =
-                    r.servings == 1 && !data.isFinalized;
+                    r.servings == 1 && !hasExplicitServings;
                 return isUnexplicitDefault
                     ? _defaultComponentServing(recipe, 0)
                     : r.servings;
               }
               if (i == 1 && recipe.hasSecondaryComponent) {
                 final isUnexplicitSecondaryDefault =
-                    r.secondaryServings == 1 && !data.isFinalized;
+                    r.secondaryServings == 1 && !hasExplicitServings;
                 return isUnexplicitSecondaryDefault
                     ? recipe.components[1].quantity
                     : r.secondaryServings;
@@ -2104,6 +2134,72 @@ class PatientsController extends GetxController {
     updateShiftOptions(selectedShift.value);
     final currentWeekNumber = int.parse(selectedWeek.value.split(" ").last);
     calculateTotalsForWeek(currentWeekNumber);
+  }
+
+  /// AI_EXECUTION_PLAN.md Phase 7, P7-05: duplicate-day - copies
+  /// [fromDayGroup]'s non-supplement selections (and their per-component
+  /// serving sizes) onto [toDayGroup] within the same week, overwriting
+  /// whatever was selected there. Supplements are already identical across
+  /// all 4 day-groups by construction (see toggleMealSelection) and are
+  /// left untouched - duplicating them would be a no-op anyway.
+  void duplicateDayGroup(int weekNumber, String fromDayGroup, String toDayGroup) {
+    if (fromDayGroup == toDayGroup) return;
+    final currentWeekRecipes = List<Recipe>.from(
+      weekSelectedRecipes[weekNumber] ?? [],
+    );
+
+    final sourceRecipes = currentWeekRecipes
+        .where(
+          (r) => r.dayGroup == fromDayGroup && !r.tags.contains('supplement'),
+        )
+        .toList();
+
+    currentWeekRecipes.removeWhere(
+      (r) => r.dayGroup == toDayGroup && !r.tags.contains('supplement'),
+    );
+
+    for (final source in sourceRecipes) {
+      final clone = source.copyWith(dayGroup: toDayGroup);
+      currentWeekRecipes.add(clone);
+      // servingsKey includes dayGroup, so the clone needs its own serving
+      // entry copied from the source's - without this it would silently
+      // fall back to each component's base quantity instead of whatever
+      // the dietician actually set for the source day.
+      final sourceServings = selectedComponentServings[servingsKey(source)];
+      if (sourceServings != null) {
+        selectedComponentServings[servingsKey(clone)] = List<num>.from(
+          sourceServings,
+        );
+      }
+    }
+
+    weekSelectedRecipes[weekNumber] = currentWeekRecipes;
+    _userInteractedWeeks.add(weekNumber);
+    calculateTotalsForWeek(weekNumber);
+  }
+
+  /// AI_EXECUTION_PLAN.md Phase 7, P7-05: copy-week - copies [fromWeek]'s
+  /// entire selection onto [toWeek], overwriting whatever was selected
+  /// there. A plain list copy is correct here (unlike duplicateDayGroup):
+  /// each Recipe entry already carries its own dayGroup/servingTime, and
+  /// servingsKey is keyed by id+servingTime+dayGroup only, never week (see
+  /// its doc comment) - so the copied week's portions resolve through the
+  /// exact same shared serving-size entries the source week already uses,
+  /// with nothing further to copy.
+  void copyWeekPlan(int fromWeek, int toWeek) {
+    if (fromWeek == toWeek) return;
+    final sourceRecipes = weekSelectedRecipes[fromWeek] ?? [];
+    weekSelectedRecipes[toWeek] = List<Recipe>.from(sourceRecipes);
+    _userInteractedWeeks.add(toWeek);
+    // Only recompute the on-screen totals if toWeek is actually the week
+    // currently being viewed - calculateTotalsForWeek writes to shared
+    // totalCalories/etc observables that whatever week's screen is open
+    // reads, so recomputing for an off-screen week would show wrong
+    // numbers for the week actually on screen.
+    final viewedWeek = int.tryParse(selectedWeek.value.split(" ").last);
+    if (viewedWeek == toWeek) {
+      calculateTotalsForWeek(toWeek);
+    }
   }
 
   /// Set the current tab's shift and refresh its full options list (the
@@ -3282,6 +3378,52 @@ class PatientsController extends GetxController {
     return payload;
   }
 
+  /// AI_EXECUTION_PLAN.md Phase 7, P7-05: save-draft - reuses
+  /// buildFinalizeWeekPayload (same selectedMeals shape finalize sends) so
+  /// there's one payload builder, not two to keep in sync. Deliberately
+  /// does not touch aiGenerationStatus or navigate away - unlike
+  /// finalizeWeek, this isn't the human-approval/publish action, just a
+  /// safety net against losing in-progress work.
+  Future<void> saveDraftForCurrentWeek(
+    String patientId,
+    String dietPlanId,
+  ) async {
+    if (saveDraftLoading.value) return;
+    saveDraftLoading.value = true;
+
+    try {
+      final payload = buildFinalizeWeekPayload();
+      final response = await service.saveDraftWeek(
+        payload,
+        patientId,
+        dietPlanId,
+      );
+
+      if (response != null && response['success'] == true) {
+        showAppToast(
+          Get.overlayContext!,
+          message: '${selectedWeek.value} saved as draft',
+          type: AppToastType.success,
+        );
+      } else {
+        showAppToast(
+          Get.overlayContext!,
+          message: 'Failed to save draft. Please try again.',
+          type: AppToastType.error,
+        );
+      }
+    } catch (e) {
+      debugPrint('Save Draft Error: $e');
+      showAppToast(
+        Get.overlayContext!,
+        message: 'An error occurred while saving the draft',
+        type: AppToastType.error,
+      );
+    }
+
+    saveDraftLoading.value = false;
+  }
+
   Future<void> finalizeWeek(
     String patientId,
     String dietPlanId,
@@ -3330,9 +3472,8 @@ class PatientsController extends GetxController {
         }
         // Pop both SelectDietSheet and CreateDietPlanScreen (now pushed
         // full screens, not bottom sheets), then land explicitly on the
-        // patient profile route - same belt-and-suspenders pattern as
-        // finalizeAll below, so the dietician always exits to the profile
-        // screen regardless of exactly how they navigated in.
+        // patient profile route, so the dietician always exits to the
+        // profile screen regardless of exactly how they navigated in.
         Get.back();
         Get.back();
         Get.offNamed('/patient-profile/$patientId');
@@ -3341,103 +3482,13 @@ class PatientsController extends GetxController {
         // awaiting this call *before* navigating (the old order) just made
         // the Finalize button's spinner sit through a second full network
         // round-trip whose result gets thrown away and immediately
-        // re-fetched anyway. Matches finalizeAll's ordering below.
+        // re-fetched anyway.
         await getPatientProfile(patientId);
       }
     } catch (e) {
       debugPrint("Finalize Week Error: $e");
     }
     showWeekDietSendingLoading.value = false;
-  }
-
-  Map<String, dynamic> buildFinalizeAllPayload() {
-    List<Map<String, dynamic>> allWeeks = [];
-
-    for (int week = 1; week <= 4; week++) {
-      final weekPlan = dietPlanData.value!.weeks.firstWhere(
-        (w) => w.week == week,
-      );
-
-      final selectedRecipes = weekSelectedRecipes[week] ?? [];
-
-      // Build dailyMeals array for this week and compute nutrition from resolved recipes
-      double weekCalories = 0, weekFat = 0, weekCarbs = 0, weekProtein = 0;
-      final dailyMeals = weekPlan.dailyMeals.map((meal) {
-        final selected = selectedRecipes.firstWhere(
-          (r) => r.id == meal.recipeId,
-          orElse: () => getRecipeById(meal.recipeId)!,
-        );
-
-        weekCalories += selected.nutrition.calories;
-        weekFat += selected.nutrition.fats;
-        weekCarbs += selected.nutrition.carbs;
-        weekProtein += selected.nutrition.protein;
-
-        return {"servingTime": meal.servingTime, "recipeId": selected.id};
-      }).toList();
-
-      allWeeks.add({
-        "week": week,
-        "dailyMeals": dailyMeals,
-        "summary": {
-          "totalCalories": weekCalories.toStringAsFixed(0),
-          "fatPercent": "0",
-          "fatGrams": weekFat.toStringAsFixed(0),
-          "carbPercent": "0",
-          "carbGrams": weekCarbs.toStringAsFixed(0),
-          "proteinPercent": "0",
-          "proteinGrams": weekProtein.toStringAsFixed(0),
-        },
-      });
-    }
-
-    return {"weeks": allWeeks};
-  }
-
-  Future<void> finalizeAll(String patientId, String dietPlanId) async {
-    showAllDietSendingLoading.value = true;
-    try {
-      final payload = buildFinalizeAllPayload();
-
-      final response = await service.finalizeAll(
-        payload,
-        patientId,
-        dietPlanId,
-      );
-
-      if (response != null && response['success'] == true) {
-        // Check if payment request was auto-sent by backend
-        final paymentSent = response['data']?['paymentRequestSent'] == true;
-        aiGenerationStatus.value = AiGenerationStatus.published;
-        // AI_EXECUTION_PLAN.md Phase 8, P8-04 - no PHI.
-        Posthog().capture(
-          eventName: 'diet_plan_published',
-          properties: {'scope': 'all_weeks'},
-        );
-
-        Get.back();
-        Get.back();
-        Get.offNamed('/patient-profile/$patientId');
-        showAppToast(
-          Get.overlayContext!,
-          message: paymentSent
-              ? "All weeks finalized & payment request sent to patient!"
-              : "All weeks finalized successfully!",
-          type: AppToastType.success,
-        );
-
-        // Update local status to reflect payment requested
-        if (paymentSent) {
-          patientProfileModel.value?.status?.requestStatus = 'PaymentRequested';
-          patientProfileModel.refresh();
-        }
-
-        await getPatientProfile(patientId);
-      }
-    } catch (e) {
-      debugPrint("Finalize All Error: $e");
-    }
-    showAllDietSendingLoading.value = false;
   }
 
   Future<void> sendPaymentRequest(String patientId, String requestId) async {

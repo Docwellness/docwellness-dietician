@@ -15,13 +15,29 @@ class BottomNaviBar extends StatelessWidget {
   BottomNaviBar({super.key});
 
   final controller = Get.put(HomeController());
-  final screens = [
-    HomeView(),
-    const PatientsView(),
-    const DietAndExerciseView(),
-    const PerformanceView(),
-    const ChatView(),
-  ];
+
+  // Lazily built, then kept alive via IndexedStack (AI_EXECUTION_PLAN.md
+  // Phase 7/P8-02) - previously `body: screens[controller.selectedIndex.value]`
+  // constructed a brand-new widget subtree on every tab switch, destroying
+  // scroll position and any in-progress state (e.g. the Patients tab's
+  // search/filter selections) and re-firing every initState each time.
+  // Each slot starts null and is only constructed the first time its index
+  // is selected, matching docwellness-user's identical fix (P6-03) - a
+  // plain eager screens list would preserve state too, but would also
+  // build every tab immediately on first mount instead of only the tabs
+  // actually visited.
+  final List<Widget?> _screens = List<Widget?>.filled(5, null);
+
+  Widget _screenAt(int index) {
+    return _screens[index] ??= switch (index) {
+      0 => HomeView(),
+      1 => const PatientsView(),
+      2 => const DietAndExerciseView(),
+      3 => const PerformanceView(),
+      4 => const ChatView(),
+      _ => HomeView(),
+    };
+  }
 
   final icons = [
     'assets/icons/Vector.png',
@@ -38,7 +54,15 @@ class BottomNaviBar extends StatelessWidget {
     return Obx(
       () => Scaffold(
         backgroundColor: lightPink,
-        body: screens[controller.selectedIndex.value],
+        body: IndexedStack(
+          index: controller.selectedIndex.value,
+          children: List.generate(_screens.length, (index) {
+            if (index != controller.selectedIndex.value && _screens[index] == null) {
+              return const SizedBox.shrink();
+            }
+            return _screenAt(index);
+          }),
+        ),
         // SafeArea (not a fixed bottom padding) so this clears whichever
         // system navigation style is active - the 3-button nav bar's ~48dp
         // inset and gesture nav's slimmer inset are both reported through

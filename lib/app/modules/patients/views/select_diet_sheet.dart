@@ -1,9 +1,11 @@
 import 'package:buttons_tabbar/buttons_tabbar.dart';
 import 'package:docwellnesdoc/app/models/ai_diet_plain_model.dart';
 import 'package:docwellnesdoc/app/modules/patients/controllers/patients_controller.dart';
+import 'package:docwellnesdoc/app/modules/patients/views/preview_as_patient_sheet.dart';
 import 'package:docwellnesdoc/app/modules/patients/widgets/food_card_widget.dart';
 import 'package:docwellnesdoc/app/modules/receipes/services/recipe_service.dart';
 import 'package:docwellnesdoc/app/modules/receipes/views/recipe_details.dart';
+import 'package:docwellnesdoc/app/utils/common_widgets/app_toast.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_button.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
 import 'package:docwellnesdoc/app/utils/theme/app_shadows.dart';
@@ -159,6 +161,114 @@ class _SelectDietSheetState extends State<SelectDietSheet>
     }
   }
 
+  Future<void> _showDuplicateDayDialog() async {
+    final currentWeekNumber = int.parse(
+      controller.selectedWeek.value.split(" ").last,
+    );
+    final fromDayGroup = controller.selectedDayGroup.value;
+    final otherDayGroups = PatientsController.dayGroups
+        .where((dg) => dg != fromDayGroup)
+        .toList();
+
+    final target = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        title: Text(
+          'Duplicate ${_dayGroupLabel(fromDayGroup)} to...',
+        ),
+        children: [
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+            child: Text(
+              'This overwrites the selected day\'s meals. Shared '
+              'supplements are unaffected.',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ),
+          const SizedBox(height: 8),
+          ...otherDayGroups.map(
+            (dg) => SimpleDialogOption(
+              onPressed: () => Navigator.pop(dialogContext, dg),
+              child: Text(_dayGroupLabel(dg)),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (target == null || !mounted) return;
+
+    controller.duplicateDayGroup(currentWeekNumber, fromDayGroup, target);
+    showAppToast(
+      Get.overlayContext!,
+      message:
+          '${_dayGroupLabel(fromDayGroup)} duplicated to ${_dayGroupLabel(target)}',
+      type: AppToastType.success,
+    );
+  }
+
+  Future<void> _showCopyWeekDialog() async {
+    final currentWeekNumber = int.parse(
+      controller.selectedWeek.value.split(" ").last,
+    );
+    final availableWeeks =
+        controller.dietPlanData.value?.weeks.map((w) => w.week).toList() ??
+            const [1, 2, 3, 4];
+    final otherWeeks = availableWeeks
+        .where((w) => w != currentWeekNumber)
+        .toList()
+      ..sort();
+
+    if (otherWeeks.isEmpty) return;
+
+    final target = await showDialog<int>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        title: Text('Copy Week $currentWeekNumber to...'),
+        children: [
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+            child: Text(
+              'This overwrites every meal already selected in the '
+              'target week.',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ),
+          const SizedBox(height: 8),
+          ...otherWeeks.map(
+            (w) => SimpleDialogOption(
+              onPressed: () => Navigator.pop(dialogContext, w),
+              child: Text('Week $w'),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (target == null || !mounted) return;
+
+    controller.copyWeekPlan(currentWeekNumber, target);
+    showAppToast(
+      Get.overlayContext!,
+      message: 'Week $currentWeekNumber copied to Week $target',
+      type: AppToastType.success,
+    );
+  }
+
+  void _openPreviewAsPatient() {
+    final currentWeekNumber = int.parse(
+      controller.selectedWeek.value.split(" ").last,
+    );
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      useSafeArea: true,
+      isScrollControlled: true,
+      builder: (ctx) => PreviewAsPatientSheet(
+        controller: controller,
+        weekNumber: currentWeekNumber,
+      ),
+    );
+  }
+
   List<String> getWeeksOfCurrentMonth() {
     DateTime now = DateTime.now();
     int year = now.year;
@@ -200,6 +310,62 @@ class _SelectDietSheetState extends State<SelectDietSheet>
               color: const Color(0xff1F2A37),
             ),
           ),
+          // AI_EXECUTION_PLAN.md Phase 7, P7-05: duplicate-day/copy-week/
+          // preview-as-patient/save-draft - grouped behind one overflow menu
+          // rather than separate icons, since these are occasional actions
+          // next to the every-time Finalize button below. Save Draft
+          // deliberately lives here (not as its own button) rather than
+          // beside Finalize - it's a safety net against losing work, not a
+          // second primary action competing with the actual publish step.
+          actions: [
+            Obx(
+              () => PopupMenuButton<String>(
+                icon: controller.saveDraftLoading.value
+                    ? const Padding(
+                        padding: EdgeInsets.all(12),
+                        child: SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    : const Icon(Icons.more_vert),
+                onSelected: (value) {
+                  switch (value) {
+                    case 'save_draft':
+                      controller.saveDraftForCurrentWeek(
+                        widget.patientId,
+                        widget.dietPlanId,
+                      );
+                    case 'duplicate_day':
+                      _showDuplicateDayDialog();
+                    case 'copy_week':
+                      _showCopyWeekDialog();
+                    case 'preview':
+                      _openPreviewAsPatient();
+                  }
+                },
+                itemBuilder: (context) => const [
+                  PopupMenuItem(
+                    value: 'save_draft',
+                    child: Text('Save draft'),
+                  ),
+                  PopupMenuItem(
+                    value: 'duplicate_day',
+                    child: Text('Duplicate this day to...'),
+                  ),
+                  PopupMenuItem(
+                    value: 'copy_week',
+                    child: Text('Copy this week to...'),
+                  ),
+                  PopupMenuItem(
+                    value: 'preview',
+                    child: Text('Preview as patient'),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
         body: Column(
           children: [
