@@ -41,7 +41,12 @@ class PatientTimelineService {
     return null;
   }
 
-  Future<bool> sendNudge({required String patientId, String? milestoneId, required String message}) async {
+  Future<bool> sendNudge({
+    required String patientId,
+    String? milestoneId,
+    required String message,
+    String nudgeType = 'task',
+  }) async {
     try {
       final response = await service.request(
         endPoint: '/nudges',
@@ -50,6 +55,7 @@ class PatientTimelineService {
           'userId': patientId,
           if (milestoneId != null) 'milestoneId': milestoneId,
           'message': message,
+          'nudgeType': nudgeType,
         },
         headers: {'Authorization': 'Bearer $token'},
       );
