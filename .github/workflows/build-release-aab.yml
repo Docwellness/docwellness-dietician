@@ -22,9 +22,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
@@ -84,7 +84,7 @@ jobs:
             --dart-define=SUPABASE_URL=https://frczivcwrgfsbkmrioux.supabase.co \
             --dart-define=SUPABASE_PUBLISHABLE_KEY=sb_publishable_8RtU4F1YHk16PzrVjjsiyA_uYaG_arn
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: docwellness-dietician-release-aab
           path: build/app/outputs/bundle/release/app-release.aab
