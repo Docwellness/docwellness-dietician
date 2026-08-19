@@ -18,11 +18,16 @@ class NudgeSheet extends StatefulWidget {
 }
 
 class _NudgeSheetState extends State<NudgeSheet> {
+  // 'chat' opens the patient's Chat screen on tap; 'task' (every other
+  // canned message, and the custom-text default) opens the Goal Journey
+  // milestone sheet instead - see docwellness-backend's
+  // timelineController.js::createNudge, which picks the push deep link
+  // from this same tag.
   static const _quick = [
-    "Time to log today's meals 🍽️",
-    'Weigh-in due — you\'re doing great ⚖️',
-    'Your water goal is waiting 💧',
-    "Let's review your week — free for a chat?",
+    {'message': "Time to log today's meals 🍽️", 'type': 'task'},
+    {'message': "Weigh-in due — you're doing great ⚖️", 'type': 'task'},
+    {'message': 'Your water goal is waiting 💧', 'type': 'task'},
+    {'message': "Let's review your week — free for a chat?", 'type': 'chat'},
   ];
   final _custom = TextEditingController();
   bool _sending = false;
@@ -34,11 +39,15 @@ class _NudgeSheetState extends State<NudgeSheet> {
     super.dispose();
   }
 
-  Future<void> _send(String message) async {
+  Future<void> _send(String message, {String nudgeType = 'task'}) async {
     if (message.trim().isEmpty) return;
     setState(() => _sending = true);
     HapticFeedback.mediumImpact();
-    await widget.controller.nudge(message: message.trim(), milestoneId: widget.milestoneId);
+    await widget.controller.nudge(
+      message: message.trim(),
+      milestoneId: widget.milestoneId,
+      nudgeType: nudgeType,
+    );
     if (!mounted) return;
     setState(() {
       _sending = false;
@@ -99,8 +108,9 @@ class _NudgeSheetState extends State<NudgeSheet> {
                 spacing: 8,
                 runSpacing: 8,
                 children: _quick.map((q) {
+                  final message = q['message']!;
                   return GestureDetector(
-                    onTap: _sending ? null : () => _send(q),
+                    onTap: _sending ? null : () => _send(message, nudgeType: q['type']!),
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
                       decoration: BoxDecoration(
@@ -109,7 +119,7 @@ class _NudgeSheetState extends State<NudgeSheet> {
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: CustomText(
-                        text: q,
+                        text: message,
                         fontWeight: FontWeight.w600,
                         fontSize: 12.5,
                         color: const Color(0xff530630),

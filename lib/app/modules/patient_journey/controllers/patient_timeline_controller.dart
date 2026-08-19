@@ -68,7 +68,12 @@ class PatientTimelineController extends GetxController {
     return 'On track';
   }
 
-  Future<void> nudge({String? milestoneId, required String message}) async {
-    await service.sendNudge(patientId: userId, milestoneId: milestoneId, message: message);
+  Future<void> nudge({String? milestoneId, required String message, String nudgeType = 'task'}) async {
+    await service.sendNudge(
+      patientId: userId,
+      milestoneId: milestoneId,
+      message: message,
+      nudgeType: nudgeType,
+    );
   }
 }
