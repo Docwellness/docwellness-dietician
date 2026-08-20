@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:get/get.dart';
 
+import '../services/diet_plan_wizard_service.dart';
 import 'timeline_step_controller.dart';
 import 'wizard_controller.dart';
 
@@ -13,8 +14,18 @@ enum GenerationPhase { idle, generatingMeals, calculatingPortions, balancingCalo
 /// controller's doc comments) rather than re-deriving membership-tier
 /// cadence rules here. This step's own job is just the staged-progress UI
 /// and, once a dietPlanId exists, flushing Step 3's staged supplements to it.
+///
+/// v4.0: for a brand-new plan whose dataModel comes back 'plan-item',
+/// generateDietPlan only creates the (empty, workflowStatus:'targets_set')
+/// DietPlan - this step ALSO calls the new generate-menu endpoint
+/// immediately after, so "Generation" still means "meals exist" for both
+/// data models by the time this step reports done. Resuming/regenerating an
+/// EXISTING plan-item plan (the regenerateWeek branch below) isn't wired up
+/// yet - the backend has no generate-week equivalent for plan-item plans -
+/// so that path stays days-array-only for now.
 class GenerationStepController extends GetxController {
   final WizardController wizard = Get.find<WizardController>();
+  final DietPlanWizardService wizardService = DietPlanWizardService();
 
   final Rx<GenerationPhase> phase = GenerationPhase.idle.obs;
   final RxnString errorMessage = RxnString();
@@ -72,6 +83,27 @@ class GenerationStepController extends GetxController {
     }
 
     wizard.dietPlanId.value = resultDietPlanId;
+    if (isNewPlan) {
+      wizard.dataModel.value = wizard.patientsController.lastDietPlanDataModel;
+    }
+
+    // v4.0: a plan-item plan has no meals yet at this point (creation
+    // deliberately skips the old engine - see
+    // controllers/dietician/dietPlanController.js's createAndGenerateDietPlan)
+    // - call the wizard's own generate-menu endpoint now so "Generation"
+    // still produces a filled-in week for this data model too.
+    if (wizard.dataModel.value == 'plan-item') {
+      final menuResult = await wizardService.generateMenu(
+        patientId: wizard.patientId,
+        dietPlanId: resultDietPlanId!,
+        weekNumbers: wizard.weeksToGenerate,
+      );
+      if (menuResult == null || menuResult['success'] != true) {
+        errorMessage.value = menuResult?['message']?.toString() ?? 'Menu generation failed - please try again.';
+        phase.value = GenerationPhase.failed;
+        return;
+      }
+    }
 
     // Now that a real dietPlanId exists, attach whatever supplements were
     // staged in Step 3.

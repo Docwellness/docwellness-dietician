@@ -133,19 +133,187 @@ class WizardCalorieException {
   }
 }
 
-/// Parses GET .../weeks/:week/swap-alternatives' response entries.
-class WizardSwapAlternative {
+// ============================================================
+// v4.0: Ingredient-Level Portioning + Recipe Versioning models.
+// A clean parallel set to WizardPlanItem/WizardDayGroup above rather than
+// extending them - the JSON shapes are genuinely different (no
+// servingMultiplier here at all; a full joined RecipeVersion with
+// ingredients/steps instead of a flat recipeName/calories), and every
+// v4.0 caller already knows it's on this path (gated by
+// DietPlan.dataModel == 'plan-item'), so there's no benefit to forcing one
+// model class to serve both shapes via nullable fields.
+// ============================================================
+
+/// One line in a RecipeVersion.ingredients[] - parses GET .../plan-items'
+/// joined foodItemName alongside the raw foodItemId/rawQuantity/unit, and
+/// serializes back (toJson) for POST .../create-custom-version's payload.
+class WizardIngredientLine {
+  final String foodItemId;
+  final String? foodItemName;
+  final double rawQuantity;
+  final String unit;
+  final String? preparation;
+
+  /// Per-100g calories, joined in by GET .../plan-items for a client-side
+  /// LIVE preview only (widgets/ingredient_editor_sheet.dart) - the
+  /// authoritative recompute always happens server-side in
+  /// services/recipeVersioningService.js at Save time. Only meaningful when
+  /// unit == 'g' (no unit-conversion data is sent to the client) - null
+  /// otherwise, so the editor can show "—" instead of a wrong number.
+  final double? per100gCalories;
+
+  WizardIngredientLine({
+    required this.foodItemId,
+    this.foodItemName,
+    required this.rawQuantity,
+    required this.unit,
+    this.preparation,
+    this.per100gCalories,
+  });
+
+  WizardIngredientLine copyWith({double? rawQuantity}) => WizardIngredientLine(
+    foodItemId: foodItemId,
+    foodItemName: foodItemName,
+    rawQuantity: rawQuantity ?? this.rawQuantity,
+    unit: unit,
+    preparation: preparation,
+    per100gCalories: per100gCalories,
+  );
+
+  factory WizardIngredientLine.fromJson(Map<String, dynamic> json) {
+    return WizardIngredientLine(
+      foodItemId: json['foodItemId']?.toString() ?? '',
+      foodItemName: json['foodItemName'],
+      rawQuantity: (json['rawQuantity'] as num?)?.toDouble() ?? 0,
+      unit: json['unit'] ?? 'g',
+      preparation: json['preparation'],
+      per100gCalories: (json['nutritionPer100g']?['calories'] as num?)?.toDouble(),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'foodItemId': foodItemId,
+    'rawQuantity': rawQuantity,
+    'unit': unit,
+    if (preparation != null) 'preparation': preparation,
+  };
+}
+
+/// Parses a RecipeVersion object as embedded in GET .../plan-items' items[],
+/// or returned directly by POST .../create-custom-version /.../auto-balance.
+class WizardRecipeVersion {
   final String id;
+  final String parentRecipeId;
   final String name;
-  final double? calories;
+  final int versionNumber;
+  final List<WizardIngredientLine> ingredients;
+  final List<String> steps;
+  final Map<String, dynamic>? nutritionPerServing;
+  final bool hasUnresolvedIngredients;
 
-  WizardSwapAlternative({required this.id, required this.name, this.calories});
+  WizardRecipeVersion({
+    required this.id,
+    required this.parentRecipeId,
+    required this.name,
+    required this.versionNumber,
+    required this.ingredients,
+    required this.steps,
+    this.nutritionPerServing,
+    required this.hasUnresolvedIngredients,
+  });
 
-  factory WizardSwapAlternative.fromJson(Map<String, dynamic> json) {
-    return WizardSwapAlternative(
-      id: json['id'] ?? '',
+  double? get calories => (nutritionPerServing?['calories'] as num?)?.toDouble();
+
+  factory WizardRecipeVersion.fromJson(Map<String, dynamic> json) {
+    return WizardRecipeVersion(
+      id: json['_id']?.toString() ?? '',
+      parentRecipeId: json['parentRecipeId']?.toString() ?? '',
       name: json['name'] ?? '',
-      calories: (json['calories'] as num?)?.toDouble(),
+      versionNumber: (json['versionNumber'] as num?)?.toInt() ?? 1,
+      ingredients: (json['ingredients'] as List? ?? [])
+          .map((i) => WizardIngredientLine.fromJson(i))
+          .toList(),
+      steps: List<String>.from(json['steps'] ?? []),
+      nutritionPerServing: json['nutritionPerServing'] as Map<String, dynamic>?,
+      hasUnresolvedIngredients: json['hasUnresolvedIngredients'] == true,
+    );
+  }
+}
+
+/// One item in GET .../plan-items' meals[].items[] - the v4.0 equivalent of
+/// WizardPlanItem, pointing at a full RecipeVersion instead of a
+/// recipeId+servingMultiplier.
+class WizardPlanItemV2 {
+  final String id;
+  final String recipeVersionId;
+  final WizardRecipeVersion? recipeVersion;
+  final bool locked;
+  final Map<String, dynamic>? calculatedNutrition;
+  final bool isLinkedComponent;
+
+  WizardPlanItemV2({
+    required this.id,
+    required this.recipeVersionId,
+    this.recipeVersion,
+    required this.locked,
+    this.calculatedNutrition,
+    required this.isLinkedComponent,
+  });
+
+  double? get calories => (calculatedNutrition?['calories'] as num?)?.toDouble();
+  String get recipeName => recipeVersion?.name ?? recipeVersionId;
+  String get parentRecipeId => recipeVersion?.parentRecipeId ?? '';
+
+  factory WizardPlanItemV2.fromJson(Map<String, dynamic> json) {
+    return WizardPlanItemV2(
+      id: json['_id']?.toString() ?? '',
+      recipeVersionId: json['recipeVersionId']?.toString() ?? '',
+      recipeVersion: json['recipeVersion'] != null ? WizardRecipeVersion.fromJson(json['recipeVersion']) : null,
+      locked: json['locked'] == true,
+      calculatedNutrition: json['calculatedNutrition'] as Map<String, dynamic>?,
+      isLinkedComponent: json['isLinkedComponent'] == true,
+    );
+  }
+}
+
+/// One entry in GET .../plan-items' days[].meals[] - the v4.0 equivalent of
+/// WizardMealSlot.
+class WizardMealSlotV2 {
+  final String servingTime;
+  final String? mealSlotId;
+  final List<WizardPlanItemV2> items;
+  final List<WizardSupplement> supplements;
+
+  WizardMealSlotV2({
+    required this.servingTime,
+    this.mealSlotId,
+    required this.items,
+    required this.supplements,
+  });
+
+  factory WizardMealSlotV2.fromJson(Map<String, dynamic> json) {
+    return WizardMealSlotV2(
+      servingTime: json['servingTime'] ?? '',
+      mealSlotId: json['mealSlotId']?.toString(),
+      items: (json['items'] as List? ?? []).map((i) => WizardPlanItemV2.fromJson(i)).toList(),
+      supplements: (json['supplements'] as List? ?? []).map((s) => WizardSupplement.fromJson(s)).toList(),
+    );
+  }
+}
+
+/// Parses GET .../plan-items' days[] - the v4.0 equivalent of WizardDayGroup.
+class WizardDayGroupV2 {
+  final String dayGroup;
+  final String? dayPlanId;
+  final List<WizardMealSlotV2> meals;
+
+  WizardDayGroupV2({required this.dayGroup, this.dayPlanId, required this.meals});
+
+  factory WizardDayGroupV2.fromJson(Map<String, dynamic> json) {
+    return WizardDayGroupV2(
+      dayGroup: json['dayGroup'] ?? '',
+      dayPlanId: json['dayPlanId']?.toString(),
+      meals: (json['meals'] as List? ?? []).map((m) => WizardMealSlotV2.fromJson(m)).toList(),
     );
   }
 }

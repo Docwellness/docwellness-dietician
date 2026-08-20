@@ -22,6 +22,13 @@ class WizardController extends GetxController {
   /// plan being built.
   final RxnString dietPlanId = RxnString();
 
+  /// v4.0: 'plan-item' | 'days-array' | null (unknown until dietPlanId is
+  /// set - see generation_step_controller.dart). Gates which of the two
+  /// completely different Step 5 experiences (Ingredient Editor vs Fraction
+  /// Dial/Week Tweak/Swap-vs-Scale) wizard_view.dart shows, and which
+  /// backend endpoints Step 3's supplement flush targets.
+  final RxnString dataModel = RxnString();
+
   /// 1-4 - which internal week this wizard run is generating. Golden's
   /// weeks-3-4 regen and Platinum's one-at-a-time cadence still resolve to
   /// a single "week" value here for Step 2/3's purposes; multi-week

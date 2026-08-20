@@ -4,18 +4,21 @@ import 'package:get/get.dart';
 
 import 'wizard_controller.dart';
 
-/// Step 5 (Finalize & Clever Adjustments) - has two sub-states:
+/// Step 5 (Finalize & Exception Review) - has two sub-states:
 ///
 /// 1. Draft review (isFinalized == false): shows what the engine (AI or
 ///    deterministic, see services/recipeSelectionEngine.js on the backend)
 ///    selected per day-group/slot, from GET .../draft-options. "Finalize
 ///    Week" submits those selections as-is via the existing
 ///    PUT .../finalize-week endpoint.
-/// 2. Clever Adjustments (isFinalized == true): Week Tweak / Exception
-///    Review / Swap vs Scale - the Phase 3 endpoints operate on the typed
-///    days[] schema, which (see finalizeWeekPlan's dual-write comment on
-///    the backend) is only ever populated by an actual finalize - so these
-///    tools only become meaningful, and are only shown, after step 1 above.
+/// 2. Exception Review (isFinalized == true): a READ-ONLY calorie-balance
+///    summary per day - Week Tweak and Swap vs Scale (the servingMultiplier-
+///    based adjustment tools that used to live here) were removed as part
+///    of v4.0's hard cutover to ingredient-level portioning (see
+///    plan_item_finalize_step_controller.dart, used instead of this
+///    controller for a 'plan-item' plan). A days-array plan's already-
+///    Finalized week can no longer be adjusted from this screen at all -
+///    only viewed.
 class FinalizeStepController extends GetxController {
   final WizardController wizard = Get.find<WizardController>();
   final DietPlanWizardService wizardService = DietPlanWizardService();
@@ -147,78 +150,6 @@ class FinalizeStepController extends GetxController {
           .map((e) => WizardCalorieException.fromJson(e))
           .toList(),
     );
-  }
-
-  Future<void> applyWeekTweak(String servingTime, double multiplier) async {
-    final result = await wizardService.applyWeekTweak(
-      patientId: patientId,
-      dietPlanId: dietPlanId,
-      week: week,
-      servingTime: servingTime,
-      multiplier: multiplier,
-    );
-    if (result != null && result['success'] == true) {
-      await Future.wait([loadWeekDays(), loadExceptions()]);
-    }
-  }
-
-  Future<void> scaleItem(WizardPlanItem item, String dayGroup, String servingTime, double newMultiplier) async {
-    final result = await wizardService.scaleItem(
-      patientId: patientId,
-      dietPlanId: dietPlanId,
-      week: week,
-      dayGroup: dayGroup,
-      servingTime: servingTime,
-      itemId: item.itemId,
-      newMultiplier: newMultiplier,
-    );
-    if (result != null && result['success'] == true) {
-      await Future.wait([loadWeekDays(), loadExceptions()]);
-    }
-  }
-
-  Future<List<WizardSwapAlternative>> getAlternatives({
-    required WizardPlanItem item,
-    required String dayGroup,
-    required String servingTime,
-    String? direction,
-  }) async {
-    final response = await wizardService.getSwapAlternatives(
-      patientId: patientId,
-      dietPlanId: dietPlanId,
-      week: week,
-      dayGroup: dayGroup,
-      servingTime: servingTime,
-      itemId: item.itemId,
-      direction: direction,
-    );
-    if (response == null) return [];
-    final alternatives = (response['data']?['alternatives'] as List? ?? [])
-        .map((a) => WizardSwapAlternative.fromJson(a))
-        .toList();
-    return alternatives;
-  }
-
-  Future<void> swapItem({
-    required WizardPlanItem item,
-    required String dayGroup,
-    required String servingTime,
-    required String newRecipeId,
-    String? reason,
-  }) async {
-    final result = await wizardService.swapRecipe(
-      patientId: patientId,
-      dietPlanId: dietPlanId,
-      week: week,
-      dayGroup: dayGroup,
-      servingTime: servingTime,
-      itemId: item.itemId,
-      newRecipeId: newRecipeId,
-      reason: reason,
-    );
-    if (result != null && result['success'] == true) {
-      await Future.wait([loadWeekDays(), loadExceptions()]);
-    }
   }
 
   Future<bool> activatePlan() async {

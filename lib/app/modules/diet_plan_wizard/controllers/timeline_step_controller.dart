@@ -91,24 +91,43 @@ class TimelineStepController extends GetxController {
   /// the count of supplements that failed to save, for the caller to warn
   /// about (generation itself still succeeded - a supplement failing to
   /// attach shouldn't be reported as if the whole plan failed).
+  ///
+  /// v4.0: picks the target endpoint from wizard.dataModel (set by
+  /// generation_step_controller.dart right before calling this) - the
+  /// staging above is identical for both data models, only where it lands
+  /// on the backend differs (days[].meals[].supplements[] vs a standalone
+  /// SupplementItem document).
   Future<int> flushToBackend({
     required String patientId,
     required String dietPlanId,
     required int week,
   }) async {
+    final isPlanItem = wizard.dataModel.value == 'plan-item';
     int failures = 0;
     for (final supplement in stagedSupplements) {
-      final result = await wizardService.upsertSupplement(
-        patientId: patientId,
-        dietPlanId: dietPlanId,
-        week: week,
-        dayGroup: supplement.dayGroup,
-        servingTime: supplement.servingTime,
-        supplementId: supplement.supplementId,
-        dosage: supplement.dosage,
-        instructions: supplement.instructions,
-        timingAnchor: supplement.timingAnchor,
-      );
+      final result = isPlanItem
+          ? await wizardService.upsertTimelineSupplement(
+              patientId: patientId,
+              dietPlanId: dietPlanId,
+              week: week,
+              dayGroup: supplement.dayGroup,
+              servingTime: supplement.servingTime,
+              supplementRecipeId: supplement.supplementId,
+              dosage: supplement.dosage,
+              instructions: supplement.instructions,
+              timingAnchor: supplement.timingAnchor,
+            )
+          : await wizardService.upsertSupplement(
+              patientId: patientId,
+              dietPlanId: dietPlanId,
+              week: week,
+              dayGroup: supplement.dayGroup,
+              servingTime: supplement.servingTime,
+              supplementId: supplement.supplementId,
+              dosage: supplement.dosage,
+              instructions: supplement.instructions,
+              timingAnchor: supplement.timingAnchor,
+            );
       if (result == null || result['success'] != true) failures++;
     }
     return failures;

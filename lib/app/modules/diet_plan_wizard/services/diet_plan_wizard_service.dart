@@ -2,10 +2,13 @@ import 'package:docwellnesdoc/app/utils/functions/dio_function.dart';
 import 'package:docwellnesdoc/main.dart';
 import 'package:flutter/foundation.dart';
 
-/// Wraps the Phase 3 "Clever UX" endpoints (Week Tweak, Swap vs Scale,
-/// Exception Review, Supplement Injection) added to
-/// routes/dietician.js/dietPlanController.js alongside the deterministic
-/// diet-plan engine. Kept separate from PatientService (which already has
+/// Wraps the Phase 3 "Clever UX" endpoints (Exception Review, Supplement
+/// Injection) added to routes/dietician.js/dietPlanController.js alongside
+/// the deterministic diet-plan engine, plus the v4.0 ingredient-versioning
+/// endpoints further below. Week Tweak/Swap vs Scale methods were removed
+/// as part of v4.0's hard cutover - see finalize_step_controller.dart's
+/// header comment; those days-array endpoints no longer exist on the
+/// backend either. Kept separate from PatientService (which already has
 /// 700+ lines) rather than growing that file further - the wizard's own
 /// service, same request/response convention (ApiService.request, check
 /// statusCode==200 && data['success']==true, return response.data or null).
@@ -14,121 +17,6 @@ class DietPlanWizardService {
 
   String _base(String patientId, String dietPlanId) =>
       '/patients/$patientId/diet-plans/$dietPlanId';
-
-  Future<dynamic> applyWeekTweak({
-    required String patientId,
-    required String dietPlanId,
-    required int week,
-    required String servingTime,
-    required double multiplier,
-  }) async {
-    try {
-      final response = await service.request(
-        endPoint: '${_base(patientId, dietPlanId)}/week-tweak',
-        method: 'POST',
-        headers: {'Authorization': 'Bearer $token'},
-        data: {'week': week, 'servingTime': servingTime, 'multiplier': multiplier},
-      );
-      if (response != null && response.data is Map) return response.data;
-    } catch (e) {
-      debugPrint('applyWeekTweak error: $e');
-    }
-    return null;
-  }
-
-  Future<dynamic> scaleItem({
-    required String patientId,
-    required String dietPlanId,
-    required int week,
-    required String dayGroup,
-    required String servingTime,
-    required String itemId,
-    required double newMultiplier,
-  }) async {
-    try {
-      final response = await service.request(
-        endPoint: '${_base(patientId, dietPlanId)}/swap',
-        method: 'POST',
-        headers: {'Authorization': 'Bearer $token'},
-        data: {
-          'week': week,
-          'dayGroup': dayGroup,
-          'servingTime': servingTime,
-          'itemId': itemId,
-          'action': 'scale',
-          'newMultiplier': newMultiplier,
-        },
-      );
-      if (response != null && response.data is Map) return response.data;
-    } catch (e) {
-      debugPrint('scaleItem error: $e');
-    }
-    return null;
-  }
-
-  Future<dynamic> swapRecipe({
-    required String patientId,
-    required String dietPlanId,
-    required int week,
-    required String dayGroup,
-    required String servingTime,
-    required String itemId,
-    required String newRecipeId,
-    String? reason,
-  }) async {
-    try {
-      final response = await service.request(
-        endPoint: '${_base(patientId, dietPlanId)}/swap',
-        method: 'POST',
-        headers: {'Authorization': 'Bearer $token'},
-        data: {
-          'week': week,
-          'dayGroup': dayGroup,
-          'servingTime': servingTime,
-          'itemId': itemId,
-          'action': 'swap',
-          'newRecipeId': newRecipeId,
-          if (reason != null) 'reason': reason,
-        },
-      );
-      if (response != null && response.data is Map) return response.data;
-    } catch (e) {
-      debugPrint('swapRecipe error: $e');
-    }
-    return null;
-  }
-
-  Future<dynamic> getSwapAlternatives({
-    required String patientId,
-    required String dietPlanId,
-    required int week,
-    required String dayGroup,
-    required String servingTime,
-    required String itemId,
-    String? direction,
-  }) async {
-    try {
-      final response = await service.request(
-        endPoint: '${_base(patientId, dietPlanId)}/weeks/$week/swap-alternatives',
-        method: 'GET',
-        headers: {'Authorization': 'Bearer $token'},
-        queryParameters: {
-          'dayGroup': dayGroup,
-          'servingTime': servingTime,
-          'itemId': itemId,
-          if (direction != null) 'direction': direction,
-        },
-      );
-      if (response != null &&
-          response.statusCode == 200 &&
-          response.data['success'] == true) {
-        return response.data;
-      }
-    } catch (e) {
-      debugPrint('getSwapAlternatives error: $e');
-    }
-    return null;
-  }
 
   Future<dynamic> getWeekDays({
     required String patientId,
@@ -203,6 +91,207 @@ class DietPlanWizardService {
       if (response != null && response.data is Map) return response.data;
     } catch (e) {
       debugPrint('upsertSupplement error: $e');
+    }
+    return null;
+  }
+
+  // ============================================================
+  // v4.0: Ingredient-Level Portioning + Recipe Versioning - wraps
+  // routes/dietician.js's "Ingredient-Level Portioning + Recipe Versioning"
+  // block (controllers/dietician/planItemController.js). Only meaningful for
+  // a DietPlan whose dataModel == 'plan-item' - see WizardController.dataModel.
+  // ============================================================
+
+  Future<dynamic> generateMenu({
+    required String patientId,
+    required String dietPlanId,
+    List<int>? weekNumbers,
+    bool restrictNonVegToDayGroups = false,
+  }) async {
+    try {
+      final response = await service.request(
+        endPoint: '${_base(patientId, dietPlanId)}/generate-menu',
+        method: 'POST',
+        headers: {'Authorization': 'Bearer $token'},
+        data: {
+          if (weekNumbers != null) 'weekNumbers': weekNumbers,
+          'restrictNonVegToDayGroups': restrictNonVegToDayGroups,
+        },
+      );
+      if (response != null && response.data is Map) return response.data;
+    } catch (e) {
+      debugPrint('generateMenu error: $e');
+    }
+    return null;
+  }
+
+  Future<dynamic> createCustomVersion({
+    required String patientId,
+    required String dietPlanId,
+    required String planItemId,
+    required List<Map<String, dynamic>> ingredients,
+  }) async {
+    try {
+      final response = await service.request(
+        endPoint: '${_base(patientId, dietPlanId)}/create-custom-version',
+        method: 'POST',
+        headers: {'Authorization': 'Bearer $token'},
+        data: {'planItemId': planItemId, 'ingredients': ingredients},
+      );
+      if (response != null && response.data is Map) return response.data;
+    } catch (e) {
+      debugPrint('createCustomVersion error: $e');
+    }
+    return null;
+  }
+
+  Future<dynamic> autoBalanceItem({
+    required String patientId,
+    required String dietPlanId,
+    required String planItemId,
+    required double targetCalories,
+  }) async {
+    try {
+      final response = await service.request(
+        endPoint: '${_base(patientId, dietPlanId)}/auto-balance',
+        method: 'POST',
+        headers: {'Authorization': 'Bearer $token'},
+        data: {'scope': 'item', 'planItemId': planItemId, 'targetCalories': targetCalories},
+      );
+      if (response != null && response.data is Map) return response.data;
+    } catch (e) {
+      debugPrint('autoBalanceItem error: $e');
+    }
+    return null;
+  }
+
+  Future<dynamic> autoBalanceDay({
+    required String patientId,
+    required String dietPlanId,
+    required String dayPlanId,
+    required double targetDailyCalories,
+  }) async {
+    try {
+      final response = await service.request(
+        endPoint: '${_base(patientId, dietPlanId)}/auto-balance',
+        method: 'POST',
+        headers: {'Authorization': 'Bearer $token'},
+        data: {'scope': 'day', 'dayPlanId': dayPlanId, 'targetDailyCalories': targetDailyCalories},
+      );
+      if (response != null && response.data is Map) return response.data;
+    } catch (e) {
+      debugPrint('autoBalanceDay error: $e');
+    }
+    return null;
+  }
+
+  Future<dynamic> autoBalanceWeek({
+    required String patientId,
+    required String dietPlanId,
+    required int week,
+    required double targetDailyCalories,
+  }) async {
+    try {
+      final response = await service.request(
+        endPoint: '${_base(patientId, dietPlanId)}/auto-balance',
+        method: 'POST',
+        headers: {'Authorization': 'Bearer $token'},
+        data: {'scope': 'week', 'week': week, 'targetDailyCalories': targetDailyCalories},
+      );
+      if (response != null && response.data is Map) return response.data;
+    } catch (e) {
+      debugPrint('autoBalanceWeek error: $e');
+    }
+    return null;
+  }
+
+  Future<dynamic> getWeekPlanItems({
+    required String patientId,
+    required String dietPlanId,
+    required int week,
+  }) async {
+    try {
+      final response = await service.request(
+        endPoint: '${_base(patientId, dietPlanId)}/weeks/$week/plan-items',
+        method: 'GET',
+        headers: {'Authorization': 'Bearer $token'},
+      );
+      if (response != null && response.statusCode == 200 && response.data['success'] == true) {
+        return response.data;
+      }
+    } catch (e) {
+      debugPrint('getWeekPlanItems error: $e');
+    }
+    return null;
+  }
+
+  Future<dynamic> swapRecipeVersion({
+    required String patientId,
+    required String dietPlanId,
+    required String planItemId,
+    required String newParentRecipeId,
+  }) async {
+    try {
+      final response = await service.request(
+        endPoint: '${_base(patientId, dietPlanId)}/swap-recipe-version',
+        method: 'POST',
+        headers: {'Authorization': 'Bearer $token'},
+        data: {'planItemId': planItemId, 'newParentRecipeId': newParentRecipeId},
+      );
+      if (response != null && response.data is Map) return response.data;
+    } catch (e) {
+      debugPrint('swapRecipeVersion error: $e');
+    }
+    return null;
+  }
+
+  Future<dynamic> upsertTimelineSupplement({
+    required String patientId,
+    required String dietPlanId,
+    required int week,
+    required String dayGroup,
+    required String servingTime,
+    required String supplementRecipeId,
+    String? dosage,
+    String? instructions,
+    required String timingAnchor,
+  }) async {
+    try {
+      final response = await service.request(
+        endPoint: '${_base(patientId, dietPlanId)}/timeline-supplements',
+        method: 'POST',
+        headers: {'Authorization': 'Bearer $token'},
+        data: {
+          'week': week,
+          'dayGroup': dayGroup,
+          'servingTime': servingTime,
+          'supplementRecipeId': supplementRecipeId,
+          if (dosage != null) 'dosage': dosage,
+          if (instructions != null) 'instructions': instructions,
+          'timingAnchor': timingAnchor,
+        },
+      );
+      if (response != null && response.data is Map) return response.data;
+    } catch (e) {
+      debugPrint('upsertTimelineSupplement error: $e');
+    }
+    return null;
+  }
+
+  Future<dynamic> finalizePlanItemWeek({
+    required String patientId,
+    required String dietPlanId,
+  }) async {
+    try {
+      final response = await service.request(
+        endPoint: '${_base(patientId, dietPlanId)}/finalize-plan-item-week',
+        method: 'POST',
+        headers: {'Authorization': 'Bearer $token'},
+        data: {},
+      );
+      if (response != null && response.data is Map) return response.data;
+    } catch (e) {
+      debugPrint('finalizePlanItemWeek error: $e');
     }
     return null;
   }

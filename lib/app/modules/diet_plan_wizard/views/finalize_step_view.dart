@@ -1,5 +1,3 @@
-import 'package:docwellnesdoc/app/modules/diet_plan_wizard/controllers/timeline_step_controller.dart'
-    show requiredServingTimes;
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_button.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
 import 'package:flutter/material.dart';
@@ -8,8 +6,6 @@ import 'package:get/get.dart';
 import '../controllers/finalize_step_controller.dart';
 import '../controllers/wizard_controller.dart';
 import '../models/wizard_week_models.dart';
-import '../widgets/fraction_dial.dart';
-import '../widgets/swap_vs_scale_sheet.dart';
 
 const _headerColor = Color(0xff530630);
 const _bodyColor = Color(0xff1F2A37);
@@ -18,11 +14,10 @@ const _primaryColor = Color(0xff851653);
 const _warnColor = Color(0xffB45309);
 const _okColor = Color(0xff059669);
 
-const List<double> _weekTweakSteps = [0.75, 1.0, 1.25];
-
-/// Step 5 (Finalize & Clever Adjustments) - see finalize_step_controller.dart
-/// for why this has two sub-states (draft review, then post-finalize
-/// adjustments).
+/// Step 5 (Finalize & Exception Review) - see finalize_step_controller.dart
+/// for why this has two sub-states (draft review, then a read-only
+/// post-finalize summary - Week Tweak/Swap vs Scale were removed as part of
+/// v4.0's hard cutover).
 class FinalizeStepView extends StatelessWidget {
   const FinalizeStepView({super.key});
 
@@ -198,8 +193,6 @@ class _CleverAdjustmentsView extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 8),
-                _WeekTweakPanel(controller: controller),
-                const SizedBox(height: 20),
                 _ExceptionReviewList(controller: controller),
                 const SizedBox(height: 16),
               ],
@@ -222,65 +215,6 @@ class _CleverAdjustmentsView extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-/// Zone 1: [0.75x | 1.0x | 1.25x] per servingTime.
-class _WeekTweakPanel extends StatelessWidget {
-  final FinalizeStepController controller;
-
-  const _WeekTweakPanel({required this.controller});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xffFEF6FB),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const CustomText(text: 'Week Tweak', fontWeight: FontWeight.w600, fontSize: 15, color: _headerColor),
-          const SizedBox(height: 8),
-          ...requiredServingTimes.map(
-            (servingTime) => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: CustomText(text: servingTime, fontWeight: FontWeight.w400, fontSize: 13, color: _bodyColor),
-                  ),
-                  ..._weekTweakSteps.map(
-                    (step) => Padding(
-                      padding: const EdgeInsets.only(left: 6),
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(8),
-                        onTap: () => controller.applyWeekTweak(servingTime, step),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            border: Border.all(color: _primaryColor),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: CustomText(
-                            text: '${step}x',
-                            fontWeight: FontWeight.w500,
-                            fontSize: 11,
-                            color: _primaryColor,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -309,7 +243,6 @@ class _ExceptionReviewList extends StatelessWidget {
               day: day,
               exception: exception,
               isBalanced: isBalanced,
-              controller: controller,
             );
           }),
         ],
@@ -322,9 +255,8 @@ class _DayCard extends StatefulWidget {
   final WizardDayGroup day;
   final WizardCalorieException? exception;
   final bool isBalanced;
-  final FinalizeStepController controller;
 
-  const _DayCard({required this.day, required this.exception, required this.isBalanced, required this.controller});
+  const _DayCard({required this.day, required this.exception, required this.isBalanced});
 
   @override
   State<_DayCard> createState() => _DayCardState();
@@ -378,10 +310,8 @@ class _DayCardState extends State<_DayCard> {
                 children: widget.day.meals.expand((meal) {
                   return meal.items.map(
                     (item) => _SmartRecipeCard(
-                      dayGroup: widget.day.dayGroup,
                       servingTime: meal.servingTime,
                       item: item,
-                      controller: widget.controller,
                     ),
                   );
                 }).toList(),
@@ -393,19 +323,17 @@ class _DayCardState extends State<_DayCard> {
   }
 }
 
-/// Zone 3: one card per plan item - Fraction Dial + (for an over-budget
-/// item) a Swap vs Scale entry point.
+/// Zone 3: one read-only card per plan item - name, calories, lock/link
+/// status. No adjustment controls - Week Tweak/Swap vs Scale were removed
+/// as part of v4.0's hard cutover (see this file's header comment); a
+/// days-array plan's already-Finalized week can only be viewed here now.
 class _SmartRecipeCard extends StatelessWidget {
-  final String dayGroup;
   final String servingTime;
   final WizardPlanItem item;
-  final FinalizeStepController controller;
 
   const _SmartRecipeCard({
-    required this.dayGroup,
     required this.servingTime,
     required this.item,
-    required this.controller,
   });
 
   @override
@@ -414,84 +342,38 @@ class _SmartRecipeCard extends StatelessWidget {
       margin: const EdgeInsets.only(top: 8),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(color: const Color(0xffFAFAFA), borderRadius: BorderRadius.circular(10)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: CustomText(
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                CustomText(
                   text: '$servingTime · ${item.recipeName ?? item.recipeId}',
                   fontWeight: FontWeight.w500,
                   fontSize: 13,
                   color: _bodyColor,
                 ),
-              ),
-              if (item.isLinkedComponent)
-                const Padding(
-                  padding: EdgeInsets.only(left: 4),
-                  child: Icon(Icons.link, size: 14, color: _mutedColor),
-                ),
-              if (item.locked) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.lock, size: 14, color: _mutedColor)),
-            ],
-          ),
-          if (item.calories != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: CustomText(
-                text: '${item.calories!.round()} Cal',
-                fontWeight: FontWeight.w400,
-                fontSize: 11,
-                color: _mutedColor,
-              ),
-            ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              FractionDial(
-                value: item.servingMultiplier,
-                onChanged: item.locked
-                    ? (_) {}
-                    : (v) => controller.scaleItem(item, dayGroup, servingTime, v),
-              ),
-              const Spacer(),
-              if (!item.locked)
-                InkWell(
-                  onTap: () => _openSwapVsScale(context),
-                  child: const Padding(
-                    padding: EdgeInsets.all(4),
-                    child: Icon(Icons.swap_horiz, size: 18, color: _primaryColor),
+                if (item.calories != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: CustomText(
+                      text: '${item.calories!.round()} Cal',
+                      fontWeight: FontWeight.w400,
+                      fontSize: 11,
+                      color: _mutedColor,
+                    ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
+          if (item.isLinkedComponent)
+            const Padding(
+              padding: EdgeInsets.only(left: 4),
+              child: Icon(Icons.link, size: 14, color: _mutedColor),
+            ),
+          if (item.locked) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.lock, size: 14, color: _mutedColor)),
         ],
-      ),
-    );
-  }
-
-  void _openSwapVsScale(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (_) => SwapVsScaleSheet(
-        item: item,
-        deviationCalories: null,
-        onLoadAlternatives: (direction) => controller.getAlternatives(
-          item: item,
-          dayGroup: dayGroup,
-          servingTime: servingTime,
-          direction: direction,
-        ),
-        onSelectAlternative: (alt) => controller.swapItem(
-          item: item,
-          dayGroup: dayGroup,
-          servingTime: servingTime,
-          newRecipeId: alt.id,
-          reason: 'Swapped via Swap vs Scale',
-        ),
-        onScaleInstead: () {},
       ),
     );
   }

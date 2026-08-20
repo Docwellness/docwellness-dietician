@@ -1857,6 +1857,14 @@ class PatientsController extends GetxController {
   /// of falling back to a generic message.
   String? lastDietPlanGenerationError;
 
+  /// v4.0: set alongside dietPlanId below - 'plan-item' | 'days-array' | null
+  /// (null on failure, or for any caller not using the new wizard flow).
+  /// Lets diet_plan_wizard's GenerationStepController tell which of the two
+  /// completely different post-creation flows to follow (the new
+  /// generate-menu/Ingredient-Editor path vs the existing draft-review path)
+  /// without duplicating generateDietPlan's own request/response handling.
+  String? lastDietPlanDataModel;
+
   Future<String?> generateDietPlan(
     String patientId,
     String firstConsultationId,
@@ -1876,6 +1884,7 @@ class PatientsController extends GetxController {
       if (currentWeight != null) 'currentWeight': currentWeight,
     };
     String? dietPlanId;
+    lastDietPlanDataModel = null;
     try {
       final response = await service.generateDietPlan(data, patientId);
       if (response != null) {
@@ -1885,6 +1894,7 @@ class PatientsController extends GetxController {
           showGenerateDietPlanSheet.value = true;
 
           dietPlanId = response['data']?['dietPlanId'];
+          lastDietPlanDataModel = response['data']?['dataModel'];
           patientProfileModel.value?.status?.activeDietPlanId = dietPlanId;
 
           patientProfileModel.refresh();

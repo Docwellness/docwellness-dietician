@@ -6,6 +6,7 @@ import '../controllers/wizard_controller.dart';
 import 'context_step_view.dart';
 import 'finalize_step_view.dart';
 import 'generation_step_view.dart';
+import 'plan_item_finalize_step_view.dart';
 import 'targets_step_view.dart';
 import 'timeline_step_view.dart';
 
@@ -50,7 +51,16 @@ class WizardView extends StatelessWidget {
                   case 4:
                     return const GenerationStepView();
                   case 5:
-                    return const FinalizeStepView();
+                    // v4.0: a plan-item plan gets the Ingredient-Editor-based
+                    // Refine Portions / detailed Finalize view instead of
+                    // Week Tweak/Fraction Dial/Swap-vs-Scale - see
+                    // plan_item_finalize_step_controller.dart. dataModel is
+                    // only known once Step 4 (Generation) has created the
+                    // plan, so this stays FinalizeStepView (days-array,
+                    // unchanged) until then.
+                    return wizard.dataModel.value == 'plan-item'
+                        ? const PlanItemFinalizeStepView()
+                        : const FinalizeStepView();
                   default:
                     return const ContextStepView();
                 }
