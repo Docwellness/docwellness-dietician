@@ -7,6 +7,7 @@ import 'context_step_view.dart';
 import 'finalize_step_view.dart';
 import 'generation_step_view.dart';
 import 'plan_item_finalize_step_view.dart';
+import 'refine_portions_step_view.dart';
 import 'targets_step_view.dart';
 import 'timeline_step_view.dart';
 
@@ -14,7 +15,9 @@ const _primaryColor = Color(0xff851653);
 const _headerColor = Color(0xff530630);
 const _mutedColor = Color(0xff9DA4AE);
 
-const List<String> _stepLabels = [
+// Existing-plan regeneration (days-array only - see
+// WizardController.isNewPlanFlow's doc comment).
+const List<String> _regenerationStepLabels = [
   'Context',
   'Targets',
   'Timeline',
@@ -22,10 +25,25 @@ const List<String> _stepLabels = [
   'Finalize',
 ];
 
+// v4.0: a brand-new plan, literal spec order - Targets -> Generate ->
+// Refine Portions -> Timeline -> Finalize, no separate Context step.
+const List<String> _newPlanStepLabels = [
+  'Targets',
+  'Generate',
+  'Refine',
+  'Timeline',
+  'Finalize',
+];
+
 /// Shell for the 5-Step Wizard - a step-progress header plus whichever
 /// step's view is currently active (WizardController.currentStep). Each
 /// step view is self-contained and reads its own lightweight controller
 /// (see wizard_binding.dart) rather than this shell owning any step's state.
+///
+/// The step SEQUENCE itself is chosen by wizard.isNewPlanFlow, not
+/// dataModel - see that field's doc comment for why (dataModel isn't known
+/// until Step 2/Generation has already run, which is too late to decide
+/// what Step 1 should even be).
 class WizardView extends StatelessWidget {
   const WizardView({super.key});
 
@@ -41,6 +59,22 @@ class WizardView extends StatelessWidget {
             _WizardHeader(wizard: wizard),
             Expanded(
               child: Obx(() {
+                if (wizard.isNewPlanFlow) {
+                  switch (wizard.currentStep.value) {
+                    case 1:
+                      return const TargetsStepView();
+                    case 2:
+                      return const GenerationStepView();
+                    case 3:
+                      return const RefinePortionsStepView();
+                    case 4:
+                      return const TimelineStepView();
+                    case 5:
+                      return const PlanItemFinalizeStepView();
+                    default:
+                      return const TargetsStepView();
+                  }
+                }
                 switch (wizard.currentStep.value) {
                   case 1:
                     return const ContextStepView();
@@ -51,16 +85,7 @@ class WizardView extends StatelessWidget {
                   case 4:
                     return const GenerationStepView();
                   case 5:
-                    // v4.0: a plan-item plan gets the Ingredient-Editor-based
-                    // Refine Portions / detailed Finalize view instead of
-                    // Week Tweak/Fraction Dial/Swap-vs-Scale - see
-                    // plan_item_finalize_step_controller.dart. dataModel is
-                    // only known once Step 4 (Generation) has created the
-                    // plan, so this stays FinalizeStepView (days-array,
-                    // unchanged) until then.
-                    return wizard.dataModel.value == 'plan-item'
-                        ? const PlanItemFinalizeStepView()
-                        : const FinalizeStepView();
+                    return const FinalizeStepView();
                   default:
                     return const ContextStepView();
                 }
@@ -110,8 +135,9 @@ class _WizardHeader extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          Obx(
-            () => Row(
+          Obx(() {
+            final labels = wizard.isNewPlanFlow ? _newPlanStepLabels : _regenerationStepLabels;
+            return Row(
               children: List.generate(WizardController.stepCount, (index) {
                 final step = index + 1;
                 final isActive = step == wizard.currentStep.value;
@@ -130,7 +156,7 @@ class _WizardHeader extends StatelessWidget {
                         ),
                         const SizedBox(height: 4),
                         CustomText(
-                          text: _stepLabels[index],
+                          text: labels[index],
                           fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
                           fontSize: 10,
                           color: isActive ? _primaryColor : _mutedColor,
@@ -140,8 +166,8 @@ class _WizardHeader extends StatelessWidget {
                   ),
                 );
               }),
-            ),
-          ),
+            );
+          }),
         ],
       ),
     );

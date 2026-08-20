@@ -63,7 +63,20 @@ class TimelineStepView extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.all(16),
           child: CustomButton(
-            onTap: wizard.nextStep,
+            onTap: () async {
+              // v4.0 new-plan flow: Timeline now runs AFTER Generate (see
+              // wizard_controller.dart's isNewPlanFlow doc comment), so
+              // dietPlanId already exists - flush staged supplements to the
+              // real endpoint right away instead of waiting for
+              // GenerationStepController (which already ran, earlier).
+              if (wizard.isNewPlanFlow && controller.stagedSupplements.isNotEmpty) {
+                final dietPlanId = wizard.dietPlanId.value;
+                if (dietPlanId != null && dietPlanId.isNotEmpty) {
+                  await controller.flushToBackend(patientId: wizard.patientId, dietPlanId: dietPlanId, week: wizard.targetWeek.value);
+                }
+              }
+              wizard.nextStep();
+            },
             text: 'Continue',
             isOutline: false,
             buttonColor: _headerColor,

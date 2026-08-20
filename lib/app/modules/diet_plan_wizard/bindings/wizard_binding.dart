@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import '../controllers/finalize_step_controller.dart';
 import '../controllers/generation_step_controller.dart';
 import '../controllers/plan_item_finalize_step_controller.dart';
+import '../controllers/refine_portions_step_controller.dart';
 import '../controllers/targets_step_controller.dart';
 import '../controllers/timeline_step_controller.dart';
 import '../controllers/wizard_controller.dart';
@@ -23,9 +24,10 @@ class WizardBinding extends Bindings {
     Get.lazyPut<TimelineStepController>(() => TimelineStepController());
     Get.lazyPut<GenerationStepController>(() => GenerationStepController());
     Get.lazyPut<FinalizeStepController>(() => FinalizeStepController());
-    // v4.0: only ever actually built if wizard.dataModel ends up 'plan-item'
-    // (see wizard_view.dart's step-5 routing) - lazyPut means this is a
-    // no-op for every days-array plan today.
+    // v4.0: only ever actually built for wizard.isNewPlanFlow (see
+    // wizard_view.dart's step routing) - lazyPut means this is a no-op for
+    // every days-array regeneration flow today.
     Get.lazyPut<PlanItemFinalizeStepController>(() => PlanItemFinalizeStepController());
+    Get.lazyPut<RefinePortionsStepController>(() => RefinePortionsStepController());
   }
 }

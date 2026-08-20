@@ -47,6 +47,26 @@ class WizardController extends GetxController {
 
   static const int stepCount = 5;
 
+  /// True only for a genuinely brand-new plan (no initialDietPlanId at
+  /// construction - see patient_profile_view.dart's two call sites: the
+  /// "Create Diet Plan" button passes none, "regenerate week N" always
+  /// passes the existing plan's id). Decided once, at construction, since
+  /// dataModel itself isn't known until Step 2/Generation actually runs -
+  /// this is what wizard_view.dart routes the step SEQUENCE on (not
+  /// dataModel), because the sequence has to be picked before Generation
+  /// has had a chance to tell us which data model this plan ended up on.
+  ///
+  /// New-plan flow uses the v4.0-spec-literal order (Targets -> Generate ->
+  /// Refine Portions -> Timeline -> Finalize, dropping Context entirely -
+  /// see wizard_view.dart) since every new plan on this deployment is
+  /// 'plan-item' right now (DIET_PLAN_DATA_MODEL is globally set). Existing-
+  /// plan regeneration keeps the original order (Context/Targets/Timeline/
+  /// Generate/Finalize) untouched - that path is days-array-only per
+  /// generation_step_controller.dart's own scoping note (no generate-week
+  /// equivalent exists yet for plan-item plans), so it was never a
+  /// candidate for reordering in the first place.
+  final bool isNewPlanFlow;
+
   final PatientsController patientsController = Get.find<PatientsController>();
 
   WizardController({
@@ -60,7 +80,8 @@ class WizardController extends GetxController {
     int initialStep = 1,
   }) : targetWeek = initialWeek.obs,
        weeksToGenerate = weeksToGenerate ?? [initialWeek],
-       currentStep = initialStep.clamp(1, stepCount).obs {
+       currentStep = initialStep.clamp(1, stepCount).obs,
+       isNewPlanFlow = initialDietPlanId == null || initialDietPlanId.isEmpty {
     if (initialDietPlanId != null && initialDietPlanId.isNotEmpty) {
       dietPlanId.value = initialDietPlanId;
     }
