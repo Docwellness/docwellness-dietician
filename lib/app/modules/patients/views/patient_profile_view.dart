@@ -18,7 +18,9 @@ import 'package:docwellnesdoc/app/modules/patients/widgets/bmi_card.dart';
 import 'package:docwellnesdoc/app/modules/patients/widgets/calorie_intake_container.dart';
 import 'package:docwellnesdoc/app/modules/patients/widgets/date_range_selector_button.dart';
 import 'package:docwellnesdoc/app/modules/patients/widgets/line_chart.dart';
-import 'package:docwellnesdoc/app/modules/patients/widgets/show_diet_level_sheet.dart';
+import 'package:docwellnesdoc/app/modules/diet_plan_wizard/bindings/wizard_binding.dart';
+import 'package:docwellnesdoc/app/modules/diet_plan_wizard/controllers/wizard_controller.dart';
+import 'package:docwellnesdoc/app/modules/diet_plan_wizard/views/wizard_view.dart';
 import 'package:docwellnesdoc/app/routes/app_pages.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/app_toast.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_button.dart';
@@ -335,7 +337,7 @@ class _PatientProfileViewState extends State<PatientProfileView> {
     }
   }
 
-  /// Opens CreateDietPlanScreen for Week 2/3/4 with inline weight input
+  /// Opens the 5-Step Wizard for Week 2/3/4 (an already-created plan).
   Future<void> _openWeightDialogForWeek(
     BuildContext context,
     int weekNum,
@@ -345,17 +347,22 @@ class _PatientProfileViewState extends State<PatientProfileView> {
   }) async {
     if (!context.mounted) return;
 
-    // Open CreateDietPlanScreen directly — weight field is built into the screen
+    final wizardController = WizardController(
+      patientId: widget.patientId,
+      patientName: (basic.fullName ?? '').split(' ').first,
+      firstConsultationId: status.firstConsultationId ?? '',
+      requestId: status.requestId ?? '',
+      initialDietPlanId: status.activeDietPlanId,
+      initialWeek: weekNum,
+      weeksToGenerate: weeksToGenerate,
+      // Regenerating an existing plan/week - Targets is meaningful (a fresh
+      // calorie/macro pick) but Context is already known, so skip straight
+      // to it.
+      initialStep: 2,
+    );
     await Get.to(
-      () => CreateDietPlanScreen(
-        firstConsultationId: status.firstConsultationId ?? '',
-        patientId: widget.patientId,
-        requestId: status.requestId ?? '',
-        name: (basic.fullName ?? '').split(' ').first,
-        targetWeek: weekNum,
-        dietPlanId: status.activeDietPlanId,
-        weeksToGenerate: weeksToGenerate,
-      ),
+      () => const WizardView(),
+      binding: WizardBinding(wizardController),
     );
     // Refresh so the calorie cards reflect the (re-)assigned diet immediately.
     await controller.getPatientProfile(widget.patientId);
@@ -1189,13 +1196,15 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                 ),
                 child: CustomButton(
                   onTap: () async {
+                    final wizardController = WizardController(
+                      patientId: widget.patientId,
+                      patientName: (basic.fullName ?? '').split(' ').first,
+                      firstConsultationId: status.firstConsultationId ?? '',
+                      requestId: status.requestId ?? '',
+                    );
                     await Get.to(
-                      () => CreateDietPlanScreen(
-                        firstConsultationId: status.firstConsultationId ?? '',
-                        patientId: widget.patientId,
-                        requestId: status.requestId ?? "",
-                        name: (basic.fullName ?? '').split(' ').first,
-                      ),
+                      () => const WizardView(),
+                      binding: WizardBinding(wizardController),
                     );
                     // Refresh profile + weekly plans after the screen closes
                     // so the Create Diet Plan button flips to the calorie

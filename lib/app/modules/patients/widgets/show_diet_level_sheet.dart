@@ -1,4 +1,6 @@
 import 'package:docwellnesdoc/app/modules/patients/controllers/patients_controller.dart';
+import 'package:docwellnesdoc/app/modules/patients/utils/diet_target_calculations.dart'
+    as diet_calc;
 import 'package:docwellnesdoc/app/utils/common_widgets/app_toast.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_button.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
@@ -153,90 +155,40 @@ class _CreateDietPlanScreenState extends State<CreateDietPlanScreen> {
     super.dispose();
   }
 
-  // ================= AGE =================
-  int _calculateAge(String dob) {
-    try {
-      final parts = dob.split('-'); // dd-mm-yyyy
-      final birthDate = DateTime(
-        int.parse(parts[2]),
-        int.parse(parts[1]),
-        int.parse(parts[0]),
-      );
-      final today = DateTime.now();
-      int age = today.year - birthDate.year;
-      if (today.month < birthDate.month ||
-          (today.month == birthDate.month && today.day < birthDate.day)) {
-        age--;
-      }
-      return age;
-    } catch (_) {
-      return 25; // safe fallback
-    }
-  }
+  // All calorie/macro math below delegates to
+  // modules/patients/utils/diet_target_calculations.dart, shared with the
+  // 5-Step Wizard's Targets step - kept as thin wrappers here (rather than
+  // rewriting every call site in build() below) so this proven, clinically-
+  // relevant math lives in exactly one place without risking the surrounding
+  // widget logic in this already-large screen.
+  int _calculateAge(String dob) => diet_calc.calculateAge(dob);
 
-  // ================= ACTIVITY =================
-  // Matched case-insensitively against the exact option labels a patient
-  // picks from (see activity_level_view.dart's activityLevelOptions:
-  // 'Sedentary' / 'Lightly Activity' / 'Moderately Activity' / 'Very
-  // Active') - previously 'Moderately Activity' (the actual stored value)
-  // didn't match any case here and silently fell through to the default.
-  double _activityMultiplier(String level) {
-    switch (level.trim().toLowerCase()) {
-      case 'sedentary':
-        return 1.2;
-      case 'lightly activity':
-      case 'lightly active':
-        return 1.375;
-      case 'moderately activity':
-      case 'moderately active':
-        return 1.55;
-      case 'very activity':
-      case 'very active':
-        return 1.725;
-      case 'extra activity':
-      case 'extra active':
-        return 1.9;
-      default:
-        return 1.375;
-    }
-  }
+  double _activityMultiplier(String level) =>
+      diet_calc.activityMultiplier(level);
 
-  // ================= BMR =================
   double _calculateBMR({
     required bool isMale,
     required double weight,
     required double height,
     required int age,
-  }) {
-    return isMale
-        ? (10 * weight) + (6.25 * height) - (5 * age) + 5
-        : (10 * weight) + (6.25 * height) - (5 * age) - 161;
-  }
+  }) => diet_calc.calculateBmr(
+    isMale: isMale,
+    weight: weight,
+    height: height,
+    age: age,
+  );
 
-  // ================= SAFETY =================
-  double _applySafety(double calories, bool isMale) {
-    if (isMale && calories < 1500) return 1500;
-    if (!isMale && calories < 1200) return 1200;
-    return calories;
-  }
+  double _applySafety(double calories, bool isMale) =>
+      diet_calc.applyCalorieSafetyFloor(calories, isMale);
 
-  // ================= WEEKLY LOSS =================
+  double weeklyWeightChangeKg(int calorieDifference) =>
+      diet_calc.weeklyWeightChangeKg(calorieDifference);
 
-  double weeklyWeightChangeKg(int calorieDifference) {
-    return (calorieDifference * 7) / 7700;
-  }
+  int _gramsForPercent(int budgetCal, int percent, int kcalPerGram) =>
+      diet_calc.gramsForPercent(budgetCal, percent, kcalPerGram);
 
-  // ================= MACROS =================
-  int _gramsForPercent(int budgetCal, int percent, int kcalPerGram) {
-    if (budgetCal <= 0) return 0;
-    return (budgetCal * percent / 100 / kcalPerGram).round();
-  }
-
-  // Standard dietary-guideline heuristic: ~14g fiber per 1000 kcal.
-  int _fiberGramsForBudget(int budgetCal) {
-    if (budgetCal <= 0) return 0;
-    return (budgetCal / 1000 * 14).round();
-  }
+  int _fiberGramsForBudget(int budgetCal) =>
+      diet_calc.fiberGramsForBudget(budgetCal);
 
   @override
   Widget build(BuildContext context) {
