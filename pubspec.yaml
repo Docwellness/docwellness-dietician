@@ -59,6 +59,9 @@ dependencies:
   posthog_flutter: ^5.31.0
   supabase_flutter: ^2.16.0
   connectivity_plus: ^7.3.0
+  # Phase 9, P9-D7
+  flutter_jailbreak_detection: ^1.10.0
+  local_auth: ^2.3.0
 
 dev_dependencies:
   flutter_test:

@@ -70,14 +70,24 @@ class AuthView extends GetView<AuthController> {
                       ),
                     );
                   }),
-                  Obx(
-                    () => CustomButton(
-                      text: 'Log In',
+                  // Phase 9, P9-D5: relabeled with a countdown while a
+                  // backend 429 lockout (isLoginLocked) is running.
+                  // CustomButton's `isLoading` swaps the label for a
+                  // spinner and disables tap, so it's deliberately NOT set
+                  // here while locked (that would hide the countdown text)
+                  // - login() itself re-checks isLoginLocked and no-ops the
+                  // tap instead.
+                  Obx(() {
+                    final locked = controller.isLoginLocked;
+                    return CustomButton(
+                      text: locked
+                          ? 'Try again in ${controller.loginLockSeconds.value}s'
+                          : 'Log In',
                       isOutline: false,
                       isLoading: controller.isLoading.value,
                       onTap: controller.login,
-                    ),
-                  ),
+                    );
+                  }),
                   const SizedBox(height: 16),
                   Center(
                     child: TextButton(

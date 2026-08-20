@@ -24,6 +24,14 @@ class DietPlanWeekData {
   // Needed to tell a genuine explicit "1" apart from the "not yet set"
   // placeholder default - see isUnexplicitDefault in patients_controller.dart.
   final bool isFinalized;
+  // True when this week's options came from a saved-but-not-finalized draft
+  // (AI_EXECUTION_PLAN.md Phase 7, P7-05 save-draft) rather than either
+  // finalizedPlan or the AI's raw generatedPlan. Like isFinalized, a draft
+  // week has real, dietician-set servings - the two are mutually exclusive
+  // (finalizedPlan always wins server-side once a week is finalized), so
+  // callers checking "does this week have explicit servings" should treat
+  // isFinalized and isDraftSaved as equivalent - see patients_controller.dart.
+  final bool isDraftSaved;
 
   DietPlanWeekData({
     required this.dietPlanId,
@@ -34,6 +42,7 @@ class DietPlanWeekData {
     this.validationWarnings = const [],
     this.weightTrend = 'gain',
     this.isFinalized = false,
+    this.isDraftSaved = false,
   });
 
   factory DietPlanWeekData.fromJson(Map<String, dynamic> json) {
@@ -54,6 +63,7 @@ class DietPlanWeekData {
           const [],
       weightTrend: json['weightTrend'] ?? 'gain',
       isFinalized: json['isFinalized'] == true,
+      isDraftSaved: json['isDraftSaved'] == true,
     );
   }
 }

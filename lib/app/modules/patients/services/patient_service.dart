@@ -315,14 +315,19 @@ class PatientService {
     return null;
   }
 
-  Future<dynamic> finalizeAll(
+  /// AI_EXECUTION_PLAN.md Phase 7, P7-05: save-draft - persists the
+  /// dietician's in-progress selections without finalizing (no publish,
+  /// no validation gate), so closing this screen mid-edit doesn't silently
+  /// discard them back to the AI's raw draft on re-open. Same request
+  /// shape as finalizeWeek (buildFinalizeWeekPayload is reused for both).
+  Future<dynamic> saveDraftWeek(
     Map<String, dynamic> data,
     String patientId,
     String dietPlanId,
   ) async {
     try {
       final response = await service.request(
-        endPoint: '/patients/$patientId/diet-plans/$dietPlanId/finalize-all',
+        endPoint: '/patients/$patientId/diet-plans/$dietPlanId/save-draft',
         method: 'PUT',
         headers: {'Authorization': "Bearer $token"},
         data: data,
