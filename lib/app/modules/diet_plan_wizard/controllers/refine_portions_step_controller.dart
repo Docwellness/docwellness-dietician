@@ -104,6 +104,20 @@ class RefinePortionsStepController extends GetxController {
     }
   }
 
+  /// "Total Budget" summary for one day-group - Selected Calories (summed
+  /// across every non-linked item in that day, matching
+  /// select_diet_sheet.dart's own per-day-group totals convention) vs
+  /// Required Calories (the same dailyCalorieTarget auto-balance targets).
+  double dayGroupSelectedCalories(WizardDayGroupV2 day) {
+    var total = 0.0;
+    for (final meal in day.meals) {
+      for (final item in meal.items) {
+        total += item.calories ?? 0;
+      }
+    }
+    return total;
+  }
+
   Future<void> swapRecipe(WizardPlanItemV2 item, String newParentRecipeId) async {
     final result = await wizardService.swapRecipeVersion(
       patientId: patientId,

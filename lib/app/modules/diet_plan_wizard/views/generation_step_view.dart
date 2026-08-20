@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 
 import '../controllers/generation_step_controller.dart';
 import '../controllers/wizard_controller.dart';
+import 'generate_review_view.dart';
 
 const _headerColor = Color(0xff530630);
 const _bodyColor = Color(0xff1F2A37);
@@ -59,6 +60,13 @@ class _GenerationStepViewState extends State<GenerationStepView> {
       }
 
       if (phase == GenerationPhase.done) {
+        // v4.0: plan-item mode gets a real interactive recipe browser for
+        // the just-generated V1 diet (add/remove/swap/open-details) instead
+        // of a bare checkmark - see generate_review_view.dart. days-array
+        // mode is completely untouched below.
+        if (wizard.dataModel.value == 'plan-item') {
+          return const GenerateReviewView();
+        }
         return _CenteredMessage(
           icon: Icons.check_circle_outline,
           iconColor: const Color(0xff059669),

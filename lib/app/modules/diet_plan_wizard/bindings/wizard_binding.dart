@@ -1,6 +1,7 @@
 import 'package:get/get.dart';
 
 import '../controllers/finalize_step_controller.dart';
+import '../controllers/generate_review_controller.dart';
 import '../controllers/generation_step_controller.dart';
 import '../controllers/plan_item_finalize_step_controller.dart';
 import '../controllers/refine_portions_step_controller.dart';
@@ -29,5 +30,6 @@ class WizardBinding extends Bindings {
     // every days-array regeneration flow today.
     Get.lazyPut<PlanItemFinalizeStepController>(() => PlanItemFinalizeStepController());
     Get.lazyPut<RefinePortionsStepController>(() => RefinePortionsStepController());
+    Get.lazyPut<GenerateReviewController>(() => GenerateReviewController());
   }
 }

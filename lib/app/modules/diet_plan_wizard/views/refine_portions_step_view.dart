@@ -155,6 +155,21 @@ class _DayGroupCard extends StatelessWidget {
                 ),
             ],
           ),
+          const SizedBox(height: 4),
+          Builder(
+            builder: (context) {
+              final required = controller.dailyCalorieTarget;
+              final selected = controller.dayGroupSelectedCalories(day);
+              return CustomText(
+                text: required != null
+                    ? 'Total Budget: Selected Calories ${selected.round()} / Required Calories ${required.round()}'
+                    : 'Selected Calories ${selected.round()}',
+                fontWeight: FontWeight.w400,
+                fontSize: 11,
+                color: _mutedColor,
+              );
+            },
+          ),
           const SizedBox(height: 6),
           ...day.meals.expand(
             (meal) => meal.items.map(

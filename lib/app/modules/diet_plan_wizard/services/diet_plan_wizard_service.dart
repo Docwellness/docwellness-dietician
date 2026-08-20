@@ -295,4 +295,45 @@ class DietPlanWizardService {
     }
     return null;
   }
+
+  /// Step 2: add an extra recipe to a meal slot (distinct from swap, which
+  /// replaces the existing item's recipe - this adds a new, independent one).
+  Future<dynamic> addPlanItem({
+    required String patientId,
+    required String dietPlanId,
+    required String mealSlotId,
+    required String recipeId,
+  }) async {
+    try {
+      final response = await service.request(
+        endPoint: '${_base(patientId, dietPlanId)}/plan-items',
+        method: 'POST',
+        headers: {'Authorization': 'Bearer $token'},
+        data: {'mealSlotId': mealSlotId, 'recipeId': recipeId},
+      );
+      if (response != null && response.data is Map) return response.data;
+    } catch (e) {
+      debugPrint('addPlanItem error: $e');
+    }
+    return null;
+  }
+
+  /// Step 2: remove one item from a meal slot entirely, no replacement.
+  Future<dynamic> removePlanItem({
+    required String patientId,
+    required String dietPlanId,
+    required String planItemId,
+  }) async {
+    try {
+      final response = await service.request(
+        endPoint: '${_base(patientId, dietPlanId)}/plan-items/$planItemId',
+        method: 'DELETE',
+        headers: {'Authorization': 'Bearer $token'},
+      );
+      if (response != null && response.data is Map) return response.data;
+    } catch (e) {
+      debugPrint('removePlanItem error: $e');
+    }
+    return null;
+  }
 }
