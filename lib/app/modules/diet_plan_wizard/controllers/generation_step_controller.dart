@@ -93,10 +93,21 @@ class GenerationStepController extends GetxController {
     // - call the wizard's own generate-menu endpoint now so "Generation"
     // still produces a filled-in week for this data model too.
     if (wizard.dataModel.value == 'plan-item') {
+      // For a brand-new plan, wizard.weeksToGenerate is always just [1]
+      // (patient_profile_view.dart's initial "Create Diet Plan" call site
+      // never sets it - for days-array plans this doesn't matter, the
+      // server derives the tier-based week count invisibly inside
+      // createAndGenerateDietPlan, but that whole call is skipped for
+      // plan-item plans, so generate-menu only ever gets whatever the
+      // client explicitly sends). Re-derive it from the tier here instead,
+      // mirroring utils/membershipTiers.js's TIER_INITIAL_WEEKS, so Silver
+      // still gets all 4 weeks up front and Golden gets 1-2, matching the
+      // exact cadence a days-array plan already gets for free.
+      final weekNumbers = isNewPlan ? _initialWeeksForTier() : wizard.weeksToGenerate;
       final menuResult = await wizardService.generateMenu(
         patientId: wizard.patientId,
         dietPlanId: resultDietPlanId!,
-        weekNumbers: wizard.weeksToGenerate,
+        weekNumbers: weekNumbers,
       );
       if (menuResult == null || menuResult['success'] != true) {
         errorMessage.value = menuResult?['message']?.toString() ?? 'Menu generation failed - please try again.';
@@ -119,6 +130,18 @@ class GenerationStepController extends GetxController {
     }
 
     phase.value = GenerationPhase.done;
+  }
+
+  /// Mirrors utils/membershipTiers.js's TIER_INITIAL_WEEKS exactly - Silver
+  /// gets all 4 weeks in the single initial "Create Diet Plan" action (no
+  /// regeneration ever offered, see validateRegenerateRequest's explicit
+  /// rejection for 'silver'), Golden gets weeks 1-2, Platinum (or an
+  /// unrecognized/missing tier) gets week 1 only.
+  List<int> _initialWeeksForTier() {
+    final tier = wizard.patientsController.patientProfileModel.value?.status?.membershipTier?.toLowerCase();
+    if (tier == 'silver') return [1, 2, 3, 4];
+    if (tier == 'golden') return [1, 2];
+    return [1];
   }
 
   Future<void> _advancePhaseAfter(GenerationPhase next, Duration delay) async {
