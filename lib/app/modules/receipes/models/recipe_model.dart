@@ -195,6 +195,39 @@ class RecipePreview {
     );
   }
 
+  /// Returns a copy with [ingredients] overridden - used by
+  /// UpdateAiInputsSheet's add/remove-ingredient editor to mutate the
+  /// in-memory preview before "Update with AI" sends it to
+  /// ai-update-from-edits. Deliberately leaves [nutrition] untouched here
+  /// (unlike copyWithComponentsAndNutrition) - there's no reliable local way
+  /// to re-estimate calories from an arbitrary added/removed ingredient, so
+  /// the AI update call is what recomputes it authoritatively.
+  RecipePreview copyWithIngredients(List<Ingredient> newIngredients) {
+    return RecipePreview(
+      id: id,
+      name: name,
+      image: image,
+      description: description,
+      category: category,
+      cuisine: cuisine,
+      servingTime: servingTime,
+      servings: servings,
+      preparationTime: preparationTime,
+      cookingTime: cookingTime,
+      dietaryHabits: dietaryHabits,
+      freeFrom: freeFrom,
+      ingredients: newIngredients,
+      servingSize: servingSize,
+      nutrition: nutrition,
+      cookingSteps: cookingSteps,
+      warnings: warnings,
+      languages: languages,
+      translations: translations,
+      supplementFacts: supplementFacts,
+      components: components,
+    );
+  }
+
   static List<Ingredient> _syncedIngredients(
     List<Ingredient> ingredients,
     List<RecipeComponent> components,

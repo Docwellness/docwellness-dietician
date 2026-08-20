@@ -3,7 +3,6 @@ import 'package:docwellnesdoc/app/modules/receipes/controllers/receipes_controll
 import 'package:docwellnesdoc/app/modules/receipes/models/recipe_model.dart';
 import 'package:docwellnesdoc/app/modules/receipes/services/recipe_service.dart';
 import 'package:docwellnesdoc/app/modules/receipes/widgets/cooking_steps_tab.dart';
-import 'package:docwellnesdoc/app/modules/receipes/widgets/edit_components_sheet.dart';
 import 'package:docwellnesdoc/app/modules/receipes/widgets/ingredient_tile.dart';
 import 'package:docwellnesdoc/app/modules/receipes/widgets/nutrition_details_widget.dart';
 import 'package:docwellnesdoc/app/modules/receipes/widgets/update_ai_inputs_sheet.dart';
@@ -41,6 +40,7 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
   RecipePreview? _editableRecipe;
   bool _isUploadingMainImage = false;
   bool _isSavingExistingRecipe = false;
+  bool _isSavingAsNewRecipe = false;
   String? _mainImageUrl;
 
   RecipePreview? get recipe {
@@ -229,64 +229,72 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
     }
   }
 
-  /// Opens the component (portion) editor - see EditComponentsSheet. Saving
-  /// only updates local/in-memory state (_editableRecipe), same as an
-  /// ingredient edit - it rides along with whichever persistence button
-  /// ("Add to Database" for a not-yet-saved preview, "Save Recipe" for an
-  /// already-saved one) the dietician taps next.
-  void _openEditComponentsSheet() {
+  /// "Save as New Recipe" - forks the current (possibly AI-refined via
+  /// Update AI Inputs) preview into a brand-new recipe document under a
+  /// different name, instead of overwriting the one being viewed. Prompts
+  /// for a name, then calls the same createRecipe endpoint the not-yet-saved
+  /// "Add to Database" flow uses.
+  Future<void> _promptSaveAsNewRecipe() async {
     if (recipe == null) return;
-    showModalBottomSheet(
+    final nameController = TextEditingController(text: '${recipe!.name} (Copy)');
+    final newName = await showDialog<String>(
       context: context,
-      backgroundColor: Colors.white,
-      useSafeArea: true,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      builder: (ctx) => AlertDialog(
+        title: const Text('Save as New Recipe'),
+        content: TextField(
+          controller: nameController,
+          decoration: const InputDecoration(labelText: 'New recipe name'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(nameController.text.trim()),
+            child: const Text('Save'),
+          ),
+        ],
       ),
-      builder: (ctx) {
-        return DraggableScrollableSheet(
-          initialChildSize: 1,
-          maxChildSize: 1,
-          minChildSize: 0.5,
-          expand: false,
-          builder: (ctx, scrollCtrl) {
-            return EditComponentsSheet(
-              scrollController: scrollCtrl,
-              initialComponents: recipe!.components,
-              onSaved: (components) {
-                // Captured before setState reassigns _editableRecipe, so
-                // these are genuinely the pre-edit values to scale from -
-                // see RecipePreview.scaleNutritionForComponentEdit.
-                final oldComponents = recipe!.components;
-                final baseNutrition = recipe!.nutrition;
-                final scaledNutrition =
-                    RecipePreview.scaleNutritionForComponentEdit(
-                      oldComponents: oldComponents,
-                      newComponents: components,
-                      baseNutrition: baseNutrition,
-                    );
-                setState(() {
-                  _editableRecipe = recipe!.copyWithComponentsAndNutrition(
-                    components,
-                    scaledNutrition,
-                  );
-                });
-                if (widget.fromAddRecipeScreen) {
-                  // Keep the shared controller's copy in sync too, since
-                  // "Add to Database" reads generatedRecipe.value, not
-                  // _editableRecipe (see saveRecipe in receipes_controller).
-                  Get.find<ReceipesController>().updateComponentsAndNutrition(
-                    components,
-                    scaledNutrition,
-                  );
-                }
-              },
-            );
-          },
-        );
-      },
     );
+    if (newName == null || newName.isEmpty || !mounted) return;
+
+    setState(() => _isSavingAsNewRecipe = true);
+    try {
+      final r = recipe!;
+      final saved = await _recipeService.createRecipe(
+        name: newName,
+        servingTime: r.servingTime,
+        servings: r.servings,
+        category: r.category,
+        description: r.description,
+        dietaryHabits: r.dietaryHabits,
+        freeFrom: r.freeFrom,
+        servingSize: r.servingSize,
+        components: r.components,
+        ingredients: r.ingredients,
+        cookingSteps: r.cookingSteps,
+        nutrition: r.nutrition,
+        image: _mainImageUrl,
+        translations: r.translations.isNotEmpty ? r.translations : null,
+      );
+      if (!mounted) return;
+      if (saved != null) {
+        if (Get.isRegistered<ReceipesController>()) {
+          Get.find<ReceipesController>().fetchRecipes(refresh: true);
+        }
+        showAppToast(
+          Get.overlayContext!,
+          message: 'Saved as new recipe "${saved.name}".',
+          type: AppToastType.success,
+        );
+      } else {
+        showAppToast(
+          Get.overlayContext!,
+          message: 'Failed to save as a new recipe. Please try again.',
+          type: AppToastType.error,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSavingAsNewRecipe = false);
+    }
   }
 
   /// Fetches a fresh internet photo for the ingredient at [index] (Pexels,
@@ -808,16 +816,6 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
           ),
         if (widget.fromAddRecipeScreen == true)
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-            child: CustomButton(
-              fontSize: 13.5,
-              onTap: _openEditComponentsSheet,
-              text: 'Edit Portions',
-              isOutline: true,
-            ),
-          ),
-        if (widget.fromAddRecipeScreen == true)
-          Padding(
             padding: const EdgeInsets.all(16),
             child: Obx(() {
               final controller = Get.find<ReceipesController>();
@@ -919,9 +917,12 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             child: CustomButton(
               fontSize: 13.5,
-              onTap: _openEditComponentsSheet,
-              text: 'Edit Portions',
+              onTap: () {
+                if (!_isSavingAsNewRecipe) _promptSaveAsNewRecipe();
+              },
+              text: _isSavingAsNewRecipe ? 'Saving...' : 'Save as New Recipe',
               isOutline: true,
+              isLoading: _isSavingAsNewRecipe,
             ),
           ),
         if (widget.fromAddRecipeScreen == false)

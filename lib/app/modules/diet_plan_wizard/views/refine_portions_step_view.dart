@@ -173,7 +173,7 @@ class _DayGroupCard extends StatelessWidget {
           const SizedBox(height: 6),
           ...day.meals.expand(
             (meal) => meal.items.map(
-              (item) => _RecipeCard(servingTime: meal.servingTime, item: item, controller: controller),
+              (item) => _RecipeCard(servingTime: meal.servingTime, item: item, day: day, controller: controller),
             ),
           ),
         ],
@@ -185,9 +185,10 @@ class _DayGroupCard extends StatelessWidget {
 class _RecipeCard extends StatelessWidget {
   final String servingTime;
   final WizardPlanItemV2 item;
+  final WizardDayGroupV2 day;
   final RefinePortionsStepController controller;
 
-  const _RecipeCard({required this.servingTime, required this.item, required this.controller});
+  const _RecipeCard({required this.servingTime, required this.item, required this.day, required this.controller});
 
   @override
   Widget build(BuildContext context) {
@@ -247,6 +248,8 @@ class _RecipeCard extends StatelessWidget {
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (_) => IngredientEditorSheet(
         item: item,
+        dayBaselineCalories: controller.dayGroupSelectedCalories(day) - (item.calories ?? 0),
+        dailyCalorieTarget: controller.dailyCalorieTarget,
         onSave: (updated) => controller.editIngredients(item, updated),
       ),
     );

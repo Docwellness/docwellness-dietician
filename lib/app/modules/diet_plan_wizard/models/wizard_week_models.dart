@@ -171,11 +171,11 @@ class WizardIngredientLine {
     this.per100gCalories,
   });
 
-  WizardIngredientLine copyWith({double? rawQuantity}) => WizardIngredientLine(
+  WizardIngredientLine copyWith({double? rawQuantity, String? unit}) => WizardIngredientLine(
     foodItemId: foodItemId,
     foodItemName: foodItemName,
     rawQuantity: rawQuantity ?? this.rawQuantity,
-    unit: unit,
+    unit: unit ?? this.unit,
     preparation: preparation,
     per100gCalories: per100gCalories,
   );

@@ -600,6 +600,35 @@ class ReceipesController extends GetxController {
     }
   }
 
+  /// Add/remove-ingredient editing for UpdateAiInputsSheet - mutates the
+  /// in-memory preview only (same "rides along with whichever persistence
+  /// button is tapped next" convention as updateComponentsAndNutrition).
+  void addIngredientToEdit({
+    required String name,
+    required num quantity,
+    required String unit,
+  }) {
+    final current = generatedRecipe.value;
+    if (current == null) return;
+    final updated = List<Ingredient>.from(current.ingredients)
+      ..add(Ingredient(
+        name: name,
+        quantity: quantity,
+        unit: unit,
+        category: 'Other',
+        priceLevel: '₹₹',
+        description: '',
+      ));
+    generatedRecipe.value = current.copyWithIngredients(updated);
+  }
+
+  void removeIngredientFromEdit(int index) {
+    final current = generatedRecipe.value;
+    if (current == null) return;
+    final updated = List<Ingredient>.from(current.ingredients)..removeAt(index);
+    generatedRecipe.value = current.copyWithIngredients(updated);
+  }
+
   /// Pre-fill form fields from existing recipe (for Update AI Inputs)
   void prefillFromRecipe(RecipePreview recipe) {
     recipeNameController.text = recipe.name;

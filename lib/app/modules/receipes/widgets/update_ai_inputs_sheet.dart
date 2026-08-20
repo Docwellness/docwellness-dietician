@@ -18,6 +18,61 @@ class UpdateAiInputsSheet extends StatelessWidget {
 
   final ReceipesController controller = Get.find<ReceipesController>();
 
+  void _showAddIngredientDialog(BuildContext context) {
+    final nameController = TextEditingController();
+    final quantityController = TextEditingController();
+    String unit = 'g';
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Add Ingredient'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Name')),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: quantityController,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(labelText: 'Quantity'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  DropdownButton<String>(
+                    value: unit,
+                    items: const ['g', 'ml', 'tsp', 'tbsp', 'cup', 'piece']
+                        .map((u) => DropdownMenuItem(value: u, child: Text(u)))
+                        .toList(),
+                    onChanged: (u) {
+                      if (u != null) setDialogState(() => unit = u);
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancel')),
+            TextButton(
+              onPressed: () {
+                final name = nameController.text.trim();
+                final quantity = num.tryParse(quantityController.text.trim());
+                if (name.isEmpty || quantity == null) return;
+                controller.addIngredientToEdit(name: name, quantity: quantity, unit: unit);
+                Navigator.of(ctx).pop();
+              },
+              child: const Text('Add'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -317,6 +372,59 @@ class UpdateAiInputsSheet extends StatelessWidget {
                   },
                 ),
               ),
+              const SizedBox(height: 16),
+
+              // Ingredients (add/remove) - what the AI actually re-runs
+              // nutrition/recipe generation against, see
+              // ReceipesController.updateAiInputs's ingredients: currentRecipe.ingredients.
+              const CustomText(
+                text: 'Ingredients',
+                fontWeight: FontWeight.w400,
+                fontSize: 18,
+                color: Color(0xff384250),
+              ),
+              const SizedBox(height: 8),
+              Obx(() {
+                final ingredients = controller.generatedRecipe.value?.ingredients ?? [];
+                return Column(
+                  children: [
+                    for (var i = 0; i < ingredients.length; i++)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: CustomText(
+                                text: '${ingredients[i].name} · ${ingredients[i].quantity} ${ingredients[i].unit}',
+                                fontWeight: FontWeight.w500,
+                                fontSize: 14,
+                                color: const Color(0xff384250),
+                              ),
+                            ),
+                            InkWell(
+                              onTap: () => controller.removeIngredientFromEdit(i),
+                              child: const Padding(
+                                padding: EdgeInsets.all(4),
+                                child: Icon(Icons.close, size: 18, color: Color(0xff6C737F)),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    OutlinedButton.icon(
+                      onPressed: () => _showAddIngredientDialog(context),
+                      icon: const Icon(Icons.add, size: 18, color: Color(0xff851653)),
+                      label: const CustomText(
+                        text: 'Add Ingredient',
+                        fontWeight: FontWeight.w500,
+                        fontSize: 13,
+                        color: Color(0xff851653),
+                      ),
+                      style: OutlinedButton.styleFrom(side: const BorderSide(color: Color(0xff851653))),
+                    ),
+                  ],
+                );
+              }),
               const SizedBox(height: 16),
 
               // Custom Preferences
