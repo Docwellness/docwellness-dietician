@@ -1,4 +1,5 @@
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
+import 'package:docwellnesdoc/app/utils/functions/quantity_label.dart';
 import 'package:docwellnesdoc/app/utils/theme/app_shadows.dart';
 import 'package:flutter/material.dart';
 
@@ -63,55 +64,6 @@ class FoodCard extends StatelessWidget {
   bool get _isSupplement =>
       supplementNutrientLabels != null && supplementNutrientLabels!.isNotEmpty;
 
-  // 15g ≈ 1 tbsp - the same approximation the source diet plans
-  // themselves use ("rice (10 tbsp)" ≈ 150g rice).
-  static const num _gramsPerTablespoon = 15;
-  // 250ml ≈ 1 cup (the standard metric/Indian recipe cup).
-  static const num _mlPerCup = 250;
-
-  /// Formats a raw numeric quantity string for display: a genuinely
-  /// ambiguous mass/volume (plain "g"/"ml") gets an approximate tbsp/cup
-  /// hint alongside it, since a bare gram figure is hard to picture. Every
-  /// other unit - piece, nos, egg, slice, bowl, cup, tbsp, tsp - is already
-  /// a real, human-sized measure (see COMPONENT_UNITS on the backend) and
-  /// gets clean fraction notation (1/4, 1/2, 3/4, 1 1/2...) with no
-  /// further conversion - converting "2 egg" into "~0 tbsp" would be
-  /// nonsensical, not helpful.
-  static String _formatQuantityLabel(String rawValue, String unit) {
-    final value = num.tryParse(rawValue);
-    if (value == null) {
-      return unit.isNotEmpty ? '$rawValue $unit' : rawValue;
-    }
-    if (unit == 'ml') {
-      final cups = _formatPieceFraction(value / _mlPerCup);
-      return '$rawValue $unit (~$cups cup)';
-    }
-    if (unit == 'g') {
-      final tbsp = (value / _gramsPerTablespoon).round();
-      return '$rawValue $unit (~$tbsp tbsp)';
-    }
-    if (unit.isEmpty) return rawValue;
-    return '${_formatPieceFraction(value)} $unit';
-  }
-
-  static String _formatPieceFraction(num value) {
-    final whole = value.floor();
-    final frac = value - whole;
-    String fracLabel = '';
-    if ((frac - 0.25).abs() < 0.01) {
-      fracLabel = '¼';
-    } else if ((frac - 0.5).abs() < 0.01) {
-      fracLabel = '½';
-    } else if ((frac - 0.75).abs() < 0.01) {
-      fracLabel = '¾';
-    } else if (frac > 0.01) {
-      fracLabel = frac.toStringAsFixed(2);
-    }
-    if (whole == 0 && fracLabel.isNotEmpty) return fracLabel;
-    if (fracLabel.isEmpty) return '$whole';
-    return '$whole $fracLabel';
-  }
-
   /// One formatted string per component for the unselected-state quantity
   /// pill(s) - falls back to the legacy single grams/unit pair when a
   /// caller doesn't pass [components] at all (e.g. update_patient_diet_
@@ -122,10 +74,10 @@ class FoodCard extends StatelessWidget {
   /// components.js - where that would be redundant with the card title).
   List<String> _unselectedQuantityLabels() {
     if (components.isEmpty) {
-      return [_formatQuantityLabel(grams, unit)];
+      return [formatQuantityLabel(grams, unit)];
     }
     return components.map((c) {
-      final formatted = _formatQuantityLabel('${c.quantity}', c.unit);
+      final formatted = formatQuantityLabel('${c.quantity}', c.unit);
       if (components.length > 1 && c.label != name) {
         return '${c.label}: $formatted';
       }
@@ -288,7 +240,7 @@ class FoodCard extends StatelessWidget {
                                   horizontal: 6,
                                 ),
                                 child: CustomText(
-                                  text: _formatQuantityLabel(
+                                  text: formatQuantityLabel(
                                     '${component.quantity}',
                                     component.unit,
                                   ),

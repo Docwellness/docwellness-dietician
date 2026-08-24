@@ -1,6 +1,7 @@
 import 'package:docwellnesdoc/app/modules/receipes/services/recipe_service.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_button.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
+import 'package:docwellnesdoc/app/utils/functions/quantity_label.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -190,8 +191,28 @@ class _RecipeCard extends StatelessWidget {
 
   const _RecipeCard({required this.servingTime, required this.item, required this.day, required this.controller});
 
+  /// Real-world serving quantity (e.g. "2 piece", "1 bowl") from the
+  /// recipe version's components - one label per component, joined with a
+  /// prefix only when there's more than one AND the label isn't just the
+  /// recipe's own name repeated (matches food_card_widget.dart's own
+  /// _unselectedQuantityLabels convention). Empty when the version predates
+  /// the components field and has none to show.
+  String? get _quantityLabel {
+    final components = item.recipeVersion?.components ?? const [];
+    if (components.isEmpty) return null;
+    final labels = components.map((c) {
+      final formatted = formatQuantityLabel('${c.quantity}', c.unit);
+      if (components.length > 1 && c.label != item.recipeName) {
+        return '${c.label}: $formatted';
+      }
+      return formatted;
+    });
+    return labels.join(', ');
+  }
+
   @override
   Widget build(BuildContext context) {
+    final quantityLabel = _quantityLabel;
     return InkWell(
       onTap: item.locked || item.recipeVersion == null ? null : () => _openIngredientEditor(context),
       borderRadius: BorderRadius.circular(10),
@@ -215,7 +236,11 @@ class _RecipeCard extends StatelessWidget {
                     Padding(
                       padding: const EdgeInsets.only(top: 2),
                       child: CustomText(
-                        text: '${item.calories!.round()} Cal · V${item.recipeVersion?.versionNumber ?? 1}',
+                        text: [
+                          if (quantityLabel != null) quantityLabel,
+                          '${item.calories!.round()} Cal',
+                          'V${item.recipeVersion?.versionNumber ?? 1}',
+                        ].join(' · '),
                         fontWeight: FontWeight.w400,
                         fontSize: 11,
                         color: _mutedColor,

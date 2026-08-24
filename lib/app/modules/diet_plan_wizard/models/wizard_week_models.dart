@@ -201,6 +201,28 @@ class WizardIngredientLine {
 
 /// Parses a RecipeVersion object as embedded in GET .../plan-items' items[],
 /// or returned directly by POST .../create-custom-version /.../auto-balance.
+/// The real-world serving-unit measurement of a WHOLE dish (e.g. "Palak
+/// Paratha" -> {label:'Palak Paratha', quantity:2, unit:'piece'}) - distinct
+/// from WizardIngredientLine (the raw food items IN the dish). Mirrors
+/// RecipeVersion.components on the backend, which is copied from the parent
+/// Recipe at V1 creation and proportionally rescaled whenever ingredients
+/// are edited/auto-balanced.
+class WizardComponent {
+  final String label;
+  final double quantity;
+  final String unit;
+
+  WizardComponent({required this.label, required this.quantity, required this.unit});
+
+  factory WizardComponent.fromJson(Map<String, dynamic> json) {
+    return WizardComponent(
+      label: json['label'] ?? '',
+      quantity: (json['quantity'] as num?)?.toDouble() ?? 0,
+      unit: json['unit'] ?? '',
+    );
+  }
+}
+
 class WizardRecipeVersion {
   final String id;
   final String parentRecipeId;
@@ -208,6 +230,7 @@ class WizardRecipeVersion {
   final int versionNumber;
   final List<WizardIngredientLine> ingredients;
   final List<String> steps;
+  final List<WizardComponent> components;
   final Map<String, dynamic>? nutritionPerServing;
   final bool hasUnresolvedIngredients;
 
@@ -218,6 +241,7 @@ class WizardRecipeVersion {
     required this.versionNumber,
     required this.ingredients,
     required this.steps,
+    this.components = const [],
     this.nutritionPerServing,
     required this.hasUnresolvedIngredients,
   });
@@ -234,6 +258,9 @@ class WizardRecipeVersion {
           .map((i) => WizardIngredientLine.fromJson(i))
           .toList(),
       steps: List<String>.from(json['steps'] ?? []),
+      components: (json['components'] as List? ?? [])
+          .map((c) => WizardComponent.fromJson(c))
+          .toList(),
       nutritionPerServing: json['nutritionPerServing'] as Map<String, dynamic>?,
       hasUnresolvedIngredients: json['hasUnresolvedIngredients'] == true,
     );
