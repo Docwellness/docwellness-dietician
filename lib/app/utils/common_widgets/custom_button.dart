@@ -10,6 +10,7 @@ class CustomButton extends StatelessWidget {
   final Color? outlineButtonColor;
   final Color? textColor;
   final bool? isLoading;
+  final bool isDisabled;
 
   const CustomButton({
     super.key,
@@ -21,13 +22,14 @@ class CustomButton extends StatelessWidget {
     this.outlineButtonColor,
     this.textColor,
     this.isLoading = false,
+    this.isDisabled = false,
   });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: isLoading == true
+      onTap: (isLoading == true || isDisabled)
           ? null
           : () {
               debugPrint('CustomButton tapped: $text');
@@ -44,7 +46,7 @@ class CustomButton extends StatelessWidget {
           ),
           color: isOutline == true
               ? Colors.transparent
-              : buttonColor ?? Color(0xff530630),
+              : (buttonColor ?? Color(0xff530630)).withValues(alpha: isDisabled ? 0.4 : 1),
           borderRadius: BorderRadius.circular(100),
         ),
         child: Center(

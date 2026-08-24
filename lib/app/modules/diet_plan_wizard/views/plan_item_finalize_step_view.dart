@@ -70,6 +70,39 @@ class PlanItemFinalizeStepView extends StatelessWidget {
                     color: _mutedColor,
                   ),
                   const SizedBox(height: 12),
+                  if (controller.targetCalories != null)
+                    ...controller.dayCalorieChecks.map(
+                      (check) => Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Row(
+                          children: [
+                            Icon(
+                              check.withinTolerance ? Icons.check_circle : Icons.error,
+                              size: 16,
+                              color: check.withinTolerance ? const Color(0xff12B76A) : const Color(0xffDC2626),
+                            ),
+                            const SizedBox(width: 6),
+                            CustomText(
+                              text:
+                                  '${check.dayGroup}: ${check.totalCalories.round()} cal (target ${controller.targetCalories!.round()} cal)',
+                              fontWeight: FontWeight.w400,
+                              fontSize: 12,
+                              color: check.withinTolerance ? _mutedColor : const Color(0xffDC2626),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  if (controller.targetCalories != null && !controller.canActivate)
+                    const Padding(
+                      padding: EdgeInsets.only(bottom: 8),
+                      child: CustomText(
+                        text: 'Every day must be within ±5% of the calorie target before this plan can be activated.',
+                        fontWeight: FontWeight.w400,
+                        fontSize: 12,
+                        color: Color(0xffDC2626),
+                      ),
+                    ),
                   ...controller.weekDays.map((day) => _FinalizedDayCard(day: day)),
                   if (controller.errorMessage.value != null)
                     Padding(
@@ -91,6 +124,7 @@ class PlanItemFinalizeStepView extends StatelessWidget {
             child: Obx(
               () => CustomButton(
                 isLoading: controller.activating.value,
+                isDisabled: !controller.canActivate,
                 onTap: () async {
                   final ok = await controller.finalizeAndActivate();
                   if (ok) Get.back();

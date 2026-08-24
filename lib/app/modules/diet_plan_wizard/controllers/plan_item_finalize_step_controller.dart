@@ -21,9 +21,47 @@ class PlanItemFinalizeStepController extends GetxController {
   final RxList<WizardDayGroupV2> weekDays = <WizardDayGroupV2>[].obs;
   final RxBool activating = false.obs;
 
+  // Same tolerance as services/planActivationService.js's
+  // ACTIVATION_CALORIE_TOLERANCE - kept in sync manually since this is a
+  // proactive client-side mirror of the server-side gate, not a replacement
+  // for it (the server still re-validates on finalize).
+  static const double _activationCalorieTolerance = 0.05;
+
   String get patientId => wizard.patientId;
   String get dietPlanId => wizard.dietPlanId.value ?? '';
   int get week => wizard.targetWeek.value;
+
+  /// The Step 1 calorie budget, or null if it was never set (Step 1 should
+  /// always set it before Generation runs, but a resumed/regenerated plan
+  /// could in principle skip that - see finalizeAndActivate/the backend's
+  /// own 400 for the same missing-target case).
+  double? get targetCalories =>
+      (wizard.patientsController.selectedCalorieStrategy['calorieBudget'] as num?)?.toDouble();
+
+  /// Per-day {dayGroup, totalCalories, withinTolerance} - only for days that
+  /// actually have generated items, mirroring
+  /// services/planActivationService.js::validatePlanForActivation exactly so
+  /// this proactive check and the server's blocking check never disagree.
+  List<({String dayGroup, double totalCalories, bool withinTolerance})> get dayCalorieChecks {
+    final target = targetCalories;
+    if (target == null || target <= 0) return const [];
+    return weekDays.where((day) => day.hasItems).map((day) {
+      final total = day.totalCalories;
+      final deviation = (total - target).abs() / target;
+      return (dayGroup: day.dayGroup, totalCalories: total, withinTolerance: deviation <= _activationCalorieTolerance);
+    }).toList();
+  }
+
+  /// False whenever activation would be rejected by the server anyway (no
+  /// target set, or any generated day outside +/-5%) - drives the Confirm &
+  /// Activate button's disabled state so the dietician sees the block before
+  /// tapping, not just as an error message after.
+  bool get canActivate {
+    final target = targetCalories;
+    if (target == null || target <= 0) return false;
+    final checks = dayCalorieChecks;
+    return checks.every((day) => day.withinTolerance);
+  }
 
   @override
   void onInit() {

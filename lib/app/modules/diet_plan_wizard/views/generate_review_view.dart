@@ -134,11 +134,6 @@ class _ReviewRecipeCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   CustomText(text: item.recipeName, fontWeight: FontWeight.w500, fontSize: 13, color: _bodyColor),
-                  if (item.calories != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 2),
-                      child: CustomText(text: '${item.calories!.round()} Cal', fontWeight: FontWeight.w400, fontSize: 11, color: _mutedColor),
-                    ),
                 ],
               ),
             ),
@@ -302,9 +297,6 @@ class _RecipePickerState extends State<_RecipePicker> {
                     final recipe = _recipes[index];
                     return ListTile(
                       title: CustomText(text: recipe.name, fontWeight: FontWeight.w500, fontSize: 14, color: _bodyColor),
-                      subtitle: recipe.calories != null
-                          ? CustomText(text: '${recipe.calories} Cal', fontWeight: FontWeight.w400, fontSize: 12, color: _mutedColor)
-                          : null,
                       onTap: () {
                         widget.onSelect(recipe);
                         Navigator.of(context).pop();

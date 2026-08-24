@@ -309,6 +309,19 @@ class WizardDayGroupV2 {
 
   WizardDayGroupV2({required this.dayGroup, this.dayPlanId, required this.meals});
 
+  /// Sum of every plan item's calories across every meal slot this day -
+  /// deliberately excludes meal.supplements (SupplementItem.excludeFromCalories
+  /// on the backend), matching services/planActivationService.js's own
+  /// computeDayCalorieTotal so this mirrors the server-side +/-5% activation
+  /// check exactly.
+  double get totalCalories =>
+      meals.expand((meal) => meal.items).fold(0.0, (sum, item) => sum + (item.calories ?? 0));
+
+  /// True only when at least one item has been generated for this day - a
+  /// day with nothing yet has nothing to validate (same "excluded rather
+  /// than counted as a failure" rule as the backend).
+  bool get hasItems => meals.any((meal) => meal.items.isNotEmpty);
+
   factory WizardDayGroupV2.fromJson(Map<String, dynamic> json) {
     return WizardDayGroupV2(
       dayGroup: json['dayGroup'] ?? '',
