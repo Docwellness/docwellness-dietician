@@ -9,6 +9,7 @@ import '../controllers/refine_portions_step_controller.dart';
 import '../controllers/wizard_controller.dart';
 import '../models/wizard_week_models.dart';
 import '../widgets/ingredient_editor_sheet.dart';
+import '../widgets/recipe_picker_list.dart';
 
 const _headerColor = Color(0xff530630);
 const _bodyColor = Color(0xff1F2A37);
@@ -71,19 +72,10 @@ class RefinePortionsStepView extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   const CustomText(
-                    text: 'Tap a recipe to edit exact ingredient quantities, or Auto-Balance a day/week toward the calorie target.',
+                    text: 'Portions are automatically balanced toward the calorie target. Tap a recipe to edit exact ingredient quantities.',
                     fontWeight: FontWeight.w400,
                     fontSize: 13,
                     color: _mutedColor,
-                  ),
-                  const SizedBox(height: 12),
-                  CustomButton(
-                    isLoading: controller.autoBalancingWeek.value,
-                    onTap: controller.autoBalanceWeek,
-                    text: 'Auto-Balance Week',
-                    isOutline: true,
-                    outlineButtonColor: _primaryColor,
-                    textColor: _primaryColor,
                   ),
                   const SizedBox(height: 16),
                   Column(
@@ -127,7 +119,6 @@ class _DayGroupCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dayPlanId = day.dayPlanId;
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(12),
@@ -135,27 +126,7 @@ class _DayGroupCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: CustomText(text: day.dayGroup, fontWeight: FontWeight.w600, fontSize: 14, color: _bodyColor),
-              ),
-              if (dayPlanId != null)
-                Obx(
-                  () => controller.autoBalancingDayPlanIds.contains(dayPlanId)
-                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: _primaryColor))
-                      : InkWell(
-                          onTap: () => controller.autoBalanceDay(dayPlanId),
-                          child: const CustomText(
-                            text: 'Auto-Balance Day',
-                            fontWeight: FontWeight.w500,
-                            fontSize: 11,
-                            color: _primaryColor,
-                          ),
-                        ),
-                ),
-            ],
-          ),
+          CustomText(text: day.dayGroup, fontWeight: FontWeight.w600, fontSize: 14, color: _bodyColor),
           const SizedBox(height: 4),
           Builder(
             builder: (context) {
@@ -276,6 +247,7 @@ class _RecipeCard extends StatelessWidget {
         dayBaselineCalories: controller.dayGroupSelectedCalories(day) - (item.calories ?? 0),
         dailyCalorieTarget: controller.dailyCalorieTarget,
         onSave: (updated) => controller.editIngredients(item, updated),
+        onSwapToNewRecipe: (newId) => controller.swapRecipe(item, newId),
       ),
     );
   }
@@ -348,22 +320,12 @@ class _SwapRecipePickerState extends State<_SwapRecipePicker> {
               )
             else
               Flexible(
-                child: ListView.separated(
-                  shrinkWrap: true,
-                  itemCount: _recipes.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
-                  itemBuilder: (context, index) {
-                    final recipe = _recipes[index];
-                    return ListTile(
-                      title: CustomText(text: recipe.name, fontWeight: FontWeight.w500, fontSize: 14, color: _bodyColor),
-                      subtitle: recipe.calories != null
-                          ? CustomText(text: '${recipe.calories} Cal', fontWeight: FontWeight.w400, fontSize: 12, color: _mutedColor)
-                          : null,
-                      onTap: () {
-                        widget.onSelect(recipe);
-                        Navigator.of(context).pop();
-                      },
-                    );
+                child: RecipePickerList(
+                  recipes: _recipes,
+                  showCalories: true,
+                  onSelect: (recipe) {
+                    widget.onSelect(recipe);
+                    Navigator.of(context).pop();
                   },
                 ),
               ),

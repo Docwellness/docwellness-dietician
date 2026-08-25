@@ -1,3 +1,4 @@
+import 'package:docwellnesdoc/app/modules/receipes/models/recipe_model.dart';
 import 'package:docwellnesdoc/app/modules/receipes/services/recipe_service.dart';
 import 'package:docwellnesdoc/app/modules/receipes/views/recipe_details.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_button.dart';
@@ -6,8 +7,10 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../controllers/generate_review_controller.dart';
+import '../controllers/generation_step_controller.dart';
 import '../controllers/wizard_controller.dart';
 import '../models/wizard_week_models.dart';
+import '../widgets/recipe_picker_list.dart';
 
 const _headerColor = Color(0xff530630);
 const _bodyColor = Color(0xff1F2A37);
@@ -45,25 +48,57 @@ class GenerateReviewView extends StatelessWidget {
       return Column(
         children: [
           const SizedBox(height: 8),
-          const CustomText(text: 'Plan generated ✓', fontWeight: FontWeight.w600, fontSize: 16, color: _headerColor),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                const Expanded(
+                  child: CustomText(text: 'Plan generated ✓', fontWeight: FontWeight.w600, fontSize: 16, color: _headerColor),
+                ),
+                InkWell(
+                  onTap: () => _confirmAndRegenerate(context, controller),
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 4, horizontal: 6),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.refresh, size: 16, color: _primaryColor),
+                        SizedBox(width: 4),
+                        CustomText(text: 'Regenerate', fontWeight: FontWeight.w500, fontSize: 12, color: _primaryColor),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
           const SizedBox(height: 2),
-          const CustomText(
-            text: 'Version 1 of the diet. Add or remove recipes below.',
-            fontWeight: FontWeight.w400,
-            fontSize: 12,
-            color: _mutedColor,
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            child: CustomText(
+              text: 'Version 1 of the diet. Add or remove recipes below.',
+              fontWeight: FontWeight.w400,
+              fontSize: 12,
+              color: _mutedColor,
+            ),
           ),
           const SizedBox(height: 12),
-          _PillRow(
-            options: generateReviewDayGroups.map((dg) => MapEntry(dg, controller.dayGroupLabel(dg))).toList(),
-            selected: controller.selectedDayGroup.value,
-            onSelect: (dg) => controller.selectedDayGroup.value = dg,
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: _DayGroupSegmentedControl(
+              options: generateReviewDayGroups.map((dg) => MapEntry(dg, controller.dayGroupLabel(dg))).toList(),
+              selected: controller.selectedDayGroup.value,
+              onSelect: (dg) => controller.selectedDayGroup.value = dg,
+            ),
           ),
           const SizedBox(height: 8),
-          _PillRow(
-            options: generateReviewServingTimes.map((t) => MapEntry(t, t)).toList(),
-            selected: controller.selectedServingTime.value,
-            onSelect: (t) => controller.selectedServingTime.value = t,
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: _MealSlotWrap(
+              options: generateReviewServingTimes,
+              selected: controller.selectedServingTime.value,
+              onSelect: (t) => controller.selectedServingTime.value = t,
+            ),
           ),
           const SizedBox(height: 8),
           Expanded(
@@ -82,17 +117,80 @@ class GenerateReviewView extends StatelessWidget {
                         label: const CustomText(text: 'Add Recipe', fontWeight: FontWeight.w500, fontSize: 13, color: _primaryColor),
                         style: OutlinedButton.styleFrom(side: const BorderSide(color: _primaryColor)),
                       ),
+                      const SizedBox(height: 4),
+                      const CustomText(
+                        text: 'Add sides, salads, or extra dishes to this slot - you can add more than one recipe per slot.',
+                        fontWeight: FontWeight.w400,
+                        fontSize: 11,
+                        color: _mutedColor,
+                      ),
                       const SizedBox(height: 16),
                     ],
                   ),
           ),
           Padding(
             padding: const EdgeInsets.all(16),
-            child: CustomButton(onTap: wizard.nextStep, text: 'Continue', isOutline: false, buttonColor: _headerColor),
+            child: Row(
+              children: [
+                Expanded(
+                  child: CustomButton(
+                    onTap: () => Get.back(),
+                    text: 'Save & Exit',
+                    isOutline: true,
+                    outlineButtonColor: _headerColor,
+                    textColor: _headerColor,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: CustomButton(onTap: wizard.nextStep, text: 'Continue', isOutline: false, buttonColor: _headerColor),
+                ),
+              ],
+            ),
           ),
         ],
       );
     });
+  }
+
+  /// The only path allowed to discard the current plan items and re-run AI
+  /// generation - always confirmed first, since it's destructive and
+  /// otherwise irreversible (same risk profile already accepted for Auto-
+  /// Balance/Swap elsewhere in this wizard).
+  Future<void> _confirmAndRegenerate(BuildContext context, GenerateReviewController controller) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const CustomText(text: 'Regenerate plan?', fontWeight: FontWeight.w600, fontSize: 16, color: _headerColor),
+        content: const CustomText(
+          text: 'This discards the current recipes for this week and generates a fresh set. This cannot be undone.',
+          fontWeight: FontWeight.w400,
+          fontSize: 13,
+          color: _bodyColor,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const CustomText(text: 'Cancel', fontWeight: FontWeight.w500, fontSize: 13, color: _mutedColor),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const CustomText(text: 'Regenerate', fontWeight: FontWeight.w500, fontSize: 13, color: _headerColor),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator(color: _primaryColor)),
+    );
+    final generationController = Get.find<GenerationStepController>();
+    await generationController.regenerateMenu();
+    await controller.loadWeekPlanItems();
+    if (context.mounted) Navigator.of(context).pop(); // dismiss the loading dialog
   }
 
   void _openAddPicker(BuildContext context, GenerateReviewController controller) {
@@ -156,6 +254,30 @@ class _ReviewRecipeCard extends StatelessWidget {
     if (parentRecipeId.isEmpty) return;
     final recipe = await RecipeService().getRecipeById(parentRecipeId);
     if (recipe == null || !context.mounted) return;
+
+    // Show this item's actually-assigned recipe version's ingredients/
+    // components/nutrition, not the unrelated master Recipe document's own
+    // stored fields - see ingredient_editor_sheet.dart's identical mapping.
+    final version = item.recipeVersion;
+    final recipeToShow = version == null
+        ? recipe
+        : recipe.copyWithVersionOverride(
+            ingredients: version.ingredients
+                .map(
+                  (i) => Ingredient(
+                    name: i.foodItemName ?? 'Ingredient',
+                    quantity: i.rawQuantity,
+                    unit: i.unit,
+                    category: 'Other',
+                    priceLevel: '₹₹',
+                    description: i.preparation ?? '',
+                  ),
+                )
+                .toList(),
+            components: version.components.map((c) => RecipeComponent(label: c.label, quantity: c.quantity, unit: c.unit)).toList(),
+            nutrition: version.nutritionPerServing != null ? Nutrition.fromJson(version.nutritionPerServing!) : null,
+          );
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,
@@ -170,7 +292,8 @@ class _ReviewRecipeCard extends StatelessWidget {
         builder: (ctx, sheetScrollController) => RecipeDetailsScreen(
           fromAddRecipeScreen: false,
           scrollController: sheetScrollController,
-          recipePreview: recipe,
+          recipePreview: recipeToShow,
+          onSavedAsNew: (saved) => controller.swapItem(item, saved.id),
         ),
       ),
     );
@@ -192,44 +315,85 @@ class _ReviewRecipeCard extends StatelessWidget {
   }
 }
 
-class _PillRow extends StatelessWidget {
+/// Full-width 4-segment control for the day-groups - always all 4 fully
+/// visible (no horizontal scroll to discover), unlike the old horizontally-
+/// scrolling pill row.
+class _DayGroupSegmentedControl extends StatelessWidget {
   final List<MapEntry<String, String>> options;
   final String selected;
   final void Function(String) onSelect;
 
-  const _PillRow({required this.options, required this.selected, required this.onSelect});
+  const _DayGroupSegmentedControl({required this.options, required this.selected, required this.onSelect});
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 36,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: options.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
-        itemBuilder: (context, index) {
-          final entry = options[index];
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(color: _pillBg, borderRadius: BorderRadius.circular(18)),
+      child: Row(
+        children: options.map((entry) {
           final isSelected = entry.key == selected;
-          return InkWell(
-            onTap: () => onSelect(entry.key),
-            borderRadius: BorderRadius.circular(18),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                color: isSelected ? _primaryColor : _pillBg,
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: CustomText(
-                text: entry.value,
-                fontWeight: FontWeight.w500,
-                fontSize: 12,
-                color: isSelected ? Colors.white : _primaryColor,
+          return Expanded(
+            child: InkWell(
+              onTap: () => onSelect(entry.key),
+              borderRadius: BorderRadius.circular(16),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                decoration: BoxDecoration(
+                  color: isSelected ? _primaryColor : Colors.transparent,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                alignment: Alignment.center,
+                child: CustomText(
+                  text: entry.value,
+                  fontWeight: FontWeight.w500,
+                  fontSize: 12,
+                  color: isSelected ? Colors.white : _primaryColor,
+                  textAlign: TextAlign.center,
+                ),
               ),
             ),
           );
-        },
+        }).toList(),
       ),
+    );
+  }
+}
+
+/// Wrapping chip row for the 7 meal slots - wraps to a second line instead
+/// of clipping/scrolling, so every slot is always visible.
+class _MealSlotWrap extends StatelessWidget {
+  final List<String> options;
+  final String selected;
+  final void Function(String) onSelect;
+
+  const _MealSlotWrap({required this.options, required this.selected, required this.onSelect});
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: options.map((option) {
+        final isSelected = option == selected;
+        return InkWell(
+          onTap: () => onSelect(option),
+          borderRadius: BorderRadius.circular(18),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: isSelected ? _primaryColor : _pillBg,
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: CustomText(
+              text: option,
+              fontWeight: FontWeight.w500,
+              fontSize: 12,
+              color: isSelected ? Colors.white : _primaryColor,
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
 }
@@ -289,19 +453,11 @@ class _RecipePickerState extends State<_RecipePicker> {
               )
             else
               Flexible(
-                child: ListView.separated(
-                  shrinkWrap: true,
-                  itemCount: _recipes.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
-                  itemBuilder: (context, index) {
-                    final recipe = _recipes[index];
-                    return ListTile(
-                      title: CustomText(text: recipe.name, fontWeight: FontWeight.w500, fontSize: 14, color: _bodyColor),
-                      onTap: () {
-                        widget.onSelect(recipe);
-                        Navigator.of(context).pop();
-                      },
-                    );
+                child: RecipePickerList(
+                  recipes: _recipes,
+                  onSelect: (recipe) {
+                    widget.onSelect(recipe);
+                    Navigator.of(context).pop();
                   },
                 ),
               ),

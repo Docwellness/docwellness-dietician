@@ -652,6 +652,10 @@ class RecipeListItem {
   final int? calories;
   final String description;
   final DateTime? createdAt;
+  // ['side'] / ['salad'] / [] - see models/Recipe.js's `tags`. Lets a
+  // recipe picker group side/salad accompaniments under their own heading
+  // instead of mixing them anonymously into the main list.
+  final List<String> tags;
 
   RecipeListItem({
     required this.id,
@@ -665,7 +669,11 @@ class RecipeListItem {
     this.calories,
     required this.description,
     this.createdAt,
+    this.tags = const [],
   });
+
+  bool get isSide => tags.contains('side');
+  bool get isSalad => tags.contains('salad');
 
   factory RecipeListItem.fromJson(Map<String, dynamic> json) {
     return RecipeListItem(
@@ -686,6 +694,7 @@ class RecipeListItem {
       createdAt: json['createdAt'] != null
           ? DateTime.tryParse(json['createdAt'])
           : null,
+      tags: json['tags'] is List ? List<String>.from(json['tags']) : const [],
     );
   }
 }
