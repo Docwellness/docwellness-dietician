@@ -28,12 +28,26 @@ class RecipeDetailsScreen extends StatefulWidget {
   // the diet plan wizard, with no behavior change when this is left null.
   final Future<void> Function(SavedRecipe savedRecipe)? onSavedAsNew;
 
+  // True when this screen is showing one diet-plan item's actually-assigned
+  // RecipeVersion (see ingredient_editor_sheet.dart/generate_review_view.
+  // dart's copyWithVersionOverride callers) rather than the recipe library's
+  // own catalog entry. "Save Recipe" PATCHes the shared master Recipe
+  // document (/api/dietician/recipes/:id) - safe from the recipe library's
+  // own edit screen, but here `recipe` reflects just ONE patient's specific
+  // portion edits for ONE plan item, so saving it would silently overwrite
+  // the catalog recipe (and therefore every other patient/plan using it)
+  // with this patient's numbers. Hides that button in this context; "Save
+  // as New Recipe" (a real fork, not a shared-document overwrite) stays
+  // available.
+  final bool isPlanItemPreview;
+
   const RecipeDetailsScreen({
     super.key,
     required this.scrollController,
     required this.fromAddRecipeScreen,
     this.recipePreview,
     this.onSavedAsNew,
+    this.isPlanItemPreview = false,
   });
 
   @override
@@ -939,59 +953,61 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
                       if (!_isSavingAsNewRecipe) _promptSaveAsNewRecipe();
                     },
                     text: _isSavingAsNewRecipe ? 'Saving...' : 'Save as New Recipe',
-                    isOutline: true,
+                    isOutline: widget.isPlanItemPreview ? false : true,
                     isLoading: _isSavingAsNewRecipe,
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: CustomButton(
-                    fontSize: 13.5,
-                    onTap: () async {
-                      if (_isSavingExistingRecipe || recipe == null) return;
-                      setState(() => _isSavingExistingRecipe = true);
-                      try {
-                        final r = recipe!;
-                        final saved = await _recipeService.saveExistingRecipe(
-                          id: r.id!,
-                          servingTime: r.servingTime,
-                          servings: r.servings,
-                          category: r.category,
-                          description: r.description,
-                          dietaryHabits: r.dietaryHabits,
-                          freeFrom: r.freeFrom,
-                          components: r.components,
-                          ingredients: r.ingredients,
-                          cookingSteps: r.cookingSteps,
-                          nutrition: r.nutrition,
-                          translations: r.translations,
-                        );
-                        if (saved) {
-                          // Close the modal bottom sheet
-                          if (mounted) Navigator.of(context).pop();
-                          showAppToast(
-                            Get.overlayContext!,
-                            message: 'Recipe saved successfully.',
-                            type: AppToastType.success,
+                if (!widget.isPlanItemPreview) ...[
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: CustomButton(
+                      fontSize: 13.5,
+                      onTap: () async {
+                        if (_isSavingExistingRecipe || recipe == null) return;
+                        setState(() => _isSavingExistingRecipe = true);
+                        try {
+                          final r = recipe!;
+                          final saved = await _recipeService.saveExistingRecipe(
+                            id: r.id!,
+                            servingTime: r.servingTime,
+                            servings: r.servings,
+                            category: r.category,
+                            description: r.description,
+                            dietaryHabits: r.dietaryHabits,
+                            freeFrom: r.freeFrom,
+                            components: r.components,
+                            ingredients: r.ingredients,
+                            cookingSteps: r.cookingSteps,
+                            nutrition: r.nutrition,
+                            translations: r.translations,
                           );
-                        } else {
-                          showAppToast(
-                            Get.overlayContext!,
-                            message: 'Failed to save recipe. Please try again.',
-                            type: AppToastType.error,
-                          );
+                          if (saved) {
+                            // Close the modal bottom sheet
+                            if (mounted) Navigator.of(context).pop();
+                            showAppToast(
+                              Get.overlayContext!,
+                              message: 'Recipe saved successfully.',
+                              type: AppToastType.success,
+                            );
+                          } else {
+                            showAppToast(
+                              Get.overlayContext!,
+                              message: 'Failed to save recipe. Please try again.',
+                              type: AppToastType.error,
+                            );
+                          }
+                        } finally {
+                          if (mounted) {
+                            setState(() => _isSavingExistingRecipe = false);
+                          }
                         }
-                      } finally {
-                        if (mounted) {
-                          setState(() => _isSavingExistingRecipe = false);
-                        }
-                      }
-                    },
-                    text: _isSavingExistingRecipe ? 'Saving...' : 'Save Recipe',
-                    isOutline: false,
-                    isLoading: _isSavingExistingRecipe,
+                      },
+                      text: _isSavingExistingRecipe ? 'Saving...' : 'Save Recipe',
+                      isOutline: false,
+                      isLoading: _isSavingExistingRecipe,
+                    ),
                   ),
-                ),
+                ],
               ],
             ),
           ),

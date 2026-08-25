@@ -162,12 +162,20 @@ class _IngredientEditorSheetState extends State<IngredientEditorSheet> {
     // components/nutrition (already in memory - the wizard fetched it),
     // not the unrelated master Recipe document's own stored fields, which
     // can be stale/different once this item has been auto-balanced or
-    // manually edited (version > 1).
+    // manually edited (version > 1). Uses the LIVE in-progress edit state
+    // (_ingredients/_scaledComponents), not the pre-edit version snapshot -
+    // tapping "Recipe Details" mid-edit (before Save) should preview what's
+    // actually typed into the fields right now, matching the live "This
+    // recipe: X Cal"/"Makes" preview already shown above in this same sheet.
+    // cookingSteps still only carries this version's last-SAVED step text
+    // (there's no per-keystroke live step text to show) - see
+    // RecipePreview.copyWithVersionOverride's own doc comment on why
+    // translations are always dropped alongside it.
     final version = widget.item.recipeVersion;
     final recipeToShow = version == null
         ? recipe
         : recipe.copyWithVersionOverride(
-            ingredients: version.ingredients
+            ingredients: _ingredients
                 .map(
                   (i) => Ingredient(
                     name: i.foodItemName ?? 'Ingredient',
@@ -179,8 +187,9 @@ class _IngredientEditorSheetState extends State<IngredientEditorSheet> {
                   ),
                 )
                 .toList(),
-            components: version.components.map((c) => RecipeComponent(label: c.label, quantity: c.quantity, unit: c.unit)).toList(),
+            components: _scaledComponents.map((c) => RecipeComponent(label: c.label, quantity: c.quantity, unit: c.unit)).toList(),
             nutrition: version.nutritionPerServing != null ? Nutrition.fromJson(version.nutritionPerServing!) : null,
+            cookingSteps: version.steps,
           );
 
     showModalBottomSheet(
@@ -196,6 +205,7 @@ class _IngredientEditorSheetState extends State<IngredientEditorSheet> {
         expand: false,
         builder: (ctx, sheetScrollController) => RecipeDetailsScreen(
           fromAddRecipeScreen: false,
+          isPlanItemPreview: true,
           scrollController: sheetScrollController,
           recipePreview: recipeToShow,
           onSavedAsNew: (saved) async {

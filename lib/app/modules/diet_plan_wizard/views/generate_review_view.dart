@@ -292,6 +292,7 @@ class _ReviewRecipeCard extends StatelessWidget {
                 .toList(),
             components: version.components.map((c) => RecipeComponent(label: c.label, quantity: c.quantity, unit: c.unit)).toList(),
             nutrition: version.nutritionPerServing != null ? Nutrition.fromJson(version.nutritionPerServing!) : null,
+            cookingSteps: version.steps,
           );
 
     showModalBottomSheet(
@@ -307,6 +308,7 @@ class _ReviewRecipeCard extends StatelessWidget {
         expand: false,
         builder: (ctx, sheetScrollController) => RecipeDetailsScreen(
           fromAddRecipeScreen: false,
+          isPlanItemPreview: true,
           scrollController: sheetScrollController,
           recipePreview: recipeToShow,
           onSavedAsNew: (saved) => controller.swapItem(item, saved.id),

@@ -229,17 +229,30 @@ class RecipePreview {
   }
 
   /// Returns a copy with [ingredients], [components], and (optionally)
-  /// [nutrition] set directly and independently - no name-matching resync
-  /// like copyWithComponentsAndNutrition does (that path is lossy for an
-  /// ingredient whose name doesn't match a component label 1:1). Used to
-  /// make this preview show a diet-plan item's actually-assigned
-  /// RecipeVersion data (already correct, already in memory) instead of the
-  /// unrelated master Recipe document's own stored fields - see
-  /// diet_plan_wizard's ingredient_editor_sheet.dart/generate_review_view.dart.
+  /// [nutrition]/[cookingSteps] set directly and independently - no
+  /// name-matching resync like copyWithComponentsAndNutrition does (that
+  /// path is lossy for an ingredient whose name doesn't match a component
+  /// label 1:1). Used to make this preview show a diet-plan item's
+  /// actually-assigned RecipeVersion data (already correct, already in
+  /// memory) instead of the unrelated master Recipe document's own stored
+  /// fields - see diet_plan_wizard's ingredient_editor_sheet.dart/
+  /// generate_review_view.dart.
+  ///
+  /// [translations] is always dropped (forced empty) here, never merely
+  /// left at the master recipe's own - a version's ingredients/components
+  /// can differ in content, count, and order from the original recipe's
+  /// (an ingredient added/removed, a quantity changed), so the original's
+  /// per-language `ingredients[index]`/`cookingSteps` would either mismatch
+  /// by position or simply describe stale quantities (see recipe_details.
+  /// dart's ingredientName/cookingSteps getters, which read translations by
+  /// index/wholesale). Showing accurate English over confidently-wrong
+  /// translated text is the same "never fabricate precision the data
+  /// doesn't have" tradeoff this file already makes elsewhere.
   RecipePreview copyWithVersionOverride({
     required List<Ingredient> ingredients,
     required List<RecipeComponent> components,
     Nutrition? nutrition,
+    List<String>? cookingSteps,
   }) {
     return RecipePreview(
       id: id,
@@ -257,10 +270,10 @@ class RecipePreview {
       ingredients: ingredients,
       servingSize: servingSize,
       nutrition: nutrition ?? this.nutrition,
-      cookingSteps: cookingSteps,
+      cookingSteps: cookingSteps ?? this.cookingSteps,
       warnings: warnings,
       languages: languages,
-      translations: translations,
+      translations: const {},
       supplementFacts: supplementFacts,
       components: components,
     );
