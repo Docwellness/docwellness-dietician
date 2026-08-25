@@ -25,6 +25,11 @@ class RefinePortionsStepController extends GetxController {
   final RxnString errorMessage = RxnString();
   final RxList<WizardDayGroupV2> weekDays = <WizardDayGroupV2>[].obs;
 
+  // Which single day-group card is mid-request, if any - lets only that
+  // one card's "Auto Adjust" button show a spinner instead of the whole
+  // list (unlike `loading`, which covers the initial/whole-week load).
+  final RxnString balancingDayPlanId = RxnString();
+
   // One-shot guard: only the step's initial load triggers auto-balance, not
   // any later loadWeekPlanItems() call (e.g. from editIngredients/swapRecipe
   // refreshing after a manual edit) - manually editing an ingredient must
@@ -95,6 +100,29 @@ class RefinePortionsStepController extends GetxController {
     final ok = result != null && result['success'] == true;
     if (ok) await loadWeekPlanItems();
     return ok;
+  }
+
+  /// Re-balances just this one day's unlocked items toward the daily
+  /// calorie target - the scoped-down "Auto Adjust" action on each day
+  /// card, for after a manual ingredient edit throws that day's total off
+  /// without wanting to touch every other day in the week (unlike the
+  /// one-shot whole-week auto-balance on this step's initial load).
+  Future<void> autoBalanceDay(WizardDayGroupV2 day) async {
+    final target = dailyCalorieTarget;
+    final dayPlanId = day.dayPlanId;
+    if (target == null || target <= 0 || dayPlanId == null || dayPlanId.isEmpty) return;
+    balancingDayPlanId.value = dayPlanId;
+    try {
+      final result = await wizardService.autoBalanceDay(
+        patientId: patientId,
+        dietPlanId: dietPlanId,
+        dayPlanId: dayPlanId,
+        targetDailyCalories: target,
+      );
+      if (result != null && result['success'] == true) await loadWeekPlanItems();
+    } finally {
+      balancingDayPlanId.value = null;
+    }
   }
 
   Future<void> autoBalanceWeek() async {

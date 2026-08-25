@@ -127,7 +127,35 @@ class _DayGroupCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          CustomText(text: dayGroupLabel(day.dayGroup), fontWeight: FontWeight.w600, fontSize: 14, color: _bodyColor),
+          Row(
+            children: [
+              Expanded(
+                child: CustomText(text: dayGroupLabel(day.dayGroup), fontWeight: FontWeight.w600, fontSize: 14, color: _bodyColor),
+              ),
+              if (day.dayPlanId != null && controller.dailyCalorieTarget != null)
+                Obx(() {
+                  final isBalancing = controller.balancingDayPlanId.value == day.dayPlanId;
+                  return InkWell(
+                    onTap: isBalancing ? null : () => controller.autoBalanceDay(day),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (isBalancing)
+                            const SizedBox(width: 13, height: 13, child: CircularProgressIndicator(strokeWidth: 2, color: _primaryColor))
+                          else
+                            const Icon(Icons.auto_fix_high, size: 15, color: _primaryColor),
+                          const SizedBox(width: 4),
+                          CustomText(text: 'Auto Adjust', fontWeight: FontWeight.w600, fontSize: 12, color: _primaryColor),
+                        ],
+                      ),
+                    ),
+                  );
+                }),
+            ],
+          ),
           const SizedBox(height: 4),
           Builder(
             builder: (context) {
