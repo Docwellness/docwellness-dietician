@@ -66,6 +66,7 @@ class _PatientProfileViewState extends State<PatientProfileView> {
   final PatientsController controller = Get.put(PatientsController());
   Timer? _autoRefreshTimer;
   static const int _refreshIntervalSeconds = 10; // Refresh every 10 seconds
+  bool _isDeleting = false;
 
   @override
   void initState() {
@@ -207,8 +208,17 @@ class _PatientProfileViewState extends State<PatientProfileView> {
             );
           }),
           IconButton(
-            onPressed: () => _showDeleteConfirmationDialog(context),
-            icon: const Icon(Icons.delete_outline, color: Color(0xffB42318)),
+            onPressed: _isDeleting ? null : () => _showDeleteConfirmationDialog(context),
+            icon: _isDeleting
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Color(0xffB42318),
+                    ),
+                  )
+                : const Icon(Icons.delete_outline, color: Color(0xffB42318)),
             tooltip: 'Delete patient',
           ),
         ],
@@ -243,6 +253,13 @@ class _PatientProfileViewState extends State<PatientProfileView> {
     textController.addListener(() {
       matches.value = textController.text.trim().toLowerCase() == email.toLowerCase();
     });
+
+    // The auto-refresh timer silently updates patientProfileModel (and the
+    // Obx'd widgets watching it) every 10s. Left running while this dialog
+    // - and, on confirm, the native biometric prompt below - are on screen,
+    // it can mutate the tree underneath mid-transition, which is what was
+    // crashing the framework ("_dependents.isEmpty") on Cancel/Delete.
+    _stopAutoRefresh();
 
     final confirmed = await showDialog<bool>(
       context: context,
@@ -320,10 +337,25 @@ class _PatientProfileViewState extends State<PatientProfileView> {
     matches.dispose();
     textController.dispose();
 
-    if (confirmed != true || !context.mounted) return;
+    if (confirmed != true || !context.mounted) {
+      // Cancelled (or already navigated away) - just resume refreshing.
+      if (context.mounted) _startAutoRefresh();
+      return;
+    }
 
+    // Give the dialog's own pop/exit transition a moment to finish before
+    // the native biometric prompt (below, via deletePatient) backgrounds the
+    // Flutter view - triggering that prompt mid-transition is what was
+    // corrupting the element tree and crashing the app.
+    await Future.delayed(const Duration(milliseconds: 300));
+    if (!context.mounted) return;
+
+    setState(() => _isDeleting = true);
     final success = await controller.deletePatient(widget.patientId, email);
-    if (success && context.mounted) {
+    if (!context.mounted) return;
+    setState(() => _isDeleting = false);
+
+    if (success) {
       showAppToast(
         Get.overlayContext!,
         message: '"$email" has been permanently deleted.',
@@ -334,6 +366,10 @@ class _PatientProfileViewState extends State<PatientProfileView> {
       } else {
         Get.offAllNamed(Routes.PATIENTS);
       }
+    } else {
+      // Deletion failed (or was blocked, e.g. by the biometric step-up) -
+      // the dietician is staying on this page, so resume auto-refresh.
+      _startAutoRefresh();
     }
   }
 
