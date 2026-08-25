@@ -67,12 +67,29 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
   bool _isSavingAsNewRecipe = false;
   String? _mainImageUrl;
 
+  /// ReceipesController is normally only ever bound by the standalone
+  /// Recipes module's own ReceipesBinding - this screen also opens as a
+  /// plan-item preview from deep inside the diet plan wizard (see
+  /// ingredient_editor_sheet.dart/generate_review_view.dart), a route the
+  /// wizard's own binding never registers it on. Every call site here that
+  /// needs it (Update AI Inputs, "Save as New Recipe"'s post-save refresh)
+  /// used a bare `Get.find<ReceipesController>()` that threw whenever this
+  /// screen was reached without the dietician having visited the Recipes
+  /// tab first in the same session - this lazily puts it instead of ever
+  /// assuming it's already there.
+  ReceipesController _receipesController() {
+    if (!Get.isRegistered<ReceipesController>()) {
+      Get.put(ReceipesController());
+    }
+    return Get.find<ReceipesController>();
+  }
+
   RecipePreview? get recipe {
     if (_editableRecipe != null) return _editableRecipe;
 
     if (widget.fromAddRecipeScreen) {
       // Use the controller's reactive recipe (updated by Update AI Inputs)
-      final controller = Get.find<ReceipesController>();
+      final controller = _receipesController();
       return controller.generatedRecipe.value ?? widget.recipePreview;
     }
     return widget.recipePreview;
@@ -176,7 +193,7 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
       _selectedLanguage = langs.firstWhere((l) => l != 'English');
     }
     if (widget.fromAddRecipeScreen) {
-      final controller = Get.find<ReceipesController>();
+      final controller = _receipesController();
       _mainImageUrl = controller.recipeImageUrl.value.isNotEmpty
           ? controller.recipeImageUrl.value
           : recipe?.image;
@@ -210,7 +227,7 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
       }
 
       if (widget.fromAddRecipeScreen) {
-        final controller = Get.find<ReceipesController>();
+        final controller = _receipesController();
         controller.recipeImageUrl.value = imageUrl;
       } else {
         // Persist the banner on the existing recipe in the DB so it shows
@@ -230,7 +247,7 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
           } else {
             // Refresh the list so the grid picks up the new image.
             if (Get.isRegistered<ReceipesController>()) {
-              Get.find<ReceipesController>().fetchRecipes(refresh: true);
+              _receipesController().fetchRecipes(refresh: true);
             }
           }
         }
@@ -302,7 +319,7 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
       if (!mounted) return;
       if (saved != null) {
         if (Get.isRegistered<ReceipesController>()) {
-          Get.find<ReceipesController>().fetchRecipes(refresh: true);
+          _receipesController().fetchRecipes(refresh: true);
         }
         if (widget.onSavedAsNew != null) {
           await widget.onSavedAsNew!(saved);
@@ -393,7 +410,7 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
           .toList();
 
       final updatedRecipe = RecipePreview.fromJson(updatedRecipeMap);
-      final controller = Get.find<ReceipesController>();
+      final controller = _receipesController();
       controller.generatedRecipe.value = updatedRecipe;
       _editableRecipe = updatedRecipe;
 
@@ -805,7 +822,7 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
             child: CustomButton(
               fontSize: 13.5,
               onTap: () {
-                final controller = Get.find<ReceipesController>();
+                final controller = _receipesController();
                 // Pre-fill the form with current recipe values
                 if (recipe != null) {
                   controller.prefillFromRecipe(recipe!);
@@ -847,7 +864,7 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
           Padding(
             padding: const EdgeInsets.all(16),
             child: Obx(() {
-              final controller = Get.find<ReceipesController>();
+              final controller = _receipesController();
               return CustomButton(
                 fontSize: 13.5,
                 onTap: () async {
@@ -896,7 +913,7 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
             child: CustomButton(
               fontSize: 13.5,
               onTap: () {
-                final controller = Get.find<ReceipesController>();
+                final controller = _receipesController();
                 if (recipe != null) {
                   controller.generatedRecipe.value = recipe;
                   controller.prefillFromRecipe(recipe!);
