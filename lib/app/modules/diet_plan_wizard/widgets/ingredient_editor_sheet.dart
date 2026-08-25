@@ -5,6 +5,8 @@ import 'package:docwellnesdoc/app/utils/common_widgets/custom_button.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
 import 'package:flutter/material.dart';
 
+import 'package:docwellnesdoc/app/utils/functions/quantity_label.dart';
+
 import '../models/wizard_week_models.dart';
 
 const _headerColor = Color(0xff530630);
@@ -61,11 +63,54 @@ class IngredientEditorSheet extends StatefulWidget {
 }
 
 class _IngredientEditorSheetState extends State<IngredientEditorSheet> {
-  late final List<WizardIngredientLine> _ingredients = List.of(
+  // Snapshot of the ingredient list as this sheet opened it - kept
+  // separately from the mutable _ingredients below so _portionScaleRatio
+  // always has an unedited baseline to compare against, however many edits
+  // the dietician makes in this session.
+  late final List<WizardIngredientLine> _originalIngredients = List.of(
     widget.item.recipeVersion?.ingredients ?? const [],
   );
+  late final List<WizardIngredientLine> _ingredients = List.of(_originalIngredients);
   bool _saving = false;
   bool _loadingDetails = false;
+
+  /// How much the ingredient list's total weight has changed since this
+  /// sheet opened, based on 'g'-unit ingredients only - the same
+  /// "only grams are client-computable" reasoning as _currentCalories below
+  /// (no unit-conversion table is ever sent to the client). Used to
+  /// live-scale the recipe's components (its real plate/serving amounts,
+  /// e.g. "1 bowl") as ingredients are edited, per the ask that this math
+  /// be driven by the ingredient portions themselves rather than calories.
+  /// Falls back to 1 (unscaled) when there's no g-based ingredient to
+  /// compare, so a components-only recipe isn't silently zeroed out.
+  double get _portionScaleRatio {
+    double original = 0;
+    double current = 0;
+    for (final ingredient in _originalIngredients) {
+      if (ingredient.unit == 'g') original += ingredient.rawQuantity;
+    }
+    for (final ingredient in _ingredients) {
+      if (ingredient.unit == 'g') current += ingredient.rawQuantity;
+    }
+    if (original <= 0) return 1;
+    return current / original;
+  }
+
+  /// Live preview of "how much this makes" - the recipe's own components
+  /// (see RecipeVersion.components, already the real-world plate/serving
+  /// amount, e.g. "3 nos" Idli + "1 bowl" Sambar) scaled by how much the
+  /// ingredients have grown/shrunk in this session. The authoritative,
+  /// server-recomputed version is created at Save (createCustomVersion
+  /// proportionally rescales components there too, off the calorie ratio) -
+  /// this is only ever a same-session preview.
+  List<WizardComponent> get _scaledComponents {
+    final components = widget.item.recipeVersion?.components ?? const [];
+    if (components.isEmpty) return const [];
+    final ratio = _portionScaleRatio;
+    return components
+        .map((c) => WizardComponent(label: c.label, quantity: c.quantity * ratio, unit: c.unit))
+        .toList();
+  }
 
   double? get _currentCalories {
     double total = 0;
@@ -215,7 +260,12 @@ class _IngredientEditorSheetState extends State<IngredientEditorSheet> {
                   ],
                 ),
                 const SizedBox(height: 10),
-                _CaloriesHeader(current: _currentCalories, dayTotal: _dayLiveTotal, dailyTarget: widget.dailyCalorieTarget),
+                _RecipeSummaryHeader(
+                  current: _currentCalories,
+                  dayTotal: _dayLiveTotal,
+                  dailyTarget: widget.dailyCalorieTarget,
+                  components: _scaledComponents,
+                ),
                 const SizedBox(height: 14),
                 Expanded(
                   child: ListView.separated(
@@ -247,38 +297,95 @@ class _IngredientEditorSheetState extends State<IngredientEditorSheet> {
   }
 }
 
-class _CaloriesHeader extends StatelessWidget {
+/// Calorie stats + "how much this makes" in one clean card - the latter
+/// (components) only renders when the recipe actually has any, so a
+/// components-less recipe just keeps the plain two-line calorie summary
+/// this replaced.
+class _RecipeSummaryHeader extends StatelessWidget {
   final double? current;
   final double dayTotal;
   final double? dailyTarget;
+  final List<WizardComponent> components;
 
-  const _CaloriesHeader({required this.current, required this.dayTotal, required this.dailyTarget});
+  const _RecipeSummaryHeader({
+    required this.current,
+    required this.dayTotal,
+    required this.dailyTarget,
+    required this.components,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(color: const Color(0xffFEF6FB), borderRadius: BorderRadius.circular(10)),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(color: const Color(0xffFEF6FB), borderRadius: BorderRadius.circular(12)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          CustomText(
-            text: current != null ? 'This recipe: ${current!.round()} Cal' : 'This recipe: —',
-            fontWeight: FontWeight.w600,
-            fontSize: 14,
-            color: _primaryColor,
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: _StatColumn(
+                  label: 'This Recipe',
+                  value: current != null ? '${current!.round()} Cal' : '—',
+                ),
+              ),
+              Container(width: 1, height: 30, color: _primaryColor.withOpacity(0.15)),
+              const SizedBox(width: 14),
+              Expanded(
+                child: _StatColumn(
+                  label: 'Day Total',
+                  value: dailyTarget != null
+                      ? '${dayTotal.round()} / ${dailyTarget!.round()} Cal'
+                      : '${dayTotal.round()} Cal',
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 4),
-          CustomText(
-            text: dailyTarget != null
-                ? 'Day Total: ${dayTotal.round()} / ${dailyTarget!.round()} Cal'
-                : 'Day Total: ${dayTotal.round()} Cal',
-            fontWeight: FontWeight.w400,
-            fontSize: 12,
-            color: _mutedColor,
-          ),
+          if (components.isNotEmpty) ...[
+            Padding(padding: const EdgeInsets.symmetric(vertical: 10), child: Divider(height: 1, color: _primaryColor.withOpacity(0.12))),
+            const CustomText(text: 'Makes (on the plate)', fontWeight: FontWeight.w600, fontSize: 11, color: _mutedColor),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: components.map((c) {
+                final formatted = formatQuantityLabel(c.quantity.toStringAsFixed(2), c.unit);
+                final label = components.length > 1 && c.label.isNotEmpty ? '${c.label}: $formatted' : formatted;
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: _primaryColor.withOpacity(0.3)),
+                  ),
+                  child: CustomText(text: label, fontWeight: FontWeight.w600, fontSize: 12, color: _primaryColor),
+                );
+              }).toList(),
+            ),
+          ],
         ],
       ),
+    );
+  }
+}
+
+class _StatColumn extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _StatColumn({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        CustomText(text: label, fontWeight: FontWeight.w500, fontSize: 11, color: _mutedColor),
+        const SizedBox(height: 2),
+        CustomText(text: value, fontWeight: FontWeight.w700, fontSize: 15, color: _primaryColor),
+      ],
     );
   }
 }

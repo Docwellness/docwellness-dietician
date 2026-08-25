@@ -8,6 +8,7 @@ import 'package:get/get.dart';
 
 import '../controllers/generate_review_controller.dart';
 import '../controllers/generation_step_controller.dart';
+import '../controllers/refine_portions_step_controller.dart';
 import '../controllers/wizard_controller.dart';
 import '../models/wizard_week_models.dart';
 import '../widgets/recipe_picker_list.dart';
@@ -143,7 +144,22 @@ class GenerateReviewView extends StatelessWidget {
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: CustomButton(onTap: wizard.nextStep, text: 'Continue', isOutline: false, buttonColor: _headerColor),
+                  child: CustomButton(
+                    onTap: () {
+                      // Step 3 (Refine Portions) is a GetX singleton for the
+                      // wizard's lifetime - if it already loaded once, force
+                      // it to refresh and re-balance against whatever the
+                      // plan items actually are now, since Step 2 may have
+                      // added/removed/swapped one since then.
+                      if (Get.isRegistered<RefinePortionsStepController>()) {
+                        Get.find<RefinePortionsStepController>().refreshForReentry();
+                      }
+                      wizard.nextStep();
+                    },
+                    text: 'Continue',
+                    isOutline: false,
+                    buttonColor: _headerColor,
+                  ),
                 ),
               ],
             ),

@@ -47,6 +47,19 @@ class RefinePortionsStepController extends GetxController {
     if (dietPlanId.isNotEmpty) _loadAndAutoBalanceOnce();
   }
 
+  /// Called when the dietician returns to this step after changing plan
+  /// items back on Step 2 (add/remove/swap a recipe) - Generate's
+  /// "Continue" button triggers this on the already-created controller
+  /// instance. GetX's lazyPut keeps this controller alive for the whole
+  /// wizard session, so onInit's initial load/auto-balance above only ever
+  /// runs once on its own - without this, removing a recipe on Step 2 left
+  /// Step 3 showing the stale plan (including the removed item) with
+  /// portions balanced against a calorie total that no longer matches.
+  Future<void> refreshForReentry() async {
+    _autoBalancedOnce = false;
+    await _loadAndAutoBalanceOnce();
+  }
+
   Future<void> _loadAndAutoBalanceOnce() async {
     await loadWeekPlanItems();
     final target = dailyCalorieTarget;
