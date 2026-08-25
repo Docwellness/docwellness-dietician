@@ -14,15 +14,23 @@ const _bodyColor = Color(0xff1F2A37);
 const _mutedColor = Color(0xff6C737F);
 const _primaryColor = Color(0xff851653);
 
-/// Real per-100g nutrition (and therefore a live client-side calorie
-/// preview) only ever arrives for a 'g'-unit ingredient - see
-/// WizardIngredientLine's own doc comment, the server never sends
-/// unitConversions to the client. Switching a row to any other unit is
-/// still a valid edit (the server resolves grams via FoodItem.unitConversions
-/// at Save), it just can't be previewed live here - matches the same
-/// "never fabricate precision the data doesn't have" honesty this file
-/// already followed for the Cal header.
 const _availableUnits = ['g', 'ml', 'tsp', 'tbsp', 'cup', 'piece'];
+
+/// One ingredient's calorie contribution at its current rawQuantity/unit -
+/// resolvedGramsPerUnit (see WizardIngredientLine's own doc comment) is
+/// already the grams-equivalent of ONE unit of whatever unit this
+/// ingredient is currently in (1 for 'g' itself, ~40 for a 'piece' of
+/// Chapati, etc.), server-resolved via FoodItem.unitConversions/density -
+/// so this works identically for every unit, not just grams. Null (never a
+/// guessed number) when either figure is unresolvable - a freshly-switched
+/// unit invalidates resolvedGramsPerUnit (see copyWith), correctly falling
+/// back to null/"—" until the version is re-fetched after Save.
+double? _ingredientCalories(WizardIngredientLine ingredient) {
+  final per100g = ingredient.per100gCalories;
+  final gramsPerUnit = ingredient.resolvedGramsPerUnit;
+  if (per100g == null || gramsPerUnit == null) return null;
+  return (ingredient.rawQuantity * gramsPerUnit / 100) * per100g;
+}
 
 /// v4.0 Step 3's core new UI: a per-ingredient editor, not a fraction dial -
 /// each row is one RecipeVersion.ingredients[] entry with a plain quantity
@@ -33,9 +41,11 @@ const _availableUnits = ['g', 'ml', 'tsp', 'tbsp', 'cup', 'piece'];
 /// never mutates the version this sheet opened with.
 ///
 /// The "Current: X Cal" and "Day Total" figures recompute locally on every
-/// keystroke for instant feedback, summing rawQuantity * per100gCalories/100
-/// across 'g'-unit rows only. The authoritative figure is always whatever
-/// the server returns after Save.
+/// keystroke for instant feedback, summing each ingredient's rawQuantity *
+/// resolvedGramsPerUnit/100 * per100gCalories (see _ingredientCalories) -
+/// works for any unit, not just grams, as long as the server could resolve
+/// a conversion for it. The authoritative figure is always whatever the
+/// server returns after Save.
 class IngredientEditorSheet extends StatefulWidget {
   final WizardPlanItemV2 item;
   final double? targetCalories;
@@ -74,23 +84,27 @@ class _IngredientEditorSheetState extends State<IngredientEditorSheet> {
   bool _saving = false;
   bool _loadingDetails = false;
 
-  /// How much the ingredient list's total weight has changed since this
-  /// sheet opened, based on 'g'-unit ingredients only - the same
-  /// "only grams are client-computable" reasoning as _currentCalories below
-  /// (no unit-conversion table is ever sent to the client). Used to
-  /// live-scale the recipe's components (its real plate/serving amounts,
-  /// e.g. "1 bowl") as ingredients are edited, per the ask that this math
-  /// be driven by the ingredient portions themselves rather than calories.
-  /// Falls back to 1 (unscaled) when there's no g-based ingredient to
-  /// compare, so a components-only recipe isn't silently zeroed out.
+  /// How much the ingredient list's total weight (in grams-equivalent, via
+  /// each ingredient's own resolvedGramsPerUnit - see WizardIngredientLine's
+  /// doc comment) has changed since this sheet opened. Used to live-scale
+  /// the recipe's components (its real plate/serving amounts, e.g. "1
+  /// bowl") as ingredients are edited, per the ask that this math be driven
+  /// by the ingredient portions themselves rather than calories. Only
+  /// ingredients with a resolvable weight count toward either side (an
+  /// ingredient with no known conversion contributes to neither, rather
+  /// than being treated as 0 and skewing the ratio). Falls back to 1
+  /// (unscaled) when there's nothing resolvable to compare, so a
+  /// components-only recipe isn't silently zeroed out.
   double get _portionScaleRatio {
     double original = 0;
     double current = 0;
     for (final ingredient in _originalIngredients) {
-      if (ingredient.unit == 'g') original += ingredient.rawQuantity;
+      final grams = ingredient.resolvedGramsPerUnit;
+      if (grams != null) original += ingredient.rawQuantity * grams;
     }
     for (final ingredient in _ingredients) {
-      if (ingredient.unit == 'g') current += ingredient.rawQuantity;
+      final grams = ingredient.resolvedGramsPerUnit;
+      if (grams != null) current += ingredient.rawQuantity * grams;
     }
     if (original <= 0) return 1;
     return current / original;
@@ -116,9 +130,10 @@ class _IngredientEditorSheetState extends State<IngredientEditorSheet> {
     double total = 0;
     bool anyKnown = false;
     for (final ingredient in _ingredients) {
-      if (ingredient.per100gCalories == null || ingredient.unit != 'g') continue;
+      final calories = _ingredientCalories(ingredient);
+      if (calories == null) continue;
       anyKnown = true;
-      total += (ingredient.rawQuantity / 100) * ingredient.per100gCalories!;
+      total += calories;
     }
     return anyKnown ? total : null;
   }
@@ -427,14 +442,11 @@ class _IngredientRowState extends State<_IngredientRow> {
     super.dispose();
   }
 
-  /// This ingredient's own calorie contribution - only computable for a
-  /// 'g'-unit ingredient with per100gCalories (see WizardIngredientLine's
-  /// own doc comment on why other units never carry that figure). "—"
-  /// otherwise, never a guessed/wrong number.
+  /// This ingredient's own calorie contribution - "—" only when genuinely
+  /// unresolvable (see _ingredientCalories), never a guessed/wrong number.
   String get _calorieLabel {
-    final per100g = widget.ingredient.per100gCalories;
-    if (widget.ingredient.unit != 'g' || per100g == null) return '—';
-    return '${((widget.ingredient.rawQuantity / 100) * per100g).round()} Cal';
+    final calories = _ingredientCalories(widget.ingredient);
+    return calories == null ? '—' : '${calories.round()} Cal';
   }
 
   @override

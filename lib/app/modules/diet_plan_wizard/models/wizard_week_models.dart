@@ -157,10 +157,19 @@ class WizardIngredientLine {
   /// Per-100g calories, joined in by GET .../plan-items for a client-side
   /// LIVE preview only (widgets/ingredient_editor_sheet.dart) - the
   /// authoritative recompute always happens server-side in
-  /// services/recipeVersioningService.js at Save time. Only meaningful when
-  /// unit == 'g' (no unit-conversion data is sent to the client) - null
-  /// otherwise, so the editor can show "—" instead of a wrong number.
+  /// services/recipeVersioningService.js at Save time.
   final double? per100gCalories;
+
+  /// Grams-equivalent of exactly ONE unit of [unit] (e.g. 40 for a 'piece'
+  /// of Chapati) - computed server-side the same way createCustomVersion
+  /// resolves nutrition (recipeVersioningService.js's resolveGramsForIngredient),
+  /// since the server never sends the raw unitConversions/density map
+  /// itself. Combined with [per100gCalories], this lets the editor show a
+  /// live calorie figure for ANY unit, not just 'g' - null when
+  /// unresolvable (no FoodItem, or no known conversion for this unit), so
+  /// the editor shows "—" instead of a wrong number. Only valid for the
+  /// unit this was resolved for - see copyWith.
+  final double? resolvedGramsPerUnit;
 
   WizardIngredientLine({
     required this.foodItemId,
@@ -169,8 +178,14 @@ class WizardIngredientLine {
     required this.unit,
     this.preparation,
     this.per100gCalories,
+    this.resolvedGramsPerUnit,
   });
 
+  /// Changing [unit] invalidates [resolvedGramsPerUnit] - it was resolved
+  /// for the OLD unit only, and re-resolving for a newly-picked unit needs
+  /// data (unitConversions/density) this client was never given, so the
+  /// editor correctly falls back to "—" for a freshly-switched unit rather
+  /// than silently reusing the wrong conversion factor.
   WizardIngredientLine copyWith({double? rawQuantity, String? unit}) => WizardIngredientLine(
     foodItemId: foodItemId,
     foodItemName: foodItemName,
@@ -178,6 +193,7 @@ class WizardIngredientLine {
     unit: unit ?? this.unit,
     preparation: preparation,
     per100gCalories: per100gCalories,
+    resolvedGramsPerUnit: (unit == null || unit == this.unit) ? resolvedGramsPerUnit : null,
   );
 
   factory WizardIngredientLine.fromJson(Map<String, dynamic> json) {
@@ -188,6 +204,7 @@ class WizardIngredientLine {
       unit: json['unit'] ?? 'g',
       preparation: json['preparation'],
       per100gCalories: (json['nutritionPer100g']?['calories'] as num?)?.toDouble(),
+      resolvedGramsPerUnit: (json['resolvedGramsPerUnit'] as num?)?.toDouble(),
     );
   }
 
