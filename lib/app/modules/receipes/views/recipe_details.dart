@@ -19,11 +19,21 @@ class RecipeDetailsScreen extends StatefulWidget {
   final bool fromAddRecipeScreen;
   final RecipePreview? recipePreview;
 
+  // When provided, "Save as New Recipe" applies the newly-created recipe
+  // back to whatever context opened this sheet (e.g. a diet-plan item) in
+  // addition to saving it to the recipe library, then closes this sheet -
+  // instead of only toasting and staying open. Kept generic (a plain
+  // SavedRecipe callback - createRecipe()'s own return type - not a
+  // wizard-specific type) so this sheet stays usable standalone, outside
+  // the diet plan wizard, with no behavior change when this is left null.
+  final Future<void> Function(SavedRecipe savedRecipe)? onSavedAsNew;
+
   const RecipeDetailsScreen({
     super.key,
     required this.scrollController,
     required this.fromAddRecipeScreen,
     this.recipePreview,
+    this.onSavedAsNew,
   });
 
   @override
@@ -279,6 +289,11 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
       if (saved != null) {
         if (Get.isRegistered<ReceipesController>()) {
           Get.find<ReceipesController>().fetchRecipes(refresh: true);
+        }
+        if (widget.onSavedAsNew != null) {
+          await widget.onSavedAsNew!(saved);
+          if (mounted) Navigator.of(context).pop();
+          return;
         }
         showAppToast(
           Get.overlayContext!,
@@ -914,65 +929,70 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
           ),
         if (widget.fromAddRecipeScreen == false)
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-            child: CustomButton(
-              fontSize: 13.5,
-              onTap: () {
-                if (!_isSavingAsNewRecipe) _promptSaveAsNewRecipe();
-              },
-              text: _isSavingAsNewRecipe ? 'Saving...' : 'Save as New Recipe',
-              isOutline: true,
-              isLoading: _isSavingAsNewRecipe,
-            ),
-          ),
-        if (widget.fromAddRecipeScreen == false)
-          Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            child: CustomButton(
-              fontSize: 13.5,
-              onTap: () async {
-                if (_isSavingExistingRecipe || recipe == null) return;
-                setState(() => _isSavingExistingRecipe = true);
-                try {
-                  final r = recipe!;
-                  final saved = await _recipeService.saveExistingRecipe(
-                    id: r.id!,
-                    servingTime: r.servingTime,
-                    servings: r.servings,
-                    category: r.category,
-                    description: r.description,
-                    dietaryHabits: r.dietaryHabits,
-                    freeFrom: r.freeFrom,
-                    components: r.components,
-                    ingredients: r.ingredients,
-                    cookingSteps: r.cookingSteps,
-                    nutrition: r.nutrition,
-                    translations: r.translations,
-                  );
-                  if (saved) {
-                    // Close the modal bottom sheet
-                    if (mounted) Navigator.of(context).pop();
-                    showAppToast(
-                      Get.overlayContext!,
-                      message: 'Recipe saved successfully.',
-                      type: AppToastType.success,
-                    );
-                  } else {
-                    showAppToast(
-                      Get.overlayContext!,
-                      message: 'Failed to save recipe. Please try again.',
-                      type: AppToastType.error,
-                    );
-                  }
-                } finally {
-                  if (mounted) {
-                    setState(() => _isSavingExistingRecipe = false);
-                  }
-                }
-              },
-              text: _isSavingExistingRecipe ? 'Saving...' : 'Save Recipe',
-              isOutline: false,
-              isLoading: _isSavingExistingRecipe,
+            child: Row(
+              children: [
+                Expanded(
+                  child: CustomButton(
+                    fontSize: 13.5,
+                    onTap: () {
+                      if (!_isSavingAsNewRecipe) _promptSaveAsNewRecipe();
+                    },
+                    text: _isSavingAsNewRecipe ? 'Saving...' : 'Save as New Recipe',
+                    isOutline: true,
+                    isLoading: _isSavingAsNewRecipe,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: CustomButton(
+                    fontSize: 13.5,
+                    onTap: () async {
+                      if (_isSavingExistingRecipe || recipe == null) return;
+                      setState(() => _isSavingExistingRecipe = true);
+                      try {
+                        final r = recipe!;
+                        final saved = await _recipeService.saveExistingRecipe(
+                          id: r.id!,
+                          servingTime: r.servingTime,
+                          servings: r.servings,
+                          category: r.category,
+                          description: r.description,
+                          dietaryHabits: r.dietaryHabits,
+                          freeFrom: r.freeFrom,
+                          components: r.components,
+                          ingredients: r.ingredients,
+                          cookingSteps: r.cookingSteps,
+                          nutrition: r.nutrition,
+                          translations: r.translations,
+                        );
+                        if (saved) {
+                          // Close the modal bottom sheet
+                          if (mounted) Navigator.of(context).pop();
+                          showAppToast(
+                            Get.overlayContext!,
+                            message: 'Recipe saved successfully.',
+                            type: AppToastType.success,
+                          );
+                        } else {
+                          showAppToast(
+                            Get.overlayContext!,
+                            message: 'Failed to save recipe. Please try again.',
+                            type: AppToastType.error,
+                          );
+                        }
+                      } finally {
+                        if (mounted) {
+                          setState(() => _isSavingExistingRecipe = false);
+                        }
+                      }
+                    },
+                    text: _isSavingExistingRecipe ? 'Saving...' : 'Save Recipe',
+                    isOutline: false,
+                    isLoading: _isSavingExistingRecipe,
+                  ),
+                ),
+              ],
             ),
           ),
       ],

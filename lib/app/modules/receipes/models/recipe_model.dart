@@ -228,6 +228,44 @@ class RecipePreview {
     );
   }
 
+  /// Returns a copy with [ingredients], [components], and (optionally)
+  /// [nutrition] set directly and independently - no name-matching resync
+  /// like copyWithComponentsAndNutrition does (that path is lossy for an
+  /// ingredient whose name doesn't match a component label 1:1). Used to
+  /// make this preview show a diet-plan item's actually-assigned
+  /// RecipeVersion data (already correct, already in memory) instead of the
+  /// unrelated master Recipe document's own stored fields - see
+  /// diet_plan_wizard's ingredient_editor_sheet.dart/generate_review_view.dart.
+  RecipePreview copyWithVersionOverride({
+    required List<Ingredient> ingredients,
+    required List<RecipeComponent> components,
+    Nutrition? nutrition,
+  }) {
+    return RecipePreview(
+      id: id,
+      name: name,
+      image: image,
+      description: description,
+      category: category,
+      cuisine: cuisine,
+      servingTime: servingTime,
+      servings: servings,
+      preparationTime: preparationTime,
+      cookingTime: cookingTime,
+      dietaryHabits: dietaryHabits,
+      freeFrom: freeFrom,
+      ingredients: ingredients,
+      servingSize: servingSize,
+      nutrition: nutrition ?? this.nutrition,
+      cookingSteps: cookingSteps,
+      warnings: warnings,
+      languages: languages,
+      translations: translations,
+      supplementFacts: supplementFacts,
+      components: components,
+    );
+  }
+
   static List<Ingredient> _syncedIngredients(
     List<Ingredient> ingredients,
     List<RecipeComponent> components,

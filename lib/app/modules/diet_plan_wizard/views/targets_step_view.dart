@@ -117,7 +117,7 @@ class _CalorieTierCard extends StatelessWidget {
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             color: selected ? const Color(0xffFEF6FB) : Colors.white,
-            border: Border.all(color: selected ? _primaryColor : _cardBorder, width: selected ? 1.5 : 1),
+            border: Border.all(color: selected ? _primaryColor : _cardBorder, width: 1),
             borderRadius: BorderRadius.circular(14),
           ),
           child: Column(
@@ -197,7 +197,7 @@ class _MacroOptionCard extends StatelessWidget {
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             color: selected ? const Color(0xffFEF6FB) : Colors.white,
-            border: Border.all(color: selected ? _primaryColor : _cardBorder, width: selected ? 1.5 : 1),
+            border: Border.all(color: selected ? _primaryColor : _cardBorder, width: 1),
             borderRadius: BorderRadius.circular(14),
           ),
           child: Column(

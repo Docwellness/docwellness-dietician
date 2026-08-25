@@ -1,3 +1,4 @@
+import 'package:docwellnesdoc/app/modules/receipes/models/recipe_model.dart';
 import 'package:docwellnesdoc/app/modules/receipes/services/recipe_service.dart';
 import 'package:docwellnesdoc/app/modules/receipes/views/recipe_details.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_button.dart';
@@ -39,6 +40,11 @@ class IngredientEditorSheet extends StatefulWidget {
   final double dayBaselineCalories;
   final double? dailyCalorieTarget;
   final Future<bool> Function(List<WizardIngredientLine> updatedIngredients) onSave;
+  // When this sheet's "Recipe Details" link leads to "Save as New Recipe",
+  // this swaps the plan item onto the newly-created recipe (see
+  // RecipeDetailsScreen.onSavedAsNew) - the caller (refine_portions_step_
+  // view.dart) already knows this item and its own swap method.
+  final Future<void> Function(String newParentRecipeId)? onSwapToNewRecipe;
 
   const IngredientEditorSheet({
     super.key,
@@ -47,6 +53,7 @@ class IngredientEditorSheet extends StatefulWidget {
     this.dayBaselineCalories = 0,
     this.dailyCalorieTarget,
     required this.onSave,
+    this.onSwapToNewRecipe,
   });
 
   @override
@@ -105,6 +112,32 @@ class _IngredientEditorSheetState extends State<IngredientEditorSheet> {
     if (!mounted) return;
     setState(() => _loadingDetails = false);
     if (recipe == null) return;
+
+    // Show this item's actually-assigned recipe version's ingredients/
+    // components/nutrition (already in memory - the wizard fetched it),
+    // not the unrelated master Recipe document's own stored fields, which
+    // can be stale/different once this item has been auto-balanced or
+    // manually edited (version > 1).
+    final version = widget.item.recipeVersion;
+    final recipeToShow = version == null
+        ? recipe
+        : recipe.copyWithVersionOverride(
+            ingredients: version.ingredients
+                .map(
+                  (i) => Ingredient(
+                    name: i.foodItemName ?? 'Ingredient',
+                    quantity: i.rawQuantity,
+                    unit: i.unit,
+                    category: 'Other',
+                    priceLevel: '₹₹',
+                    description: i.preparation ?? '',
+                  ),
+                )
+                .toList(),
+            components: version.components.map((c) => RecipeComponent(label: c.label, quantity: c.quantity, unit: c.unit)).toList(),
+            nutrition: version.nutritionPerServing != null ? Nutrition.fromJson(version.nutritionPerServing!) : null,
+          );
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,
@@ -119,7 +152,11 @@ class _IngredientEditorSheetState extends State<IngredientEditorSheet> {
         builder: (ctx, sheetScrollController) => RecipeDetailsScreen(
           fromAddRecipeScreen: false,
           scrollController: sheetScrollController,
-          recipePreview: recipe,
+          recipePreview: recipeToShow,
+          onSavedAsNew: (saved) async {
+            await widget.onSwapToNewRecipe?.call(saved.id);
+            if (mounted) Navigator.of(context).pop();
+          },
         ),
       ),
     );
@@ -273,17 +310,34 @@ class _IngredientRowState extends State<_IngredientRow> {
     super.dispose();
   }
 
+  /// This ingredient's own calorie contribution - only computable for a
+  /// 'g'-unit ingredient with per100gCalories (see WizardIngredientLine's
+  /// own doc comment on why other units never carry that figure). "—"
+  /// otherwise, never a guessed/wrong number.
+  String get _calorieLabel {
+    final per100g = widget.ingredient.per100gCalories;
+    if (widget.ingredient.unit != 'g' || per100g == null) return '—';
+    return '${((widget.ingredient.rawQuantity / 100) * per100g).round()} Cal';
+  }
+
   @override
   Widget build(BuildContext context) {
     final unit = widget.ingredient.unit;
     return Row(
       children: [
         Expanded(
-          child: CustomText(
-            text: widget.ingredient.foodItemName ?? 'Ingredient',
-            fontWeight: FontWeight.w500,
-            fontSize: 14,
-            color: _bodyColor,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              CustomText(
+                text: widget.ingredient.foodItemName ?? 'Ingredient',
+                fontWeight: FontWeight.w500,
+                fontSize: 14,
+                color: _bodyColor,
+              ),
+              const SizedBox(height: 2),
+              CustomText(text: _calorieLabel, fontWeight: FontWeight.w400, fontSize: 11, color: _mutedColor),
+            ],
           ),
         ),
         SizedBox(

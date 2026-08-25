@@ -38,6 +38,28 @@ class GenerationStepController extends GetxController {
     final existingDietPlanId = wizard.dietPlanId.value;
     final isNewPlan = existingDietPlanId == null || existingDietPlanId.isEmpty;
 
+    // Defensive guard, not the normal path: within one uninterrupted wizard
+    // session this controller's own onInit-gated call site already only
+    // calls generate() once. But a freshly constructed controller reaching
+    // this screen with a dietPlanId that already has generated items (e.g.
+    // resuming) must not silently re-run the whole AI generation pipeline -
+    // only the explicit, confirmed "Regenerate" action (regenerateMenu
+    // below) may do that.
+    if (!isNewPlan) {
+      final existing = await wizardService.getWeekPlanItems(
+        patientId: wizard.patientId,
+        dietPlanId: existingDietPlanId,
+        week: wizard.targetWeek.value,
+      );
+      final days = (existing?['data']?['days'] as List?) ?? const [];
+      final alreadyHasItems = days.any((day) => ((day as Map)['meals'] as List? ?? []).any((meal) => ((meal as Map)['items'] as List? ?? []).isNotEmpty));
+      if (alreadyHasItems) {
+        wizard.dataModel.value = 'plan-item';
+        phase.value = GenerationPhase.done;
+        return;
+      }
+    }
+
     // Fake-staged progress - the backend call itself is a single request/
     // response (no real progress events), but the generation pipeline
     // (recipe selection -> nutrition calc -> calorie balancing, whichever
@@ -130,6 +152,30 @@ class GenerationStepController extends GetxController {
     }
 
     phase.value = GenerationPhase.done;
+  }
+
+  /// Explicit, dietician-confirmed re-run of AI menu generation for a plan
+  /// that already has items - the ONLY path allowed to discard the current
+  /// plan items and generate a fresh set, unlike generate()'s guard above
+  /// which exists specifically to prevent that from happening silently.
+  /// Scoped to the week currently under review, not every week the plan
+  /// might have, so regenerating doesn't wipe weeks the dietician isn't
+  /// looking at right now.
+  Future<bool> regenerateMenu() async {
+    final dietPlanId = wizard.dietPlanId.value;
+    if (dietPlanId == null || dietPlanId.isEmpty) return false;
+    errorMessage.value = null;
+    final result = await wizardService.generateMenu(
+      patientId: wizard.patientId,
+      dietPlanId: dietPlanId,
+      weekNumbers: [wizard.targetWeek.value],
+    );
+    final success = result != null && result['success'] == true;
+    if (!success) {
+      errorMessage.value = result?['message']?.toString() ?? 'Regeneration failed - please try again.';
+    }
+    phase.value = GenerationPhase.done;
+    return success;
   }
 
   /// Mirrors utils/membershipTiers.js's TIER_INITIAL_WEEKS exactly - Silver
