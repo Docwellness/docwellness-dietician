@@ -1,6 +1,7 @@
 import 'package:docwellnesdoc/app/modules/receipes/services/recipe_service.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_button.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
+import 'package:docwellnesdoc/app/utils/functions/day_group_label.dart';
 import 'package:docwellnesdoc/app/utils/functions/quantity_label.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -126,7 +127,7 @@ class _DayGroupCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          CustomText(text: day.dayGroup, fontWeight: FontWeight.w600, fontSize: 14, color: _bodyColor),
+          CustomText(text: dayGroupLabel(day.dayGroup), fontWeight: FontWeight.w600, fontSize: 14, color: _bodyColor),
           const SizedBox(height: 4),
           Builder(
             builder: (context) {

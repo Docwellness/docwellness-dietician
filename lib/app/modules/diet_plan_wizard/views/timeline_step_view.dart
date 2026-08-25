@@ -1,5 +1,6 @@
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_button.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
+import 'package:docwellnesdoc/app/utils/functions/day_group_label.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -106,7 +107,7 @@ class _DayGroupSection extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            CustomText(text: dayGroup, fontWeight: FontWeight.w600, fontSize: 15, color: _bodyColor),
+            CustomText(text: dayGroupLabel(dayGroup), fontWeight: FontWeight.w600, fontSize: 15, color: _bodyColor),
             const SizedBox(height: 8),
             ...requiredServingTimes.map(
               (servingTime) => _SlotRow(dayGroup: dayGroup, servingTime: servingTime, controller: controller),

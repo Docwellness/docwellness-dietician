@@ -8,6 +8,7 @@ import 'package:docwellnesdoc/app/modules/receipes/views/recipe_details.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/app_toast.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_button.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
+import 'package:docwellnesdoc/app/utils/functions/day_group_label.dart' as day_group_label;
 import 'package:docwellnesdoc/app/utils/theme/app_shadows.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -143,23 +144,7 @@ class _SelectDietSheetState extends State<SelectDietSheet>
     );
   }
 
-  /// Human-friendly tab label for a day-group value - the underlying value
-  /// sent to the backend is always the canonical 'Monday'/'Tuesday'/
-  /// 'Wednesday'/'Thursday'.
-  String _dayGroupLabel(String dayGroup) {
-    switch (dayGroup) {
-      case 'Monday':
-        return 'Mon & Fri';
-      case 'Tuesday':
-        return 'Tue & Sat';
-      case 'Wednesday':
-        return 'Wed & Sun';
-      case 'Thursday':
-        return 'Thu';
-      default:
-        return dayGroup;
-    }
-  }
+  String _dayGroupLabel(String dayGroup) => day_group_label.dayGroupLabel(dayGroup);
 
   Future<void> _showDuplicateDayDialog() async {
     final currentWeekNumber = int.parse(

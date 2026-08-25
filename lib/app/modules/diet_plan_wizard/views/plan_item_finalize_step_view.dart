@@ -1,5 +1,6 @@
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_button.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
+import 'package:docwellnesdoc/app/utils/functions/day_group_label.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -84,7 +85,7 @@ class PlanItemFinalizeStepView extends StatelessWidget {
                             const SizedBox(width: 6),
                             CustomText(
                               text:
-                                  '${check.dayGroup}: ${check.totalCalories.round()} cal (target ${controller.targetCalories!.round()} cal)',
+                                  '${dayGroupLabel(check.dayGroup)}: ${check.totalCalories.round()} cal (target ${controller.targetCalories!.round()} cal)',
                               fontWeight: FontWeight.w400,
                               fontSize: 12,
                               color: check.withinTolerance ? _mutedColor : const Color(0xffDC2626),
@@ -155,7 +156,7 @@ class _FinalizedDayCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          CustomText(text: day.dayGroup, fontWeight: FontWeight.w600, fontSize: 14, color: _bodyColor),
+          CustomText(text: dayGroupLabel(day.dayGroup), fontWeight: FontWeight.w600, fontSize: 14, color: _bodyColor),
           const SizedBox(height: 6),
           ...day.meals.where((m) => m.items.isNotEmpty || m.supplements.isNotEmpty).map(
             (meal) => Padding(

@@ -1,4 +1,5 @@
 import 'package:docwellnesdoc/app/modules/receipes/services/recipe_service.dart';
+import 'package:docwellnesdoc/app/utils/functions/day_group_label.dart' as day_group_label;
 import 'package:get/get.dart';
 
 import '../models/wizard_week_models.dart';
@@ -39,14 +40,7 @@ class GenerateReviewController extends GetxController {
   String get dietPlanId => wizard.dietPlanId.value ?? '';
   int get week => wizard.targetWeek.value;
 
-  static const Map<String, String> _dayGroupLabels = {
-    'Monday': 'Mon & Fri',
-    'Tuesday': 'Tue & Sat',
-    'Wednesday': 'Wed & Sun',
-    'Thursday': 'Thu',
-  };
-
-  String dayGroupLabel(String dayGroup) => _dayGroupLabels[dayGroup] ?? dayGroup;
+  String dayGroupLabel(String dayGroup) => day_group_label.dayGroupLabel(dayGroup);
 
   @override
   void onInit() {
