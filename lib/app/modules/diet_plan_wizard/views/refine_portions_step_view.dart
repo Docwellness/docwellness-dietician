@@ -277,6 +277,7 @@ class _RecipeCard extends StatelessWidget {
         dailyCalorieTarget: controller.dailyCalorieTarget,
         onSave: (updated) => controller.editIngredients(item, updated),
         onSwapToNewRecipe: (newId) => controller.swapRecipe(item, newId),
+        onUpdateExisting: (recipe) => controller.updateItemFromRecipeSnapshot(item, recipe),
       ),
     );
   }
