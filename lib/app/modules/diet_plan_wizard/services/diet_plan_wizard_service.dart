@@ -145,6 +145,32 @@ class DietPlanWizardService {
     return null;
   }
 
+  /// Applies an AI-regenerated recipe snapshot (see recipe_details.dart's
+  /// "Update AI Inputs"/"Update Existing") to ONE plan item - unlike
+  /// [createCustomVersion] above, `recipe` carries free-text
+  /// name/quantity/unit ingredients (not yet resolved to FoodItem ids); the
+  /// backend resolves them and creates a new RecipeVersion under this item's
+  /// existing parentRecipeId, never touching the shared Recipe document.
+  Future<dynamic> updateItemRecipeVersion({
+    required String patientId,
+    required String dietPlanId,
+    required String planItemId,
+    required Map<String, dynamic> recipe,
+  }) async {
+    try {
+      final response = await service.request(
+        endPoint: '${_base(patientId, dietPlanId)}/update-item-recipe-version',
+        method: 'POST',
+        headers: {'Authorization': 'Bearer $token'},
+        data: {'planItemId': planItemId, 'recipe': recipe},
+      );
+      if (response != null && response.data is Map) return response.data;
+    } catch (e) {
+      debugPrint('updateItemRecipeVersion error: $e');
+    }
+    return null;
+  }
+
   Future<dynamic> autoBalanceItem({
     required String patientId,
     required String dietPlanId,

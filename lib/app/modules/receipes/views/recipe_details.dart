@@ -41,6 +41,18 @@ class RecipeDetailsScreen extends StatefulWidget {
   // available.
   final bool isPlanItemPreview;
 
+  // "Update Existing" - shown alongside "Save as New" only once Update AI
+  // Inputs has produced a newer version (see _hasNewerAiVersion) AND this is
+  // a plan-item preview. Applies the AI-regenerated recipe to just this one
+  // diet-plan item (a new RecipeVersion scoped to it, via
+  // RefinePortionsStepController/GenerateReviewController.
+  // updateItemFromRecipeSnapshot) instead of forking a whole new catalog
+  // recipe like "Save as New" does - and unlike the ordinary "Save Recipe"
+  // button (hidden here, see isPlanItemPreview's own doc comment), never
+  // overwrites the shared Recipe document other patients/plans still use.
+  // Returns whether the update succeeded, so this screen can toast/close.
+  final Future<bool> Function(RecipePreview updatedRecipe)? onUpdateExisting;
+
   const RecipeDetailsScreen({
     super.key,
     required this.scrollController,
@@ -48,6 +60,7 @@ class RecipeDetailsScreen extends StatefulWidget {
     this.recipePreview,
     this.onSavedAsNew,
     this.isPlanItemPreview = false,
+    this.onUpdateExisting,
   });
 
   @override
@@ -65,6 +78,13 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
   bool _isUploadingMainImage = false;
   bool _isSavingExistingRecipe = false;
   bool _isSavingAsNewRecipe = false;
+  bool _isUpdatingExisting = false;
+  // True once Update AI Inputs has produced a newer version in this
+  // session - gates showing "Update Existing" alongside "Save as New" (see
+  // widget.onUpdateExisting's doc comment). Never true before the dietician
+  // has actually re-run the AI, so the plain "Save as New Recipe" button
+  // stays the only option until there's really something newer to apply.
+  bool _hasNewerAiVersion = false;
   String? _mainImageUrl;
 
   /// ReceipesController is normally only ever bound by the standalone
@@ -340,6 +360,37 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
       }
     } finally {
       if (mounted) setState(() => _isSavingAsNewRecipe = false);
+    }
+  }
+
+  /// "Update Existing" - applies the AI-regenerated recipe (see
+  /// widget.onUpdateExisting's doc comment) to just this one diet-plan item.
+  /// Only ever reachable when that callback is set and _hasNewerAiVersion is
+  /// true (see the button-row logic in build()).
+  Future<void> _updateExisting() async {
+    if (recipe == null || widget.onUpdateExisting == null || _isUpdatingExisting) {
+      return;
+    }
+    setState(() => _isUpdatingExisting = true);
+    try {
+      final ok = await widget.onUpdateExisting!(recipe!);
+      if (!mounted) return;
+      if (ok) {
+        Navigator.of(context).pop();
+        showAppToast(
+          Get.overlayContext!,
+          message: 'Recipe updated for this plan item.',
+          type: AppToastType.success,
+        );
+      } else {
+        showAppToast(
+          Get.overlayContext!,
+          message: 'Failed to update the recipe. Please try again.',
+          type: AppToastType.error,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isUpdatingExisting = false);
     }
   }
 
@@ -946,6 +997,7 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
                             setState(() {
                               _editableRecipe =
                                   controller.generatedRecipe.value;
+                              _hasNewerAiVersion = true;
                             });
                           },
                         );
@@ -958,76 +1010,111 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
               isOutline: true,
             ),
           ),
-        if (widget.fromAddRecipeScreen == false)
+        if (widget.fromAddRecipeScreen == false &&
+            (!widget.isPlanItemPreview || (_hasNewerAiVersion && widget.onUpdateExisting != null)))
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            child: Row(
-              children: [
-                Expanded(
-                  child: CustomButton(
-                    fontSize: 13.5,
-                    onTap: () {
-                      if (!_isSavingAsNewRecipe) _promptSaveAsNewRecipe();
-                    },
-                    text: _isSavingAsNewRecipe ? 'Saving...' : 'Save as New Recipe',
-                    isOutline: widget.isPlanItemPreview ? false : true,
-                    isLoading: _isSavingAsNewRecipe,
-                  ),
-                ),
-                if (!widget.isPlanItemPreview) ...[
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: CustomButton(
-                      fontSize: 13.5,
-                      onTap: () async {
-                        if (_isSavingExistingRecipe || recipe == null) return;
-                        setState(() => _isSavingExistingRecipe = true);
-                        try {
-                          final r = recipe!;
-                          final saved = await _recipeService.saveExistingRecipe(
-                            id: r.id!,
-                            servingTime: r.servingTime,
-                            servings: r.servings,
-                            category: r.category,
-                            description: r.description,
-                            dietaryHabits: r.dietaryHabits,
-                            freeFrom: r.freeFrom,
-                            components: r.components,
-                            ingredients: r.ingredients,
-                            cookingSteps: r.cookingSteps,
-                            nutrition: r.nutrition,
-                            translations: r.translations,
-                          );
-                          if (saved) {
-                            // Close the modal bottom sheet
-                            if (mounted) Navigator.of(context).pop();
-                            showAppToast(
-                              Get.overlayContext!,
-                              message: 'Recipe saved successfully.',
-                              type: AppToastType.success,
-                            );
-                          } else {
-                            showAppToast(
-                              Get.overlayContext!,
-                              message: 'Failed to save recipe. Please try again.',
-                              type: AppToastType.error,
-                            );
-                          }
-                        } finally {
-                          if (mounted) {
-                            setState(() => _isSavingExistingRecipe = false);
-                          }
-                        }
-                      },
-                      text: _isSavingExistingRecipe ? 'Saving...' : 'Save Recipe',
-                      isOutline: false,
-                      isLoading: _isSavingExistingRecipe,
-                    ),
-                  ),
-                ],
-              ],
+            child: _buildBottomActionRow(),
+          ),
+      ],
+    );
+  }
+
+  // ---------------- BOTTOM ACTION ROW (isPlanItemPreview / non-add-recipe) ----------------
+  // Non-plan-item-preview (viewing the recipe library's own catalog entry):
+  // always "Save as New Recipe" + "Save Recipe" (PATCHes the shared catalog
+  // recipe), unchanged from before this feature.
+  //
+  // Plan-item preview (opened from the diet-plan wizard): this whole row is
+  // hidden (see the `if` guarding its Padding above) until Update AI Inputs
+  // has actually produced a newer version - there is deliberately no
+  // standalone "Save as New Recipe" button before that, only the "Update AI
+  // Inputs" button above it. Once there IS a newer version, both "Save as
+  // New" (forks a brand-new catalog recipe) and "Update Existing" (versions
+  // just this one plan item - see widget.onUpdateExisting's doc comment)
+  // show together, never separately.
+  Widget _buildBottomActionRow() {
+    final showUpdateExisting =
+        widget.isPlanItemPreview && _hasNewerAiVersion && widget.onUpdateExisting != null;
+    return Row(
+      children: [
+        Expanded(
+          child: CustomButton(
+            fontSize: 13.5,
+            onTap: () {
+              if (!_isSavingAsNewRecipe) _promptSaveAsNewRecipe();
+            },
+            text: _isSavingAsNewRecipe
+                ? 'Saving...'
+                : (showUpdateExisting ? 'Save as New' : 'Save as New Recipe'),
+            isOutline: widget.isPlanItemPreview ? false : true,
+            isLoading: _isSavingAsNewRecipe,
+          ),
+        ),
+        if (showUpdateExisting) ...[
+          const SizedBox(width: 12),
+          Expanded(
+            child: CustomButton(
+              fontSize: 13.5,
+              onTap: () {
+                if (!_isUpdatingExisting) _updateExisting();
+              },
+              text: _isUpdatingExisting ? 'Updating...' : 'Update Existing',
+              isOutline: false,
+              isLoading: _isUpdatingExisting,
             ),
           ),
+        ] else if (!widget.isPlanItemPreview) ...[
+          const SizedBox(width: 12),
+          Expanded(
+            child: CustomButton(
+              fontSize: 13.5,
+              onTap: () async {
+                if (_isSavingExistingRecipe || recipe == null) return;
+                setState(() => _isSavingExistingRecipe = true);
+                try {
+                  final r = recipe!;
+                  final saved = await _recipeService.saveExistingRecipe(
+                    id: r.id!,
+                    servingTime: r.servingTime,
+                    servings: r.servings,
+                    category: r.category,
+                    description: r.description,
+                    dietaryHabits: r.dietaryHabits,
+                    freeFrom: r.freeFrom,
+                    components: r.components,
+                    ingredients: r.ingredients,
+                    cookingSteps: r.cookingSteps,
+                    nutrition: r.nutrition,
+                    translations: r.translations,
+                  );
+                  if (saved) {
+                    // Close the modal bottom sheet
+                    if (mounted) Navigator.of(context).pop();
+                    showAppToast(
+                      Get.overlayContext!,
+                      message: 'Recipe saved successfully.',
+                      type: AppToastType.success,
+                    );
+                  } else {
+                    showAppToast(
+                      Get.overlayContext!,
+                      message: 'Failed to save recipe. Please try again.',
+                      type: AppToastType.error,
+                    );
+                  }
+                } finally {
+                  if (mounted) {
+                    setState(() => _isSavingExistingRecipe = false);
+                  }
+                }
+              },
+              text: _isSavingExistingRecipe ? 'Saving...' : 'Save Recipe',
+              isOutline: false,
+              isLoading: _isSavingExistingRecipe,
+            ),
+          ),
+        ],
       ],
     );
   }
