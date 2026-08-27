@@ -25,7 +25,8 @@ WizardIngredientLine _line({
       resolvedGramsPerUnit: gramsPerUnit,
     );
 
-WizardPlanItemV2 _planItem(List<WizardIngredientLine> ingredients) => WizardPlanItemV2(
+WizardPlanItemV2 _planItem(List<WizardIngredientLine> ingredients, {List<WizardComponent> components = const []}) =>
+    WizardPlanItemV2(
       id: 'item1',
       recipeVersionId: 'v1',
       recipeVersion: WizardRecipeVersion(
@@ -35,6 +36,7 @@ WizardPlanItemV2 _planItem(List<WizardIngredientLine> ingredients) => WizardPlan
         versionNumber: 1,
         ingredients: ingredients,
         steps: const [],
+        components: components,
         hasUnresolvedIngredients: false,
       ),
       locked: false,
@@ -199,6 +201,101 @@ void main() {
       expect(_textOf(tester, _quantityFieldFor('water')), '120'); // 60 * 2, not 999
       final waterFieldAfter = tester.widget<TextField>(_quantityFieldFor('water'));
       expect(waterFieldAfter.readOnly, isTrue); // reverted to locked
+    });
+  });
+
+  group('"Makes (on the plate)" reverse edit', () {
+    final editTrigger = find.byKey(const Key('makesOnPlateEditTrigger'));
+
+    testWidgets('a single-component recipe shows the edit trigger', (tester) async {
+      final item = _planItem(
+        [_line(id: 'flour', qty: 40, role: 'core'), _line(id: 'water', qty: 24, role: 'sub')],
+        components: [WizardComponent(label: 'Chapati', quantity: 1, unit: 'piece')],
+      );
+      await _pumpSheet(tester, item);
+
+      expect(editTrigger, findsOneWidget);
+    });
+
+    testWidgets('a multi-component recipe does NOT show the edit trigger', (tester) async {
+      final item = _planItem(
+        [_line(id: 'idli-rice', qty: 100, role: 'core'), _line(id: 'sambar-dal', qty: 50, role: 'core')],
+        components: [
+          WizardComponent(label: 'Idli', quantity: 3, unit: 'nos'),
+          WizardComponent(label: 'Sambar', quantity: 1, unit: 'bowl'),
+        ],
+      );
+      await _pumpSheet(tester, item);
+
+      expect(editTrigger, findsNothing);
+    });
+
+    testWidgets('doubling the quantity in the same unit doubles the core ingredient (and cascades to sub)', (tester) async {
+      final item = _planItem(
+        [_line(id: 'flour', qty: 40, role: 'core'), _line(id: 'water', qty: 24, role: 'sub')],
+        components: [WizardComponent(label: 'Chapati', quantity: 1, unit: 'piece')],
+      );
+      await _pumpSheet(tester, item);
+
+      await tester.tap(editTrigger);
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byKey(const Key('makesOnPlateQuantityField')), '2');
+      await tester.tap(find.byKey(const Key('makesOnPlateApplyButton')));
+      await tester.pumpAndSettle();
+
+      expect(_textOf(tester, _quantityFieldFor('flour')), '80'); // 40 * 2
+      expect(_textOf(tester, _quantityFieldFor('water')), '48'); // 24 * 2, cascaded
+    });
+
+    testWidgets('switching to grams sets the core group to that literal weight', (tester) async {
+      final item = _planItem(
+        [_line(id: 'flour', qty: 40, role: 'core'), _line(id: 'water', qty: 24, role: 'sub')],
+        components: [WizardComponent(label: 'Chapati', quantity: 1, unit: 'piece')],
+      );
+      await _pumpSheet(tester, item);
+
+      await tester.tap(editTrigger);
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byKey(const Key('makesOnPlateQuantityField')), '80');
+      await tester.tap(find.byKey(const Key('makesOnPlateUnitDropdown')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('g').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('makesOnPlateApplyButton')));
+      await tester.pumpAndSettle();
+
+      // 80g target == exactly double the original 40g core group, so this
+      // should land on the exact same result as the same-unit doubling
+      // test above - confirms the g/ml literal-target path and the
+      // ratio-based path agree when they logically should.
+      expect(_textOf(tester, _quantityFieldFor('flour')), '80');
+      expect(_textOf(tester, _quantityFieldFor('water')), '48');
+    });
+
+    testWidgets('re-editing back to the original quantity restores the original ingredient values', (tester) async {
+      final item = _planItem(
+        [_line(id: 'flour', qty: 40, role: 'core'), _line(id: 'water', qty: 24, role: 'sub')],
+        components: [WizardComponent(label: 'Chapati', quantity: 1, unit: 'piece')],
+      );
+      await _pumpSheet(tester, item);
+
+      await tester.tap(editTrigger);
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('makesOnPlateQuantityField')), '3');
+      await tester.tap(find.byKey(const Key('makesOnPlateApplyButton')));
+      await tester.pumpAndSettle();
+      expect(_textOf(tester, _quantityFieldFor('flour')), '120'); // 40 * 3
+
+      await tester.tap(editTrigger);
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('makesOnPlateQuantityField')), '1');
+      await tester.tap(find.byKey(const Key('makesOnPlateApplyButton')));
+      await tester.pumpAndSettle();
+
+      expect(_textOf(tester, _quantityFieldFor('flour')), '40'); // back to original, not compounded
+      expect(_textOf(tester, _quantityFieldFor('water')), '24');
     });
   });
 }

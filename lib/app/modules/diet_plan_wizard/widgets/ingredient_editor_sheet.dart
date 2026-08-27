@@ -16,6 +16,13 @@ const _primaryColor = Color(0xff851653);
 
 const _availableUnits = ['g', 'ml', 'tsp', 'tbsp', 'cup', 'piece'];
 
+// Full COMPONENT_UNITS set (matches utils/recipeJsonSchema.js's backend
+// constant) - wider than _availableUnits above, which only covers
+// ingredient-level units. "Makes (on the plate)" is a dish-level unit
+// (e.g. "3 nos" idli, "1 bowl" sambar), so its editor needs the countable/
+// vessel units too, not just the ingredient-measuring ones.
+const _componentUnits = ['g', 'ml', 'cup', 'tbsp', 'tsp', 'piece', 'nos', 'bowl', 'egg', 'slice'];
+
 /// One ingredient's calorie contribution at its current rawQuantity/unit -
 /// resolvedGramsPerUnit (see WizardIngredientLine's own doc comment) is
 /// already the grams-equivalent of ONE unit of whatever unit this
@@ -92,6 +99,17 @@ class _IngredientEditorSheetState extends State<IngredientEditorSheet> {
   bool _saving = false;
   bool _loadingDetails = false;
 
+  /// Set only when the dietician has edited "Makes (on the plate)" into a
+  /// DIFFERENT unit than the recipe's own (e.g. "piece" -> "g") this
+  /// session - see _updateComponentTarget. Null means still showing the
+  /// recipe's own original unit, in which case _scaledComponents uses its
+  /// normal ratio-based live-scale behavior. Purely a same-session display
+  /// convenience, never sent to the server - Save always submits
+  /// ingredients only (see widget.onSave's contract), and the server always
+  /// re-derives components in the recipe's own defined unit from whatever
+  /// ratio the submitted ingredients produce.
+  String? _componentUnitOverride;
+
   /// How much the ingredient list's total weight (in grams-equivalent, via
   /// each ingredient's own resolvedGramsPerUnit - see WizardIngredientLine's
   /// doc comment) has changed since this sheet opened. Used to live-scale
@@ -153,6 +171,20 @@ class _IngredientEditorSheetState extends State<IngredientEditorSheet> {
   List<WizardComponent> get _scaledComponents {
     final components = widget.item.recipeVersion?.components ?? const [];
     if (components.isEmpty) return const [];
+    if (components.length == 1 && _componentUnitOverride != null) {
+      // Dietician edited "Makes (on the plate)" into a different unit (see
+      // _updateComponentTarget) - show the live core-ingredient-group
+      // weight directly in that unit instead of converting back through
+      // the recipe's own original unit, which would misrepresent what they
+      // actually asked for.
+      double coreGrams = 0;
+      for (final ingredient in _ingredients) {
+        if (ingredient.role != 'core') continue;
+        final grams = ingredient.resolvedGramsPerUnit;
+        if (grams != null) coreGrams += ingredient.rawQuantity * grams;
+      }
+      return [WizardComponent(label: components.first.label, quantity: coreGrams, unit: _componentUnitOverride!)];
+    }
     final ratio = _portionScaleRatio;
     return components
         .map((c) => WizardComponent(label: c.label, quantity: c.quantity * ratio, unit: c.unit))
@@ -226,6 +258,140 @@ class _IngredientEditorSheetState extends State<IngredientEditorSheet> {
       );
       _ingredients[i] = ingredient.copyWith(rawQuantity: original.rawQuantity * ratio);
     }
+  }
+
+  /// "Makes (on the plate)" as an editable target, not just a read-out -
+  /// the reverse of every other edit in this sheet (normally editing an
+  /// ingredient scales components; this scales the core ingredient group
+  /// to HIT a components target the dietician typed directly), reusing
+  /// [_recomputeSubIngredientsIfCoreChanged] for the sub-ingredient
+  /// cascade exactly as a direct core-ingredient edit would. Only offered
+  /// when the recipe has exactly one component (see the UI gating around
+  /// where this is called) - a multi-component dish (e.g. Idli+Sambar+
+  /// Chutney) has no per-ingredient mapping to which component it
+  /// belongs to (only core/sub, a different axis), so there's no
+  /// principled way to scale "just the Idli's ingredients" without
+  /// guessing.
+  ///
+  /// Always computed fresh from _originalIngredients/the recipe's own
+  /// original component (never from the current live state) - same
+  /// "never compound off a previous edit" convention as
+  /// _recomputeSubIngredientsIfCoreChanged, for the same reason: editing
+  /// this same field twice in one session (e.g. 1 piece -> 2 -> 1) must
+  /// land back on the true original, not drift from repeated multiplication.
+  ///
+  /// newUnit == 'g' or 'ml': treated as the LITERAL new core-group weight
+  /// in grams (ml approximated 1:1 as grams - "Makes on the plate" is a
+  /// dish-level unit, not a specific FoodItem's, so there's no per-
+  /// ingredient density to convert through here). Any other unit
+  /// (including the recipe's own original unit): ratio-based off the
+  /// recipe's own original components[0].quantity - e.g. "1 piece" -> "2
+  /// piece" doubles the core group. Switching TO a different non-gram
+  /// unit (e.g. piece -> bowl) uses the same implied-grams-per-original-
+  /// unit rate as a best-effort approximation, not a guess at a genuine
+  /// piece<->bowl conversion (there isn't one).
+  void _updateComponentTarget(double newQuantity, String newUnit) {
+    final components = widget.item.recipeVersion?.components ?? const [];
+    if (components.length != 1) return; // gated in the UI too; defensive here
+    final originalComponent = components.first;
+    if (newQuantity <= 0 || originalComponent.quantity <= 0) return;
+
+    double originalCoreGrams = 0;
+    for (final ingredient in _originalIngredients) {
+      if (ingredient.role != 'core') continue;
+      final grams = ingredient.resolvedGramsPerUnit;
+      if (grams != null) originalCoreGrams += ingredient.rawQuantity * grams;
+    }
+    if (originalCoreGrams <= 0) return; // nothing resolvable to scale from
+
+    final double targetCoreGrams;
+    if (newUnit == 'g' || newUnit == 'ml') {
+      targetCoreGrams = newQuantity;
+    } else {
+      final impliedGramsPerOriginalUnit = originalCoreGrams / originalComponent.quantity;
+      targetCoreGrams = newQuantity * impliedGramsPerOriginalUnit;
+    }
+    final targetRatio = targetCoreGrams / originalCoreGrams;
+
+    setState(() {
+      for (var i = 0; i < _ingredients.length; i++) {
+        final ingredient = _ingredients[i];
+        if (ingredient.role != 'core') continue;
+        final original = _originalIngredients.firstWhere(
+          (o) => o.foodItemId == ingredient.foodItemId,
+          orElse: () => ingredient,
+        );
+        _ingredients[i] = ingredient.copyWith(rawQuantity: original.rawQuantity * targetRatio);
+      }
+      final firstCoreIndex = _ingredients.indexWhere((i) => i.role == 'core');
+      if (firstCoreIndex != -1) _recomputeSubIngredientsIfCoreChanged(firstCoreIndex);
+      _componentUnitOverride = newUnit == originalComponent.unit ? null : newUnit;
+    });
+  }
+
+  /// Opens the "Makes (on the plate)" quantity+unit editor - only reachable
+  /// when the recipe has exactly one component (see _RecipeSummaryHeader's
+  /// onEditTap wiring below and _updateComponentTarget's own doc comment
+  /// for why). Prefilled with the current LIVE values (not the recipe's
+  /// original), so re-opening after an edit shows what's actually on
+  /// screen right now.
+  Future<void> _openComponentEditor() async {
+    final current = _scaledComponents.first;
+    final quantityController = TextEditingController(text: _formatEditableQuantity(current.quantity));
+    var selectedUnit = current.unit;
+
+    final result = await showDialog<({double quantity, String unit})>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const CustomText(text: 'Makes (on the plate)', fontWeight: FontWeight.w600, fontSize: 16, color: _headerColor),
+          content: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: TextField(
+                  key: const Key('makesOnPlateQuantityField'),
+                  controller: quantityController,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(labelText: 'Quantity', border: OutlineInputBorder()),
+                ),
+              ),
+              const SizedBox(width: 12),
+              DropdownButton<String>(
+                key: const Key('makesOnPlateUnitDropdown'),
+                value: selectedUnit,
+                items: _componentUnits.map((u) => DropdownMenuItem(value: u, child: Text(u))).toList(),
+                onChanged: (u) {
+                  if (u != null) setDialogState(() => selectedUnit = u);
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('Cancel')),
+            TextButton(
+              key: const Key('makesOnPlateApplyButton'),
+              onPressed: () {
+                final quantity = double.tryParse(quantityController.text);
+                if (quantity == null || quantity <= 0) return;
+                Navigator.of(dialogContext).pop((quantity: quantity, unit: selectedUnit));
+              },
+              child: const Text('Apply'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (result != null) _updateComponentTarget(result.quantity, result.unit);
+  }
+
+  /// A prefill-friendly plain number for the editor's TextField - strips a
+  /// trailing ".0" (e.g. "2" not "2.0") but keeps genuine decimals (e.g.
+  /// "1.5"), so the field starts on a clean value to edit from rather than
+  /// forcing the dietician to first delete a spurious ".0".
+  String _formatEditableQuantity(double value) {
+    if (value == value.roundToDouble()) return value.round().toString();
+    return value.toStringAsFixed(2);
   }
 
   Future<void> _save() async {
@@ -363,6 +529,11 @@ class _IngredientEditorSheetState extends State<IngredientEditorSheet> {
                   dayTotal: _dayLiveTotal,
                   dailyTarget: widget.dailyCalorieTarget,
                   components: _scaledComponents,
+                  // Only offered for a single-component recipe - see
+                  // _updateComponentTarget's own doc comment for why a
+                  // multi-component dish (Idli+Sambar+Chutney) can't
+                  // support this.
+                  onEditTap: (widget.item.recipeVersion?.components.length ?? 0) == 1 ? _openComponentEditor : null,
                 ),
                 const SizedBox(height: 14),
                 Expanded(
@@ -404,12 +575,17 @@ class _RecipeSummaryHeader extends StatelessWidget {
   final double dayTotal;
   final double? dailyTarget;
   final List<WizardComponent> components;
+  // Non-null only for a single-component recipe (see the call site's own
+  // comment) - makes "Makes (on the plate)" a tappable target the
+  // dietician can edit directly instead of a read-only derived figure.
+  final VoidCallback? onEditTap;
 
   const _RecipeSummaryHeader({
     required this.current,
     required this.dayTotal,
     required this.dailyTarget,
     required this.components,
+    this.onEditTap,
   });
 
   @override
@@ -443,7 +619,15 @@ class _RecipeSummaryHeader extends StatelessWidget {
           ),
           if (components.isNotEmpty) ...[
             Padding(padding: const EdgeInsets.symmetric(vertical: 10), child: Divider(height: 1, color: _primaryColor.withOpacity(0.12))),
-            const CustomText(text: 'Makes (on the plate)', fontWeight: FontWeight.w600, fontSize: 11, color: _mutedColor),
+            Row(
+              children: [
+                const CustomText(text: 'Makes (on the plate)', fontWeight: FontWeight.w600, fontSize: 11, color: _mutedColor),
+                if (onEditTap != null) ...[
+                  const SizedBox(width: 4),
+                  Icon(Icons.edit, size: 13, color: _primaryColor.withOpacity(0.6)),
+                ],
+              ],
+            ),
             const SizedBox(height: 6),
             Wrap(
               spacing: 8,
@@ -451,7 +635,7 @@ class _RecipeSummaryHeader extends StatelessWidget {
               children: components.map((c) {
                 final formatted = formatQuantityLabel(c.quantity.toStringAsFixed(2), c.unit);
                 final label = components.length > 1 && c.label.isNotEmpty ? '${c.label}: $formatted' : formatted;
-                return Container(
+                final chip = Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
                     color: Colors.white,
@@ -460,6 +644,17 @@ class _RecipeSummaryHeader extends StatelessWidget {
                   ),
                   child: CustomText(text: label, fontWeight: FontWeight.w600, fontSize: 12, color: _primaryColor),
                 );
+                // onEditTap is only ever non-null when components.length == 1
+                // (see the call site's own comment), so every chip here is
+                // the single editable one when it's set.
+                return onEditTap != null
+                    ? InkWell(
+                        key: const Key('makesOnPlateEditTrigger'),
+                        borderRadius: BorderRadius.circular(20),
+                        onTap: onEditTap,
+                        child: chip,
+                      )
+                    : chip;
               }).toList(),
             ),
           ],

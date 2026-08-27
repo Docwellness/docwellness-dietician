@@ -43,17 +43,28 @@ String formatQuantityLabel(String rawValue, String unit) {
 String formatPieceFraction(num value) {
   final whole = value.floor();
   final frac = value - whole;
-  String fracLabel = '';
   if ((frac - 0.25).abs() < 0.01) {
-    fracLabel = '¼';
-  } else if ((frac - 0.5).abs() < 0.01) {
-    fracLabel = '½';
-  } else if ((frac - 0.75).abs() < 0.01) {
-    fracLabel = '¾';
-  } else if (frac > 0.01) {
-    fracLabel = frac.toStringAsFixed(2);
+    return whole == 0 ? '¼' : '$whole ¼';
   }
-  if (whole == 0 && fracLabel.isNotEmpty) return fracLabel;
-  if (fracLabel.isEmpty) return '$whole';
-  return '$whole $fracLabel';
+  if ((frac - 0.5).abs() < 0.01) {
+    return whole == 0 ? '½' : '$whole ½';
+  }
+  if ((frac - 0.75).abs() < 0.01) {
+    return whole == 0 ? '¾' : '$whole ¾';
+  }
+  if (frac > 0.01) {
+    // Not a clean quarter-fraction - show ONE plain decimal number (e.g.
+    // "1.13"), not the whole part and the fractional part concatenated
+    // with a space (the previous "$whole $frac" read as two separate
+    // values, e.g. "1 0.13" instead of "1.13"). Trims a trailing zero/dot
+    // so "1.10" reads as "1.1" and "1.00" would already have hit the
+    // frac<=0.01 branch below anyway.
+    var s = value.toStringAsFixed(2);
+    if (s.contains('.')) {
+      s = s.replaceFirst(RegExp(r'0$'), '');
+      s = s.replaceFirst(RegExp(r'\.$'), '');
+    }
+    return s;
+  }
+  return '$whole';
 }
