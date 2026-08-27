@@ -1,8 +1,10 @@
+# diet-plan-wizard/core-ingredient-scaling Specification
+
 ## Purpose
 
 Defines the Ingredient Editor's core/sub ingredient behavior: visually distinguishing which ingredients are `core` (the portion-meaningful ones, e.g. a Chapati's flour or a Mixed Vegetable's whole vegetable group) from `sub` (ingredients only meaningful relative to the core group, e.g. water/salt/ghee/oil), and live-recomputing sub-ingredient quantities as core ingredients are edited, mirroring what the backend does authoritatively at Save.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Core ingredients are visually distinguished from sub ingredients
 The Ingredient Editor SHALL visually mark every ingredient whose `role` is `core` as distinct from `sub` ingredients, so a dietician can identify at a glance which ingredient(s) drive the recipe's proportions.
