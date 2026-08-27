@@ -1,3 +1,4 @@
+import 'package:docwellnesdoc/app/modules/receipes/models/recipe_model.dart';
 import 'package:docwellnesdoc/app/modules/receipes/services/recipe_service.dart';
 import 'package:docwellnesdoc/app/utils/functions/day_group_label.dart' as day_group_label;
 import 'package:get/get.dart';
@@ -90,5 +91,27 @@ class GenerateReviewController extends GetxController {
       newParentRecipeId: newParentRecipeId,
     );
     if (result != null && result['success'] == true) await loadWeekPlanItems();
+  }
+
+  /// "Update Existing" on Recipe Details' AI-regenerated preview - see
+  /// RefinePortionsStepController.updateItemFromRecipeSnapshot's identical
+  /// doc comment.
+  Future<bool> updateItemFromRecipeSnapshot(WizardPlanItemV2 item, RecipePreview recipe) async {
+    final result = await wizardService.updateItemRecipeVersion(
+      patientId: patientId,
+      dietPlanId: dietPlanId,
+      planItemId: item.id,
+      recipe: {
+        'name': recipe.name,
+        'ingredients': recipe.ingredients
+            .map((i) => {'name': i.name, 'quantity': i.quantity, 'unit': i.unit})
+            .toList(),
+        'cookingSteps': recipe.cookingSteps,
+        'components': recipe.components.map((c) => c.toJson()).toList(),
+      },
+    );
+    final ok = result != null && result['success'] == true;
+    if (ok) await loadWeekPlanItems();
+    return ok;
   }
 }

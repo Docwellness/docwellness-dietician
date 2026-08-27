@@ -1,3 +1,4 @@
+import 'package:docwellnesdoc/app/modules/receipes/models/recipe_model.dart';
 import 'package:get/get.dart';
 
 import '../models/wizard_week_models.dart';
@@ -164,5 +165,31 @@ class RefinePortionsStepController extends GetxController {
       newParentRecipeId: newParentRecipeId,
     );
     if (result != null && result['success'] == true) await loadWeekPlanItems();
+  }
+
+  /// "Update Existing" on the Ingredient Editor's "Recipe Details" sheet -
+  /// applies an AI-regenerated recipe (see recipe_details.dart's "Update AI
+  /// Inputs") to just this one plan item, without touching the shared
+  /// catalog recipe every other patient/plan pointed at [item]'s
+  /// parentRecipeId still uses (that's what "Save as New Recipe" avoids too,
+  /// by forking into a brand-new Recipe instead - this instead versions the
+  /// existing one, scoped to this item only).
+  Future<bool> updateItemFromRecipeSnapshot(WizardPlanItemV2 item, RecipePreview recipe) async {
+    final result = await wizardService.updateItemRecipeVersion(
+      patientId: patientId,
+      dietPlanId: dietPlanId,
+      planItemId: item.id,
+      recipe: {
+        'name': recipe.name,
+        'ingredients': recipe.ingredients
+            .map((i) => {'name': i.name, 'quantity': i.quantity, 'unit': i.unit})
+            .toList(),
+        'cookingSteps': recipe.cookingSteps,
+        'components': recipe.components.map((c) => c.toJson()).toList(),
+      },
+    );
+    final ok = result != null && result['success'] == true;
+    if (ok) await loadWeekPlanItems();
+    return ok;
   }
 }

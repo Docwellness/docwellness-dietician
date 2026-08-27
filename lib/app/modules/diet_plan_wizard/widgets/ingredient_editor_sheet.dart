@@ -57,6 +57,11 @@ class IngredientEditorSheet extends StatefulWidget {
   // RecipeDetailsScreen.onSavedAsNew) - the caller (refine_portions_step_
   // view.dart) already knows this item and its own swap method.
   final Future<void> Function(String newParentRecipeId)? onSwapToNewRecipe;
+  // When this sheet's "Recipe Details" link leads to "Update Existing" (see
+  // RecipeDetailsScreen.onUpdateExisting), applies the AI-regenerated
+  // recipe to just this plan item - the caller already knows this item and
+  // its own RefinePortionsStepController.updateItemFromRecipeSnapshot.
+  final Future<bool> Function(RecipePreview updatedRecipe)? onUpdateExisting;
 
   const IngredientEditorSheet({
     super.key,
@@ -66,6 +71,7 @@ class IngredientEditorSheet extends StatefulWidget {
     this.dailyCalorieTarget,
     required this.onSave,
     this.onSwapToNewRecipe,
+    this.onUpdateExisting,
   });
 
   @override
@@ -291,6 +297,7 @@ class _IngredientEditorSheetState extends State<IngredientEditorSheet> {
             await widget.onSwapToNewRecipe?.call(saved.id);
             if (mounted) Navigator.of(context).pop();
           },
+          onUpdateExisting: widget.onUpdateExisting,
         ),
       ),
     );

@@ -312,6 +312,7 @@ class _ReviewRecipeCard extends StatelessWidget {
           scrollController: sheetScrollController,
           recipePreview: recipeToShow,
           onSavedAsNew: (saved) => controller.swapItem(item, saved.id),
+          onUpdateExisting: (recipe) => controller.updateItemFromRecipeSnapshot(item, recipe),
         ),
       ),
     );
