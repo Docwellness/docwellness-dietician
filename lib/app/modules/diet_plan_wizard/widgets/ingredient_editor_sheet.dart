@@ -116,6 +116,31 @@ class _IngredientEditorSheetState extends State<IngredientEditorSheet> {
     return current / original;
   }
 
+  /// recipe-core-ingredient-scaling: same computation as [_portionScaleRatio]
+  /// above, but summed only over `role == 'core'` ingredients - drives the
+  /// live sub-ingredient recompute in [_updateQuantity]/[_updateUnit]. When
+  /// no ingredient has `role == 'core'` (a not-yet-migrated recipe, per the
+  /// backend's own "inert, not an error" fallback), both totals are 0 and
+  /// this returns 1 (the existing divide-by-zero guard) - the recompute
+  /// becomes a no-op automatically, with no separate "does this recipe
+  /// support this feature" branch needed anywhere else.
+  double get _coreScaleRatio {
+    double original = 0;
+    double current = 0;
+    for (final ingredient in _originalIngredients) {
+      if (ingredient.role != 'core') continue;
+      final grams = ingredient.resolvedGramsPerUnit;
+      if (grams != null) original += ingredient.rawQuantity * grams;
+    }
+    for (final ingredient in _ingredients) {
+      if (ingredient.role != 'core') continue;
+      final grams = ingredient.resolvedGramsPerUnit;
+      if (grams != null) current += ingredient.rawQuantity * grams;
+    }
+    if (original <= 0) return 1;
+    return current / original;
+  }
+
   /// Live preview of "how much this makes" - the recipe's own components
   /// (see RecipeVersion.components, already the real-world plate/serving
   /// amount, e.g. "3 nos" Idli + "1 bowl" Sambar) scaled by how much the
@@ -153,13 +178,52 @@ class _IngredientEditorSheetState extends State<IngredientEditorSheet> {
   void _updateQuantity(int index, double value) {
     setState(() {
       _ingredients[index] = _ingredients[index].copyWith(rawQuantity: value);
+      _recomputeSubIngredientsIfCoreChanged(index);
     });
   }
 
   void _updateUnit(int index, String unit) {
     setState(() {
       _ingredients[index] = _ingredients[index].copyWith(unit: unit);
+      _recomputeSubIngredientsIfCoreChanged(index);
     });
+  }
+
+  /// recipe-core-ingredient-scaling: only fires when the JUST-edited
+  /// ingredient is 'core' (editing a 'sub' ingredient directly never
+  /// triggers this, it only ever updates its own entry). Recomputes EVERY
+  /// 'sub' ingredient's rawQuantity unconditionally from its ORIGINAL
+  /// (sheet-open snapshot) value times the current core-group ratio - not
+  /// from whatever is currently in [_ingredients], and not skipped even
+  /// when the ratio comes out to ~1 (e.g. rebalancing carrots vs. peas
+  /// within a multi-core group nets back to the original total after two
+  /// separate edits) - `original * 1` already IS the correct "unchanged"
+  /// value, so there is nothing to special-case. This is what correctly
+  /// resets a sub ingredient back to its original value if a prior edit
+  /// had temporarily scaled it away from 1:1 and a later edit brings the
+  /// core group's total back to where it started - unlike the server's
+  /// single-shot createCustomVersion (services/recipeVersioningService.js),
+  /// this recompute can run many times across many keystrokes in one
+  /// session, so it always derives fresh from `original`, never from its
+  /// own last output.
+  ///
+  /// Unconditionally overwriting also means a sub ingredient that was
+  /// unlocked via Override gets its typed value discarded here too, exactly
+  /// per this feature's design - see the resulting change surfacing
+  /// through _IngredientRowState.didUpdateWidget, which reverts that row's
+  /// Override lock alongside syncing its displayed text.
+  void _recomputeSubIngredientsIfCoreChanged(int editedIndex) {
+    if (_ingredients[editedIndex].role != 'core') return;
+    final ratio = _coreScaleRatio;
+    for (var i = 0; i < _ingredients.length; i++) {
+      final ingredient = _ingredients[i];
+      if (ingredient.role != 'sub') continue;
+      final original = _originalIngredients.firstWhere(
+        (o) => o.foodItemId == ingredient.foodItemId,
+        orElse: () => ingredient,
+      );
+      _ingredients[i] = ingredient.copyWith(rawQuantity: original.rawQuantity * ratio);
+    }
   }
 
   Future<void> _save() async {
@@ -440,13 +504,42 @@ class _IngredientRow extends StatefulWidget {
 
 class _IngredientRowState extends State<_IngredientRow> {
   late final TextEditingController _controller = TextEditingController(text: _formatQty(widget.ingredient.rawQuantity));
+  final FocusNode _focusNode = FocusNode();
+
+  // recipe-core-ingredient-scaling: a 'sub' ingredient's field starts
+  // read-only and stays that way until this dietician explicitly taps
+  // Override for THIS row, in THIS sheet session - see design.md's
+  // Decisions for why (surfaces, rather than hides, the two-step
+  // limitation: a core edit afterward discards a sub override).
+  bool _subOverrideUnlocked = false;
 
   static String _formatQty(double q) => q % 1 == 0 ? q.toStringAsFixed(0) : q.toStringAsFixed(1);
 
   @override
   void dispose() {
     _controller.dispose();
+    _focusNode.dispose();
     super.dispose();
+  }
+
+  /// A sub ingredient's [rawQuantity]/[unit] only ever changes from
+  /// OUTSIDE this row via _recomputeSubIngredientsIfCoreChanged (a core
+  /// ingredient elsewhere was edited) - core ingredients are only ever
+  /// changed by this row's own [onChanged]. Sync the controller to match
+  /// (skipped while this field has focus, so an in-progress core edit
+  /// never has its own cursor/selection disturbed by a DIFFERENT row's
+  /// rebuild), and revert a sub override back to locked - its old typed
+  /// value was just discarded by the recompute, so the field should look
+  /// locked again rather than editable-but-stale.
+  @override
+  void didUpdateWidget(covariant _IngredientRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final changedExternally =
+        widget.ingredient.rawQuantity != oldWidget.ingredient.rawQuantity || widget.ingredient.unit != oldWidget.ingredient.unit;
+    if (changedExternally && !_focusNode.hasFocus) {
+      _controller.text = _formatQty(widget.ingredient.rawQuantity);
+      if (_subOverrideUnlocked) _subOverrideUnlocked = false;
+    }
   }
 
   /// This ingredient's own calorie contribution - "—" only when genuinely
@@ -459,17 +552,33 @@ class _IngredientRowState extends State<_IngredientRow> {
   @override
   Widget build(BuildContext context) {
     final unit = widget.ingredient.unit;
+    final isCore = widget.ingredient.role == 'core';
+    final isLocked = !isCore && !_subOverrideUnlocked;
     return Row(
       children: [
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              CustomText(
-                text: widget.ingredient.foodItemName ?? 'Ingredient',
-                fontWeight: FontWeight.w500,
-                fontSize: 14,
-                color: _bodyColor,
+              Row(
+                children: [
+                  Flexible(
+                    child: CustomText(
+                      text: widget.ingredient.foodItemName ?? 'Ingredient',
+                      fontWeight: FontWeight.w500,
+                      fontSize: 14,
+                      color: _bodyColor,
+                    ),
+                  ),
+                  if (isCore) ...[
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(color: _primaryColor.withOpacity(0.12), borderRadius: BorderRadius.circular(6)),
+                      child: const CustomText(text: 'Core', fontWeight: FontWeight.w700, fontSize: 9, color: _primaryColor),
+                    ),
+                  ],
+                ],
               ),
               const SizedBox(height: 2),
               CustomText(text: _calorieLabel, fontWeight: FontWeight.w400, fontSize: 11, color: _mutedColor),
@@ -480,22 +589,38 @@ class _IngredientRowState extends State<_IngredientRow> {
           width: 64,
           child: TextField(
             controller: _controller,
+            focusNode: _focusNode,
+            readOnly: isLocked,
             textAlign: TextAlign.center,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _bodyColor),
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: isLocked ? _mutedColor : _bodyColor),
             decoration: InputDecoration(
               isDense: true,
               contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: _primaryColor)),
-              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: _primaryColor)),
+              filled: isLocked,
+              fillColor: isLocked ? _mutedColor.withOpacity(0.06) : null,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: isLocked ? _mutedColor.withOpacity(0.3) : _primaryColor)),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: isLocked ? _mutedColor.withOpacity(0.3) : _primaryColor)),
               focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: _primaryColor, width: 1.5)),
             ),
-            onChanged: (value) {
-              final parsed = double.tryParse(value);
-              if (parsed != null && parsed >= 0) widget.onQuantityChanged(parsed);
-            },
+            onChanged: isLocked
+                ? null
+                : (value) {
+                    final parsed = double.tryParse(value);
+                    if (parsed != null && parsed >= 0) widget.onQuantityChanged(parsed);
+                  },
           ),
         ),
+        if (!isCore) ...[
+          const SizedBox(width: 4),
+          IconButton(
+            onPressed: () => setState(() => _subOverrideUnlocked = !_subOverrideUnlocked),
+            icon: Icon(_subOverrideUnlocked ? Icons.lock_open : Icons.lock_outline, size: 16, color: _mutedColor),
+            tooltip: _subOverrideUnlocked ? 'Locked to core proportions' : 'Override this amount manually',
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+          ),
+        ],
         const SizedBox(width: 8),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8),
