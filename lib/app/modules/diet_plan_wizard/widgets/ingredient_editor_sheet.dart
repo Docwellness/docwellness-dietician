@@ -22,9 +22,11 @@ const _availableUnits = ['g', 'ml', 'tsp', 'tbsp', 'cup', 'piece'];
 /// ingredient is currently in (1 for 'g' itself, ~40 for a 'piece' of
 /// Chapati, etc.), server-resolved via FoodItem.unitConversions/density -
 /// so this works identically for every unit, not just grams. Null (never a
-/// guessed number) when either figure is unresolvable - a freshly-switched
-/// unit invalidates resolvedGramsPerUnit (see copyWith), correctly falling
-/// back to null/"—" until the version is re-fetched after Save.
+/// guessed number) when either figure is unresolvable - switching a unit
+/// (see copyWith) re-resolves resolvedGramsPerUnit from the ingredient's
+/// own precomputed gramsPerUnitByUnit map, recalculating live rather than
+/// going blank; only a unit genuinely absent from that map (no known
+/// conversion for this ingredient at all) still falls back to "—".
 double? _ingredientCalories(WizardIngredientLine ingredient) {
   final per100g = ingredient.per100gCalories;
   final gramsPerUnit = ingredient.resolvedGramsPerUnit;

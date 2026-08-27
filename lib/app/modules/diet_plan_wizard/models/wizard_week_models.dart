@@ -184,8 +184,22 @@ class WizardIngredientLine {
   /// live calorie figure for ANY unit, not just 'g' - null when
   /// unresolvable (no FoodItem, or no known conversion for this unit), so
   /// the editor shows "—" instead of a wrong number. Only valid for the
-  /// unit this was resolved for - see copyWith.
+  /// unit this was resolved for - see copyWith, which re-resolves it from
+  /// [gramsPerUnitByUnit] on a unit change rather than nulling it out.
   final double? resolvedGramsPerUnit;
+
+  /// The SAME grams-per-unit figure as [resolvedGramsPerUnit], precomputed
+  /// server-side for every unit this ingredient's FoodItem could actually
+  /// resolve (not just its current one) - e.g. {"g":1,"tsp":5.15,"tbsp":15.45}
+  /// for an ingredient with a known density. Lets copyWith recompute a live
+  /// calorie figure the instant a dietician switches an ingredient's unit,
+  /// instead of the previous "switching a unit loses the calorie figure
+  /// until Save" behavior - a unit simply absent from this map means it's
+  /// still genuinely unresolvable for this ingredient (never a guessed
+  /// number, same convention as [resolvedGramsPerUnit] being null).
+  /// Display-only, like every other joined-in field here - never sent back
+  /// in [toJson].
+  final Map<String, double> gramsPerUnitByUnit;
 
   WizardIngredientLine({
     required this.foodItemId,
@@ -196,13 +210,13 @@ class WizardIngredientLine {
     this.role = 'sub',
     this.per100gCalories,
     this.resolvedGramsPerUnit,
+    this.gramsPerUnitByUnit = const {},
   });
 
-  /// Changing [unit] invalidates [resolvedGramsPerUnit] - it was resolved
-  /// for the OLD unit only, and re-resolving for a newly-picked unit needs
-  /// data (unitConversions/density) this client was never given, so the
-  /// editor correctly falls back to "—" for a freshly-switched unit rather
-  /// than silently reusing the wrong conversion factor.
+  /// Changing [unit] re-resolves [resolvedGramsPerUnit] from
+  /// [gramsPerUnitByUnit] (the old unit's figure was only ever valid for
+  /// that unit) - falls back to null, same as before, when the newly-picked
+  /// unit isn't in the map (genuinely unresolvable for this ingredient).
   WizardIngredientLine copyWith({double? rawQuantity, String? unit}) => WizardIngredientLine(
     foodItemId: foodItemId,
     foodItemName: foodItemName,
@@ -211,7 +225,8 @@ class WizardIngredientLine {
     preparation: preparation,
     role: role,
     per100gCalories: per100gCalories,
-    resolvedGramsPerUnit: (unit == null || unit == this.unit) ? resolvedGramsPerUnit : null,
+    resolvedGramsPerUnit: (unit == null || unit == this.unit) ? resolvedGramsPerUnit : gramsPerUnitByUnit[unit],
+    gramsPerUnitByUnit: gramsPerUnitByUnit,
   );
 
   factory WizardIngredientLine.fromJson(Map<String, dynamic> json) {
@@ -224,6 +239,10 @@ class WizardIngredientLine {
       role: json['role'] == 'core' ? 'core' : 'sub',
       per100gCalories: (json['nutritionPer100g']?['calories'] as num?)?.toDouble(),
       resolvedGramsPerUnit: (json['resolvedGramsPerUnit'] as num?)?.toDouble(),
+      gramsPerUnitByUnit: (json['gramsPerUnitByUnit'] as Map<String, dynamic>?)?.map(
+            (key, value) => MapEntry(key, (value as num).toDouble()),
+          ) ??
+          const {},
     );
   }
 
