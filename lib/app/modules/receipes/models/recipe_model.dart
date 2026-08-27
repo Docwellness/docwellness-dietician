@@ -32,7 +32,21 @@ class RecipePreview {
   // bowl, tbsp). Always at least one entry - see the fallback in fromJson.
   // This is what EditComponentsSheet edits and what the dietician-facing
   // diet-plan stepper (patients_controller.dart) ultimately steps through.
+  //
+  // That fallback entry (quantity:1, unit:'g', synthesized below when the
+  // backend sent neither real `components` nor a usable `servingSize`) only
+  // exists so callers that assume a non-empty list (baseServingQuantity/
+  // servingUnit getters, patients_controller.dart's indexed component[0]
+  // reads) never crash - it does NOT mean this recipe actually has a known
+  // "Makes (on the plate)" portion. [hasRealComponents] is the honest
+  // signal: false whenever this List<RecipeComponent> is that synthetic
+  // placeholder rather than real backend/dietician-authored data. A widget
+  // deciding whether to DISPLAY a portion (e.g. recipe_details.dart's
+  // "Makes" chip) must check hasRealComponents, not components.isNotEmpty -
+  // the list is never empty, so that check alone would always show a
+  // meaningless "1 g" badge for a recipe with no real portion data.
   final List<RecipeComponent> components;
+  final bool hasRealComponents;
 
   RecipePreview({
     this.id,
@@ -56,7 +70,18 @@ class RecipePreview {
     this.translations = const {},
     this.supplementFacts,
     List<RecipeComponent>? components,
-  }) : components = (components == null || components.isEmpty)
+    // Explicit override for callers that already know whether their
+    // `components` value is real (e.g. a dietician's just-edited portion,
+    // or a RecipeVersion's actual stored data) vs. forwarding an existing
+    // instance's own flag. When omitted, computed from whether a non-empty
+    // `components` list was actually supplied here - correct for fromJson
+    // (a fresh parse of the backend response) but NOT safe to leave
+    // implicit in a copyWith* that passes an already-fallback-applied list
+    // forward, since that list is never empty by the time it reaches here -
+    // see each copyWith* method's own explicit value below.
+    bool? hasRealComponents,
+  }) : hasRealComponents = hasRealComponents ?? (components != null && components.isNotEmpty),
+       components = (components == null || components.isEmpty)
            ? [
                RecipeComponent(
                  label: name,
@@ -151,6 +176,7 @@ class RecipePreview {
       translations: translations,
       supplementFacts: supplementFacts,
       components: components,
+      hasRealComponents: hasRealComponents,
     );
   }
 
@@ -192,6 +218,11 @@ class RecipePreview {
       translations: translations,
       supplementFacts: supplementFacts,
       components: newComponents,
+      // The dietician just edited these via EditComponentsSheet, which
+      // requires at least one real component to save - true in practice,
+      // but derive from the raw param rather than hardcode, same
+      // defensive reasoning as copyWithVersionOverride's own comment.
+      hasRealComponents: newComponents.isNotEmpty,
     );
   }
 
@@ -225,6 +256,7 @@ class RecipePreview {
       translations: translations,
       supplementFacts: supplementFacts,
       components: components,
+      hasRealComponents: hasRealComponents,
     );
   }
 
@@ -276,6 +308,13 @@ class RecipePreview {
       translations: const {},
       supplementFacts: supplementFacts,
       components: components,
+      // `components` here is this specific RecipeVersion's own stored
+      // list, which can legitimately be empty (a version synced from a
+      // Recipe that itself has no `components` yet - the same "1g"-
+      // placeholder-worthy gap this flag exists to catch). Compute from
+      // the RAW incoming param, not hardcoded true - see this field's own
+      // doc comment on why a copyWith* can't just say "yes, always real".
+      hasRealComponents: components.isNotEmpty,
     );
   }
 

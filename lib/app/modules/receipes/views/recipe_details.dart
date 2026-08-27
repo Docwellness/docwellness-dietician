@@ -612,7 +612,14 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
         // EditComponentsSheet for the editor) - lets a dietician see at a
         // glance whether the AI produced a sensible portion (e.g. "2 egg")
         // or fell back to a raw gram total, without opening the editor.
-        if (recipe != null && recipe!.components.isNotEmpty)
+        // Gated on hasRealComponents, NOT components.isNotEmpty -
+        // `components` always has at least one entry (RecipePreview's own
+        // constructor synthesizes a meaningless quantity:1/unit:'g'
+        // placeholder when the backend has no real portion data), so that
+        // check alone would show every recipe with no actual "Makes (on
+        // the plate)" data as a misleading "1 g" chip instead of just not
+        // showing a chip at all.
+        if (recipe != null && recipe!.hasRealComponents)
           Padding(
             padding: const EdgeInsets.only(left: 16, right: 16, top: 8),
             child: Wrap(
