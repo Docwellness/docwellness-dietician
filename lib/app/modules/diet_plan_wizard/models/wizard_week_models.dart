@@ -154,6 +154,22 @@ class WizardIngredientLine {
   final String unit;
   final String? preparation;
 
+  /// 'core' | 'sub' (recipe-core-ingredient-scaling) - which ingredient(s)
+  /// are the clinically/portion-meaningful ones a dietician actually
+  /// adjusts ('core', e.g. Chapati's Whole Wheat Flour, or every vegetable
+  /// in a Mixed Vegetable dish together) vs. ones only meaningful relative
+  /// to that group ('sub' - water/salt/oil/spices). Defaults to 'sub' when
+  /// absent, matching the backend schema's own default and its "not yet
+  /// migrated" treatment of legacy recipes (see ingredient_editor_sheet.dart's
+  /// _coreScaleRatio, which naturally becomes a no-op when no ingredient
+  /// is 'core'). Deliberately NOT sent back in [toJson] - the server
+  /// always derives/recomputes it itself from the version being edited
+  /// (services/recipeVersioningService.js's createCustomVersion never
+  /// trusts a client-submitted role), matching this class's existing
+  /// convention of only sending what the server actually reads
+  /// ([foodItemName]/[resolvedGramsPerUnit]/[per100gCalories] are display-only too).
+  final String role;
+
   /// Per-100g calories, joined in by GET .../plan-items for a client-side
   /// LIVE preview only (widgets/ingredient_editor_sheet.dart) - the
   /// authoritative recompute always happens server-side in
@@ -177,6 +193,7 @@ class WizardIngredientLine {
     required this.rawQuantity,
     required this.unit,
     this.preparation,
+    this.role = 'sub',
     this.per100gCalories,
     this.resolvedGramsPerUnit,
   });
@@ -192,6 +209,7 @@ class WizardIngredientLine {
     rawQuantity: rawQuantity ?? this.rawQuantity,
     unit: unit ?? this.unit,
     preparation: preparation,
+    role: role,
     per100gCalories: per100gCalories,
     resolvedGramsPerUnit: (unit == null || unit == this.unit) ? resolvedGramsPerUnit : null,
   );
@@ -203,6 +221,7 @@ class WizardIngredientLine {
       rawQuantity: (json['rawQuantity'] as num?)?.toDouble() ?? 0,
       unit: json['unit'] ?? 'g',
       preparation: json['preparation'],
+      role: json['role'] == 'core' ? 'core' : 'sub',
       per100gCalories: (json['nutritionPer100g']?['calories'] as num?)?.toDouble(),
       resolvedGramsPerUnit: (json['resolvedGramsPerUnit'] as num?)?.toDouble(),
     );
