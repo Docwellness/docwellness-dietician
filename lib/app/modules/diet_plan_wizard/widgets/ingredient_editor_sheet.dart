@@ -343,42 +343,100 @@ class _IngredientEditorSheetState extends State<IngredientEditorSheet> {
     final result = await showDialog<({double quantity, String unit})>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
-        builder: (dialogContext, setDialogState) => AlertDialog(
-          title: const CustomText(text: 'Makes (on the plate)', fontWeight: FontWeight.w600, fontSize: 16, color: _headerColor),
-          content: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: TextField(
-                  key: const Key('makesOnPlateQuantityField'),
-                  controller: quantityController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(labelText: 'Quantity', border: OutlineInputBorder()),
+        builder: (dialogContext, setDialogState) => Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const CustomText(text: 'Makes (on the plate)', fontWeight: FontWeight.w700, fontSize: 17, color: _headerColor),
+                const SizedBox(height: 4),
+                CustomText(
+                  text: 'Set the dish\'s real serving size - ingredients scale to match.',
+                  fontWeight: FontWeight.w400,
+                  fontSize: 12,
+                  color: _mutedColor,
                 ),
-              ),
-              const SizedBox(width: 12),
-              DropdownButton<String>(
-                key: const Key('makesOnPlateUnitDropdown'),
-                value: selectedUnit,
-                items: _componentUnits.map((u) => DropdownMenuItem(value: u, child: Text(u))).toList(),
-                onChanged: (u) {
-                  if (u != null) setDialogState(() => selectedUnit = u);
-                },
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('Cancel')),
-            TextButton(
-              key: const Key('makesOnPlateApplyButton'),
-              onPressed: () {
-                final quantity = double.tryParse(quantityController.text);
-                if (quantity == null || quantity <= 0) return;
-                Navigator.of(dialogContext).pop((quantity: quantity, unit: selectedUnit));
-              },
-              child: const Text('Apply'),
+                const SizedBox(height: 18),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      flex: 3,
+                      child: TextField(
+                        key: const Key('makesOnPlateQuantityField'),
+                        controller: quantityController,
+                        autofocus: true,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: _bodyColor),
+                        decoration: InputDecoration(
+                          isDense: true,
+                          labelText: 'Quantity',
+                          labelStyle: const TextStyle(color: _mutedColor, fontSize: 13),
+                          contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: _primaryColor)),
+                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: _primaryColor)),
+                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: _primaryColor, width: 1.5)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      flex: 2,
+                      child: Container(
+                        height: 48,
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(border: Border.all(color: _primaryColor), borderRadius: BorderRadius.circular(10)),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            key: const Key('makesOnPlateUnitDropdown'),
+                            value: selectedUnit,
+                            isExpanded: true,
+                            icon: const Icon(Icons.keyboard_arrow_down, color: _primaryColor, size: 20),
+                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: _bodyColor),
+                            items: _componentUnits.map((u) => DropdownMenuItem(value: u, child: Text(u))).toList(),
+                            onChanged: (u) {
+                              if (u != null) setDialogState(() => selectedUnit = u);
+                            },
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 22),
+                Row(
+                  children: [
+                    Expanded(
+                      child: CustomButton(
+                        text: 'Cancel',
+                        isOutline: true,
+                        outlineButtonColor: _mutedColor,
+                        textColor: _mutedColor,
+                        onTap: () => Navigator.of(dialogContext).pop(),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: CustomButton(
+                        key: const Key('makesOnPlateApplyButton'),
+                        text: 'Apply',
+                        isOutline: false,
+                        buttonColor: _headerColor,
+                        onTap: () {
+                          final quantity = double.tryParse(quantityController.text);
+                          if (quantity == null || quantity <= 0) return;
+                          Navigator.of(dialogContext).pop((quantity: quantity, unit: selectedUnit));
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
