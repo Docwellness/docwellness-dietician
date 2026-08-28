@@ -231,6 +231,30 @@ class DietPlanWizardService {
     return null;
   }
 
+  /// Auto-balances EVERY generated week of the plan, not just one. The
+  /// Refine Portions step's one-shot entry balance uses this so a Silver
+  /// plan's weeks 2-4 (generated up front, never shown in the single-week
+  /// Refine UI) don't stay at raw portions and block finalize's whole-plan
+  /// +/-5% activation gate.
+  Future<dynamic> autoBalancePlan({
+    required String patientId,
+    required String dietPlanId,
+    required double targetDailyCalories,
+  }) async {
+    try {
+      final response = await service.request(
+        endPoint: '${_base(patientId, dietPlanId)}/auto-balance',
+        method: 'POST',
+        headers: {'Authorization': 'Bearer $token'},
+        data: {'scope': 'plan', 'targetDailyCalories': targetDailyCalories},
+      );
+      if (response != null && response.data is Map) return response.data;
+    } catch (e) {
+      debugPrint('autoBalancePlan error: $e');
+    }
+    return null;
+  }
+
   Future<dynamic> getWeekPlanItems({
     required String patientId,
     required String dietPlanId,

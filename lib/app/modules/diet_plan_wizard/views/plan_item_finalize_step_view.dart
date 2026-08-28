@@ -1,3 +1,6 @@
+import 'package:docwellnesdoc/app/modules/receipes/models/recipe_model.dart';
+import 'package:docwellnesdoc/app/modules/receipes/services/recipe_service.dart';
+import 'package:docwellnesdoc/app/modules/receipes/views/recipe_details.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_button.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
 import 'package:docwellnesdoc/app/utils/functions/day_group_label.dart';
@@ -242,34 +245,61 @@ class _RecipeCard extends StatelessWidget {
       calories: item.calories?.round(),
       versionLabel: version != null ? 'V${version.versionNumber}' : null,
       pinned: item.pinned,
+      onTap: item.parentRecipeId.isEmpty ? null : () => _openRecipeDetails(context),
       macros: n == null
           ? null
           : MacroChipRow(protein: macro('protein'), fiber: macro('fiber'), carbs: macro('carbs'), fat: macro('fats')),
-      expandedBody: (version == null || (version.ingredients.isEmpty && version.steps.isEmpty))
-          ? null
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (version.ingredients.isNotEmpty)
-                  CustomText(
-                    text: version.ingredients
-                        .map((i) => '${i.foodItemName ?? '?'} ${i.rawQuantity.toStringAsFixed(i.rawQuantity % 1 == 0 ? 0 : 1)}${i.unit}')
-                        .join(', '),
-                    fontWeight: FontWeight.w400,
-                    fontSize: 12,
-                    color: WizardPalette.muted,
-                  ),
-                if (version.steps.isNotEmpty) ...[
-                  const SizedBox(height: 6),
-                  CustomText(
-                    text: version.steps.asMap().entries.map((e) => '${e.key + 1}. ${e.value}').join('  '),
-                    fontWeight: FontWeight.w400,
-                    fontSize: 11,
-                    color: WizardPalette.muted,
-                  ),
-                ],
-              ],
-            ),
+    );
+  }
+
+  /// Opens the shared Recipe Details bottom sheet for this plan item, showing
+  /// its actually-assigned recipe version's ingredients / components / steps /
+  /// nutrition (not the master Recipe's stale values) - same mapping the
+  /// Generate review screen and the Ingredient Editor use. Read-only here:
+  /// Finalize is a review step, so no save/apply callbacks are wired.
+  Future<void> _openRecipeDetails(BuildContext context) async {
+    final recipe = await RecipeService().getRecipeById(item.parentRecipeId);
+    if (recipe == null || !context.mounted) return;
+
+    final version = item.recipeVersion;
+    final recipeToShow = version == null
+        ? recipe
+        : recipe.copyWithVersionOverride(
+            ingredients: version.ingredients
+                .map((i) => Ingredient(
+                      name: i.foodItemName ?? 'Ingredient',
+                      quantity: i.rawQuantity,
+                      unit: i.unit,
+                      category: 'Other',
+                      priceLevel: '₹₹',
+                      description: i.preparation ?? '',
+                    ))
+                .toList(),
+            components: version.components
+                .map((c) => RecipeComponent(label: c.label, quantity: c.quantity, unit: c.unit))
+                .toList(),
+            nutrition: version.nutritionPerServing != null ? Nutrition.fromJson(version.nutritionPerServing!) : null,
+            cookingSteps: version.steps,
+          );
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      useSafeArea: true,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 1,
+        maxChildSize: 1,
+        minChildSize: 0.5,
+        expand: false,
+        builder: (ctx, sheetScrollController) => RecipeDetailsScreen(
+          fromAddRecipeScreen: false,
+          isPlanItemPreview: true,
+          scrollController: sheetScrollController,
+          recipePreview: recipeToShow,
+        ),
+      ),
     );
   }
 }

@@ -71,7 +71,7 @@ class RefinePortionsStepController extends GetxController {
     final target = dailyCalorieTarget;
     if (!_autoBalancedOnce && target != null && target > 0 && weekDays.isNotEmpty) {
       _autoBalancedOnce = true;
-      await autoBalanceWeek();
+      await autoBalanceWholePlan();
     }
   }
 
@@ -141,15 +141,21 @@ class RefinePortionsStepController extends GetxController {
     }
   }
 
-  Future<void> autoBalanceWeek() async {
+  /// One-shot entry balance: covers EVERY generated week of the plan, not
+  /// just the one this step's UI shows. A Silver-tier plan generates all 4
+  /// weeks up front (generation_step_controller.dart's _initialWeeksForTier)
+  /// and finalize validates the whole plan - balancing only [week] here left
+  /// weeks 2-4 at raw portions and blocked activation with "N day(s) outside
+  /// +/-5% tolerance". Weeks other than [week] are balanced silently; the
+  /// dietician still reviews/tweaks [week]'s day-groups in the list below.
+  Future<void> autoBalanceWholePlan() async {
     final target = dailyCalorieTarget;
     if (target == null || target <= 0) return;
     loading.value = true;
     try {
-      final result = await wizardService.autoBalanceWeek(
+      final result = await wizardService.autoBalancePlan(
         patientId: patientId,
         dietPlanId: dietPlanId,
-        week: week,
         targetDailyCalories: target,
       );
       if (result != null && result['success'] == true) await loadWeekPlanItems();

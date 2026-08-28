@@ -267,9 +267,10 @@ class MealTimeline extends StatelessWidget {
 
 /// The one recipe card used everywhere in the wizard. Name + right-aligned
 /// calories on top; a portion pill and optional "Edited" badge; an optional
-/// macro row; optional trailing actions (swap/remove) and an optional
-/// expandable body (ingredients / cooking steps).
-class WizardRecipeCard extends StatefulWidget {
+/// macro row; optional trailing actions (swap/remove). Tapping the card
+/// ([onTap]) is how full recipe detail is reached - via the shared Recipe
+/// Details bottom sheet, not an inline expander.
+class WizardRecipeCard extends StatelessWidget {
   final String title;
   final String? portionLabel;
   final int? calories;
@@ -278,7 +279,6 @@ class WizardRecipeCard extends StatefulWidget {
   final bool pinned;
   final VoidCallback? onUnpin;
   final List<Widget> actions;
-  final Widget? expandedBody;
   final VoidCallback? onTap;
 
   const WizardRecipeCard({
@@ -291,26 +291,18 @@ class WizardRecipeCard extends StatefulWidget {
     this.pinned = false,
     this.onUnpin,
     this.actions = const [],
-    this.expandedBody,
     this.onTap,
   });
 
   @override
-  State<WizardRecipeCard> createState() => _WizardRecipeCardState();
-}
-
-class _WizardRecipeCardState extends State<WizardRecipeCard> {
-  bool _expanded = false;
-
-  @override
   Widget build(BuildContext context) {
     final meta = <String>[
-      if (widget.calories != null) '${widget.calories} Cal',
-      if (widget.versionLabel != null) widget.versionLabel!,
+      if (calories != null) '$calories Cal',
+      if (versionLabel != null) versionLabel!,
     ].join(' · ');
 
     return InkWell(
-      onTap: widget.onTap,
+      onTap: onTap,
       borderRadius: BorderRadius.circular(WizardPalette.cardRadius),
       child: Container(
         padding: const EdgeInsets.all(12),
@@ -326,58 +318,28 @@ class _WizardRecipeCardState extends State<WizardRecipeCard> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
-                  child: CustomText(text: widget.title, fontWeight: FontWeight.w600, fontSize: 13, color: WizardPalette.ink),
+                  child: CustomText(text: title, fontWeight: FontWeight.w600, fontSize: 13, color: WizardPalette.ink),
                 ),
-                ...widget.actions,
+                ...actions,
               ],
             ),
-            if (widget.portionLabel != null || meta.isNotEmpty || widget.pinned) ...[
+            if (portionLabel != null || meta.isNotEmpty || pinned) ...[
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
                 runSpacing: 6,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  if (widget.portionLabel != null) PortionPill.raw(widget.portionLabel!),
-                  if (widget.pinned) EditedBadge(onTap: widget.onUnpin),
+                  if (portionLabel != null) PortionPill.raw(portionLabel!),
+                  if (pinned) EditedBadge(onTap: onUnpin),
                   if (meta.isNotEmpty)
                     CustomText(text: meta, fontWeight: FontWeight.w400, fontSize: 11, color: WizardPalette.muted),
                 ],
               ),
             ],
-            if (widget.macros != null) ...[
+            if (macros != null) ...[
               const SizedBox(height: 10),
-              widget.macros!,
-            ],
-            if (widget.expandedBody != null) ...[
-              const SizedBox(height: 6),
-              InkWell(
-                onTap: () => setState(() => _expanded = !_expanded),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Row(
-                    children: [
-                      CustomText(
-                        text: _expanded ? 'Hide details' : 'Recipe & steps',
-                        fontWeight: FontWeight.w600,
-                        fontSize: 11,
-                        color: WizardPalette.magenta,
-                      ),
-                      Icon(_expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-                          size: 16, color: WizardPalette.magenta),
-                    ],
-                  ),
-                ),
-              ),
-              AnimatedCrossFade(
-                duration: const Duration(milliseconds: 180),
-                crossFadeState: _expanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
-                firstChild: const SizedBox(width: double.infinity),
-                secondChild: Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: widget.expandedBody!,
-                ),
-              ),
+              macros!,
             ],
           ],
         ),
