@@ -330,6 +330,14 @@ class WizardPlanItemV2 {
   final String recipeVersionId;
   final WizardRecipeVersion? recipeVersion;
   final bool locked;
+
+  /// True once a dietician has saved a hand-edited portion for this item
+  /// (ingredient quantities or "Makes on the plate"). "Auto Adjust" skips
+  /// pinned items and rebalances the rest of the day around them; the
+  /// Refine Portions card shows an "Edited" badge that taps through to
+  /// unpin. Weaker than [locked] - a pinned item can still be swapped.
+  final bool pinned;
+
   final Map<String, dynamic>? calculatedNutrition;
   final bool isLinkedComponent;
 
@@ -338,6 +346,7 @@ class WizardPlanItemV2 {
     required this.recipeVersionId,
     this.recipeVersion,
     required this.locked,
+    this.pinned = false,
     this.calculatedNutrition,
     required this.isLinkedComponent,
   });
@@ -352,6 +361,7 @@ class WizardPlanItemV2 {
       recipeVersionId: json['recipeVersionId']?.toString() ?? '',
       recipeVersion: json['recipeVersion'] != null ? WizardRecipeVersion.fromJson(json['recipeVersion']) : null,
       locked: json['locked'] == true,
+      pinned: json['pinned'] == true,
       calculatedNutrition: json['calculatedNutrition'] as Map<String, dynamic>?,
       isLinkedComponent: json['isLinkedComponent'] == true,
     );

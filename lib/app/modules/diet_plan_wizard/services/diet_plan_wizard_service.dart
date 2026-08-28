@@ -362,4 +362,28 @@ class DietPlanWizardService {
     }
     return null;
   }
+
+  /// Step 3: set/clear a plan item's `pinned` flag. Saving a hand-edited
+  /// portion pins it automatically on the backend - this is the Refine
+  /// Portions card's "Edited" badge tapping through to unpin, returning the
+  /// item to "Auto Adjust"'s pool. Does not change any portion.
+  Future<dynamic> setPinned({
+    required String patientId,
+    required String dietPlanId,
+    required String planItemId,
+    required bool pinned,
+  }) async {
+    try {
+      final response = await service.request(
+        endPoint: '${_base(patientId, dietPlanId)}/plan-items/$planItemId',
+        method: 'PATCH',
+        headers: {'Authorization': 'Bearer $token'},
+        data: {'pinned': pinned},
+      );
+      if (response != null && response.data is Map) return response.data;
+    } catch (e) {
+      debugPrint('setPinned error: $e');
+    }
+    return null;
+  }
 }

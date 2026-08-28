@@ -1,3 +1,4 @@
+import 'package:docwellnesdoc/app/utils/functions/day_group_label.dart';
 import 'package:get/get.dart';
 
 import '../models/wizard_week_models.dart';
@@ -20,6 +21,12 @@ class PlanItemFinalizeStepController extends GetxController {
   final RxnString errorMessage = RxnString();
   final RxList<WizardDayGroupV2> weekDays = <WizardDayGroupV2>[].obs;
   final RxBool activating = false.obs;
+
+  /// Which day-group's meal timeline the Review screen is showing (the
+  /// screen renders one day-group at a time now, selected from a chip row at
+  /// the top - diet-plan-wizard/finalize-step). Empty until the first load
+  /// picks the first day-group that has items.
+  final RxString selectedDayGroup = ''.obs;
 
   // Same tolerance as services/planActivationService.js's
   // ACTIVATION_CALORIE_TOLERANCE - kept in sync manually since this is a
@@ -80,9 +87,28 @@ class PlanItemFinalizeStepController extends GetxController {
       }
       final data = response['data'] as Map<String, dynamic>;
       weekDays.assignAll((data['days'] as List? ?? []).map((d) => WizardDayGroupV2.fromJson(d)).toList());
+      // Keep the current selection if it still has items, else fall back to
+      // the first day-group that does.
+      final withItems = weekDays.where((d) => d.hasItems).toList();
+      if (withItems.isNotEmpty && !withItems.any((d) => d.dayGroup == selectedDayGroup.value)) {
+        selectedDayGroup.value = withItems.first.dayGroup;
+      }
     } finally {
       loading.value = false;
     }
+  }
+
+  /// Day-groups that have generated meals, as (canonical value, display
+  /// label) pairs for the selector.
+  List<MapEntry<String, String>> get selectableDayGroups =>
+      weekDays.where((d) => d.hasItems).map((d) => MapEntry(d.dayGroup, dayGroupLabel(d.dayGroup))).toList();
+
+  /// The day-group the timeline is currently showing, or null before load.
+  WizardDayGroupV2? get selectedDay {
+    for (final day in weekDays) {
+      if (day.dayGroup == selectedDayGroup.value) return day;
+    }
+    return null;
   }
 
   /// Finalizes this week (POST .../finalize-plan-item-week, sets

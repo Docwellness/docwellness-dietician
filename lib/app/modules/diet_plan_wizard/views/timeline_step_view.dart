@@ -7,11 +7,12 @@ import 'package:get/get.dart';
 import '../controllers/timeline_step_controller.dart';
 import '../controllers/wizard_controller.dart';
 import '../widgets/supplement_picker_sheet.dart';
+import '../widgets/wizard_theme.dart';
 
-const _headerColor = Color(0xff530630);
-const _bodyColor = Color(0xff1F2A37);
-const _mutedColor = Color(0xff6C737F);
-const _primaryColor = Color(0xff851653);
+const _headerColor = WizardPalette.plum;
+const _bodyColor = WizardPalette.ink;
+const _mutedColor = WizardPalette.muted;
+const _primaryColor = WizardPalette.magenta;
 const _supplementBg = Color(0xffF3E8FF);
 const _supplementFg = Color(0xff6D28D9);
 
@@ -101,8 +102,9 @@ class _DayGroupSection extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          border: Border.all(color: const Color(0xffFDF2FA)),
-          borderRadius: BorderRadius.circular(14),
+          color: WizardPalette.surface,
+          border: Border.all(color: WizardPalette.line),
+          borderRadius: BorderRadius.circular(WizardPalette.cardRadius),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

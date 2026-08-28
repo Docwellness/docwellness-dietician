@@ -11,6 +11,7 @@ import '../controllers/wizard_controller.dart';
 import '../models/wizard_week_models.dart';
 import '../widgets/ingredient_editor_sheet.dart';
 import '../widgets/recipe_picker_list.dart';
+import '../widgets/wizard_widgets.dart';
 
 const _headerColor = Color(0xff530630);
 const _bodyColor = Color(0xff1F2A37);
@@ -246,6 +247,11 @@ class _RecipeCard extends StatelessWidget {
                         color: _mutedColor,
                       ),
                     ),
+                  if (item.pinned && !item.locked)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: EditedBadge(onTap: () => _confirmUnpin(context)),
+                    ),
                 ],
               ),
             ),
@@ -263,6 +269,32 @@ class _RecipeCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _confirmUnpin(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const CustomText(text: 'Let Auto Adjust tune this recipe?', fontWeight: FontWeight.w600, fontSize: 16, color: _headerColor),
+        content: const CustomText(
+          text: 'You hand-set this portion, so Auto Adjust has been leaving it alone. Unpin it to let Auto Adjust rescale it again with the rest of the day. The current portion does not change now.',
+          fontWeight: FontWeight.w400,
+          fontSize: 13,
+          color: _bodyColor,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const CustomText(text: 'Keep pinned', fontWeight: FontWeight.w500, fontSize: 13, color: _mutedColor),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const CustomText(text: 'Unpin', fontWeight: FontWeight.w500, fontSize: 13, color: _headerColor),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) await controller.unpin(item);
   }
 
   void _openIngredientEditor(BuildContext context) {

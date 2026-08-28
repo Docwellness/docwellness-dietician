@@ -91,6 +91,21 @@ class RefinePortionsStepController extends GetxController {
     }
   }
 
+  /// "Edited" badge on a manually-portioned recipe card tapping through to
+  /// unpin - returns the item to the pool that "Auto Adjust" rescales. The
+  /// backend pins an item automatically whenever a portion edit is saved
+  /// (see editIngredients); this is the only way to undo that. Does not
+  /// change any portion.
+  Future<void> unpin(WizardPlanItemV2 item) async {
+    final result = await wizardService.setPinned(
+      patientId: patientId,
+      dietPlanId: dietPlanId,
+      planItemId: item.id,
+      pinned: false,
+    );
+    if (result != null && result['success'] == true) await loadWeekPlanItems();
+  }
+
   Future<bool> editIngredients(WizardPlanItemV2 item, List<WizardIngredientLine> updatedIngredients) async {
     final result = await wizardService.createCustomVersion(
       patientId: patientId,

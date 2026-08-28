@@ -1,21 +1,23 @@
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_button.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
 import 'package:docwellnesdoc/app/utils/functions/day_group_label.dart';
+import 'package:docwellnesdoc/app/utils/functions/quantity_label.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../controllers/plan_item_finalize_step_controller.dart';
 import '../controllers/wizard_controller.dart';
 import '../models/wizard_week_models.dart';
+import '../widgets/wizard_theme.dart';
+import '../widgets/wizard_widgets.dart';
 
-const _headerColor = Color(0xff530630);
-const _bodyColor = Color(0xff1F2A37);
-const _mutedColor = Color(0xff6C737F);
-const _primaryColor = Color(0xff851653);
-
-/// Step 5 (Finalize), v4.0 mode - see plan_item_finalize_step_controller.dart
-/// for why this is now always the read-only detail view (Refine Portions,
-/// formerly a pre-finalize sub-state here, is its own Step 3 now).
+/// Step 5 (Review & Finalize), v4.0 mode. A day-group-selectable meal
+/// timeline that previews the plan in the patient Diet Plan view's own
+/// visual language (portion pill, per-recipe macros, timeline rail), with
+/// cooking steps tucked behind a per-card expand - while keeping the
+/// per-day-group +/-5% calorie-tolerance gate that guards activation
+/// (openspec change diet-wizard-portions-and-polish,
+/// diet-plan-wizard/finalize-step).
 class PlanItemFinalizeStepView extends StatelessWidget {
   const PlanItemFinalizeStepView({super.key});
 
@@ -32,7 +34,7 @@ class PlanItemFinalizeStepView extends StatelessWidget {
             text: 'Generate a plan first before finalizing.',
             fontWeight: FontWeight.w400,
             fontSize: 13,
-            color: _mutedColor,
+            color: WizardPalette.muted,
             textAlign: TextAlign.center,
           ),
         ),
@@ -41,7 +43,7 @@ class PlanItemFinalizeStepView extends StatelessWidget {
 
     return Obx(() {
       if (controller.loading.value) {
-        return const Center(child: CircularProgressIndicator(color: _primaryColor));
+        return const Center(child: CircularProgressIndicator(color: WizardPalette.magenta));
       }
       if (controller.errorMessage.value != null && controller.weekDays.isEmpty) {
         return Center(
@@ -49,10 +51,14 @@ class PlanItemFinalizeStepView extends StatelessWidget {
             text: controller.errorMessage.value!,
             fontWeight: FontWeight.w400,
             fontSize: 13,
-            color: _mutedColor,
+            color: WizardPalette.muted,
           ),
         );
       }
+
+      final selectableDayGroups = controller.selectableDayGroups;
+      final day = controller.selectedDay;
+
       return Column(
         children: [
           Expanded(
@@ -62,49 +68,26 @@ class PlanItemFinalizeStepView extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const SizedBox(height: 8),
-                  const CustomText(text: 'Review & Finalize', fontWeight: FontWeight.w500, fontSize: 20, color: _headerColor),
+                  const CustomText(text: 'Review & Finalize', fontWeight: FontWeight.w600, fontSize: 20, color: WizardPalette.plum),
                   const SizedBox(height: 4),
                   const CustomText(
-                    text: 'Exactly what will be prescribed - review before confirming.',
+                    text: 'Exactly what will be prescribed - review each day before confirming.',
                     fontWeight: FontWeight.w400,
                     fontSize: 13,
-                    color: _mutedColor,
+                    color: WizardPalette.muted,
                   ),
-                  const SizedBox(height: 12),
-                  if (controller.targetCalories != null)
-                    ...controller.dayCalorieChecks.map(
-                      (check) => Padding(
-                        padding: const EdgeInsets.only(bottom: 6),
-                        child: Row(
-                          children: [
-                            Icon(
-                              check.withinTolerance ? Icons.check_circle : Icons.error,
-                              size: 16,
-                              color: check.withinTolerance ? const Color(0xff12B76A) : const Color(0xffDC2626),
-                            ),
-                            const SizedBox(width: 6),
-                            CustomText(
-                              text:
-                                  '${dayGroupLabel(check.dayGroup)}: ${check.totalCalories.round()} cal (target ${controller.targetCalories!.round()} cal)',
-                              fontWeight: FontWeight.w400,
-                              fontSize: 12,
-                              color: check.withinTolerance ? _mutedColor : const Color(0xffDC2626),
-                            ),
-                          ],
-                        ),
-                      ),
+                  const SizedBox(height: 14),
+                  if (controller.targetCalories != null) _CalorieChecklist(controller: controller),
+                  if (selectableDayGroups.length > 1) ...[
+                    const SizedBox(height: 8),
+                    DayGroupSelector(
+                      options: selectableDayGroups,
+                      selected: controller.selectedDayGroup.value,
+                      onSelect: (dg) => controller.selectedDayGroup.value = dg,
                     ),
-                  if (controller.targetCalories != null && !controller.canActivate)
-                    const Padding(
-                      padding: EdgeInsets.only(bottom: 8),
-                      child: CustomText(
-                        text: 'Every day must be within ±5% of the calorie target before this plan can be activated.',
-                        fontWeight: FontWeight.w400,
-                        fontSize: 12,
-                        color: Color(0xffDC2626),
-                      ),
-                    ),
-                  ...controller.weekDays.map((day) => _FinalizedDayCard(day: day)),
+                  ],
+                  const SizedBox(height: 16),
+                  if (day != null) _DayTimeline(day: day, controller: controller),
                   if (controller.errorMessage.value != null)
                     Padding(
                       padding: const EdgeInsets.only(top: 8),
@@ -112,7 +95,7 @@ class PlanItemFinalizeStepView extends StatelessWidget {
                         text: controller.errorMessage.value!,
                         fontWeight: FontWeight.w400,
                         fontSize: 12,
-                        color: const Color(0xffDC2626),
+                        color: WizardPalette.warn,
                       ),
                     ),
                   const SizedBox(height: 16),
@@ -132,7 +115,7 @@ class PlanItemFinalizeStepView extends StatelessWidget {
                 },
                 text: 'Confirm & Activate',
                 isOutline: false,
-                buttonColor: _headerColor,
+                buttonColor: WizardPalette.plum,
               ),
             ),
           ),
@@ -142,95 +125,182 @@ class PlanItemFinalizeStepView extends StatelessWidget {
   }
 }
 
-class _FinalizedDayCard extends StatelessWidget {
-  final WizardDayGroupV2 day;
+class _CalorieChecklist extends StatelessWidget {
+  final PlanItemFinalizeStepController controller;
 
-  const _FinalizedDayCard({required this.day});
+  const _CalorieChecklist({required this.controller});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(border: Border.all(color: const Color(0xffFDF2FA)), borderRadius: BorderRadius.circular(12)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          CustomText(text: dayGroupLabel(day.dayGroup), fontWeight: FontWeight.w600, fontSize: 14, color: _bodyColor),
-          const SizedBox(height: 6),
-          ...day.meals.where((m) => m.items.isNotEmpty || m.supplements.isNotEmpty).map(
-            (meal) => Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  CustomText(text: meal.servingTime, fontWeight: FontWeight.w500, fontSize: 12, color: _primaryColor),
-                  ...meal.items.map((item) => _FinalizedItemDetail(item: item)),
-                  ...meal.supplements.map(
-                    (supplement) => Padding(
-                      padding: const EdgeInsets.only(left: 8, top: 4),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.medication, size: 14, color: _mutedColor),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: CustomText(
-                              text: '${supplement.supplementName ?? 'Supplement'}${supplement.dosage != null ? ' · ${supplement.dosage}' : ''} (${supplement.timingAnchor})',
-                              fontWeight: FontWeight.w400,
-                              fontSize: 12,
-                              color: _bodyColor,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+    final target = controller.targetCalories!;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ...controller.dayCalorieChecks.map(
+          (check) => Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Row(
+              children: [
+                Icon(
+                  check.withinTolerance ? Icons.check_circle : Icons.error,
+                  size: 16,
+                  color: check.withinTolerance ? WizardPalette.ok : WizardPalette.warn,
+                ),
+                const SizedBox(width: 6),
+                CustomText(
+                  text: '${dayGroupLabel(check.dayGroup)}: ${check.totalCalories.round()} cal (target ${target.round()} cal)',
+                  fontWeight: FontWeight.w400,
+                  fontSize: 12,
+                  color: check.withinTolerance ? WizardPalette.muted : WizardPalette.warn,
+                ),
+              ],
             ),
           ),
-        ],
-      ),
+        ),
+        if (!controller.canActivate)
+          const Padding(
+            padding: EdgeInsets.only(top: 2, bottom: 4),
+            child: CustomText(
+              text: 'Every day must be within ±5% of the calorie target before this plan can be activated.',
+              fontWeight: FontWeight.w400,
+              fontSize: 12,
+              color: WizardPalette.warn,
+            ),
+          ),
+      ],
     );
   }
 }
 
-class _FinalizedItemDetail extends StatelessWidget {
+class _DayTimeline extends StatelessWidget {
+  final WizardDayGroupV2 day;
+  final PlanItemFinalizeStepController controller;
+
+  const _DayTimeline({required this.day, required this.controller});
+
+  @override
+  Widget build(BuildContext context) {
+    final meals = day.meals.where((m) => m.items.isNotEmpty || m.supplements.isNotEmpty).toList();
+    if (meals.isEmpty) {
+      return const CustomText(
+        text: 'No meals generated for this day yet.',
+        fontWeight: FontWeight.w400,
+        fontSize: 13,
+        color: WizardPalette.muted,
+      );
+    }
+    return MealTimeline(
+      slots: meals
+          .map(
+            (meal) => (
+              servingTime: meal.servingTime,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final item in meal.items) ...[
+                    _RecipeCard(item: item),
+                    const SizedBox(height: 8),
+                  ],
+                  for (final supplement in meal.supplements)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: _SupplementRow(supplement: supplement),
+                    ),
+                ],
+              ),
+            ),
+          )
+          .toList(),
+    );
+  }
+}
+
+class _RecipeCard extends StatelessWidget {
   final WizardPlanItemV2 item;
 
-  const _FinalizedItemDetail({required this.item});
+  const _RecipeCard({required this.item});
+
+  String? get _portionLabel {
+    final components = item.recipeVersion?.components ?? const [];
+    if (components.isEmpty) return null;
+    return components.map((c) {
+      final formatted = formatQuantityLabel(c.quantity.toStringAsFixed(2), c.unit);
+      if (components.length > 1 && c.label != item.recipeName) return '${c.label}: $formatted';
+      return formatted;
+    }).join(', ');
+  }
 
   @override
   Widget build(BuildContext context) {
     final version = item.recipeVersion;
-    return Padding(
-      padding: const EdgeInsets.only(left: 8, top: 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    final n = item.calculatedNutrition ?? version?.nutritionPerServing;
+    num? macro(String key) => (n?[key] as num?);
+
+    return WizardRecipeCard(
+      title: item.recipeName,
+      portionLabel: _portionLabel,
+      calories: item.calories?.round(),
+      versionLabel: version != null ? 'V${version.versionNumber}' : null,
+      pinned: item.pinned,
+      macros: n == null
+          ? null
+          : MacroChipRow(protein: macro('protein'), fiber: macro('fiber'), carbs: macro('carbs'), fat: macro('fats')),
+      expandedBody: (version == null || (version.ingredients.isEmpty && version.steps.isEmpty))
+          ? null
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (version.ingredients.isNotEmpty)
+                  CustomText(
+                    text: version.ingredients
+                        .map((i) => '${i.foodItemName ?? '?'} ${i.rawQuantity.toStringAsFixed(i.rawQuantity % 1 == 0 ? 0 : 1)}${i.unit}')
+                        .join(', '),
+                    fontWeight: FontWeight.w400,
+                    fontSize: 12,
+                    color: WizardPalette.muted,
+                  ),
+                if (version.steps.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  CustomText(
+                    text: version.steps.asMap().entries.map((e) => '${e.key + 1}. ${e.value}').join('  '),
+                    fontWeight: FontWeight.w400,
+                    fontSize: 11,
+                    color: WizardPalette.muted,
+                  ),
+                ],
+              ],
+            ),
+    );
+  }
+}
+
+class _SupplementRow extends StatelessWidget {
+  final WizardSupplement supplement;
+
+  const _SupplementRow({required this.supplement});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: WizardPalette.surface,
+        borderRadius: BorderRadius.circular(WizardPalette.cardRadius),
+        border: Border.all(color: WizardPalette.line),
+      ),
+      child: Row(
         children: [
-          CustomText(text: item.recipeName, fontWeight: FontWeight.w500, fontSize: 13, color: _bodyColor),
-          if (version != null && version.ingredients.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: CustomText(
-                text: version.ingredients
-                    .map((i) => '${i.foodItemName ?? '?'} ${i.rawQuantity.toStringAsFixed(i.rawQuantity % 1 == 0 ? 0 : 1)}${i.unit}')
-                    .join(', '),
-                fontWeight: FontWeight.w400,
-                fontSize: 12,
-                color: _mutedColor,
-              ),
+          const Icon(Icons.medication_outlined, size: 15, color: WizardPalette.muted),
+          const SizedBox(width: 8),
+          Expanded(
+            child: CustomText(
+              text:
+                  '${supplement.supplementName ?? 'Supplement'}${supplement.dosage != null ? ' · ${supplement.dosage}' : ''} (${supplement.timingAnchor})',
+              fontWeight: FontWeight.w400,
+              fontSize: 12,
+              color: WizardPalette.ink,
             ),
-          if (version != null && version.steps.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: CustomText(
-                text: version.steps.asMap().entries.map((e) => '${e.key + 1}. ${e.value}').join('  '),
-                fontWeight: FontWeight.w400,
-                fontSize: 11,
-                color: _mutedColor,
-              ),
-            ),
+          ),
         ],
       ),
     );

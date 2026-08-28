@@ -12,12 +12,14 @@ import '../controllers/refine_portions_step_controller.dart';
 import '../controllers/wizard_controller.dart';
 import '../models/wizard_week_models.dart';
 import '../widgets/recipe_picker_list.dart';
+import '../widgets/wizard_theme.dart';
+import '../widgets/wizard_widgets.dart';
 
-const _headerColor = Color(0xff530630);
-const _bodyColor = Color(0xff1F2A37);
-const _mutedColor = Color(0xff6C737F);
-const _primaryColor = Color(0xff851653);
-const _pillBg = Color(0xffFDF2FA);
+const _headerColor = WizardPalette.plum;
+const _bodyColor = WizardPalette.ink;
+const _mutedColor = WizardPalette.muted;
+const _primaryColor = WizardPalette.magenta;
+const _pillBg = WizardPalette.tint;
 
 /// Step 2 (Generate) "done" phase, plan-item mode only - shown inline by
 /// generation_step_view.dart instead of the plain days-array checkmark
@@ -234,33 +236,21 @@ class _ReviewRecipeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: () => _openDetails(context),
-      borderRadius: BorderRadius.circular(10),
-      child: Container(
-        margin: const EdgeInsets.only(top: 8),
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(color: const Color(0xffFAFAFA), borderRadius: BorderRadius.circular(10)),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  CustomText(text: item.recipeName, fontWeight: FontWeight.w500, fontSize: 13, color: _bodyColor),
-                ],
-              ),
-            ),
-            InkWell(
-              onTap: () => _openSwapPicker(context),
-              child: const Padding(padding: EdgeInsets.all(4), child: Icon(Icons.swap_horiz, size: 18, color: _primaryColor)),
-            ),
-            InkWell(
-              onTap: () => controller.removeItem(item),
-              child: const Padding(padding: EdgeInsets.all(4), child: Icon(Icons.close, size: 18, color: _mutedColor)),
-            ),
-          ],
-        ),
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: WizardRecipeCard(
+        title: item.recipeName,
+        onTap: () => _openDetails(context),
+        actions: [
+          InkWell(
+            onTap: () => _openSwapPicker(context),
+            child: const Padding(padding: EdgeInsets.all(4), child: Icon(Icons.swap_horiz, size: 18, color: _primaryColor)),
+          ),
+          InkWell(
+            onTap: () => controller.removeItem(item),
+            child: const Padding(padding: EdgeInsets.all(4), child: Icon(Icons.close, size: 18, color: _mutedColor)),
+          ),
+        ],
       ),
     );
   }
