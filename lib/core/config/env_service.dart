@@ -7,8 +7,12 @@ class EnvService {
   EnvService._();
 
   /// Backend host (no path suffix - callers append their own /api/... path,
-  /// see apiBaseUrl in main.dart). Override at build time with:
-  ///   flutter run --dart-define=API_BASE_URL=https://dev-api.docwellness.fit
+  /// see apiBaseUrl in main.dart). Bound to the build via a config file:
+  ///   flutter run --dart-define-from-file=config/dev.json     (dev-api)
+  ///   flutter run --dart-define-from-file=config/prod.json    (production)
+  ///   flutter run --dart-define-from-file=config/local.json   (host machine)
+  /// or use scripts/run-{dev,prod,local}.ps1 / the VS Code launch configs.
+  /// A bare `flutter run` with no config falls back to a local backend.
   static const String apiHost = String.fromEnvironment(
     'API_BASE_URL',
     defaultValue: 'http://localhost:5000',

@@ -1,0 +1,10 @@
+{
+  "_comment": "Dev build config - dev-api.docwellness.fit + dev-environment SDK keys. Pass with `flutter run --dart-define-from-file=config/dev.json` (or use scripts/run-dev.ps1 / the VS Code 'dietician (dev-api)' launch config). Every value here is safe to commit: Sentry DSNs and PostHog project API keys are designed to be public/client-embeddable, and the Supabase publishable key only permits what RLS allows. Real secrets (JWT signing keys, DB passwords, Supabase service-role key) never belong in a Flutter dart-define.",
+  "ENV": "development",
+  "API_BASE_URL": "https://dev-api.docwellness.fit",
+  "SENTRY_DSN": "https://24d8ba47f43fc752850f3fb3a1deda59@o4511762128896000.ingest.de.sentry.io/4511762171822160",
+  "POSTHOG_API_KEY": "phc_r36BW82kcdGPitJRk34vb2fNnxMamUVaHRcBPzeebVMe",
+  "POSTHOG_HOST": "https://eu.i.posthog.com",
+  "SUPABASE_URL": "https://ovflhhhtwrjthnyrnaoo.supabase.co",
+  "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_FmRYCR40VTVGDsHxK7Z9jQ_67UZ-t-o"
+}

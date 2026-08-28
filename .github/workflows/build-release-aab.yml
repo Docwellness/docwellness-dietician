@@ -1,10 +1,10 @@
 name: Build release AAB
 
 # Manual only, on purpose - this produces a signed production release build
-# (prod API/Supabase/Sentry/PostHog dart-defines below), not something that
-# should fire on every push. Run it from the Actions tab when you actually
-# want a new release build; upload to Play Console (Internal testing track)
-# is still a manual step.
+# (prod API/Supabase/Sentry/PostHog config from config/prod.json), not
+# something that should fire on every push. Run it from the Actions tab when
+# you actually want a new release build; upload to Play Console (Internal
+# testing track) is still a manual step.
 on:
   workflow_dispatch:
     inputs:
@@ -75,14 +75,7 @@ jobs:
           if [ -n "${{ github.event.inputs.build_number }}" ]; then
             ARGS="$ARGS --build-number=${{ github.event.inputs.build_number }}"
           fi
-          flutter build appbundle $ARGS \
-            --dart-define=ENV=production \
-            --dart-define=API_BASE_URL=https://api.docwellness.fit \
-            --dart-define=SENTRY_DSN=https://24d8ba47f43fc752850f3fb3a1deda59@o4511762128896000.ingest.de.sentry.io/4511762171822160 \
-            --dart-define=POSTHOG_API_KEY=phc_r36BW82kcdGPitJRk34vb2fNnxMamUVaHRcBPzeebVMe \
-            --dart-define=POSTHOG_HOST=https://eu.i.posthog.com \
-            --dart-define=SUPABASE_URL=https://frczivcwrgfsbkmrioux.supabase.co \
-            --dart-define=SUPABASE_PUBLISHABLE_KEY=sb_publishable_8RtU4F1YHk16PzrVjjsiyA_uYaG_arn
+          flutter build appbundle $ARGS --dart-define-from-file=config/prod.json
 
       - uses: actions/upload-artifact@v5
         with:

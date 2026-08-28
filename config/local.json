@@ -1,0 +1,7 @@
+{
+  "_comment": "Local backend build config - talks to a backend running on the host machine (`npm run dev` in docwellness-backend, port 5000). 10.0.2.2 is the Android emulator's alias for the host loopback; use http://localhost:5000 for a physical device on the same network (swap for the machine's LAN IP) or the iOS simulator. Sentry/PostHog are intentionally omitted so they stay no-ops locally (EnvService defaults them to empty).",
+  "ENV": "development",
+  "API_BASE_URL": "http://10.0.2.2:5000",
+  "SUPABASE_URL": "https://ovflhhhtwrjthnyrnaoo.supabase.co",
+  "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_FmRYCR40VTVGDsHxK7Z9jQ_67UZ-t-o"
+}
