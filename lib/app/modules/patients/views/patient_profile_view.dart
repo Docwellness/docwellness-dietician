@@ -589,128 +589,116 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                 ],
               ),
             ),
+          // ── Patient identity header ──────────────────────────────────
+          // The avatar wears a ring in the membership-tier colour (amber for
+          // Golden, steel-blue for Platinum, …) so the tier reads at a
+          // glance; the chip beside the name spells it out. "Chat with
+          // patient" is a full-width action under the identity row instead
+          // of a cramped fixed-width stub wedged beside the name, and the
+          // tier chip now hugs its label rather than stretching edge-to-edge.
           Container(
             width: double.infinity,
-            color: Color(0xffFEF6FB),
-            padding: EdgeInsets.all(16),
-            child: Row(
+            color: const Color(0xffFEF6FB),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                SizedBox(
-                  height: 80,
-                  width: 80,
-                  child: Stack(
-                    children: [
-                      Container(
-                        height: 70,
-                        width: 70,
-
-                        decoration: BoxDecoration(
-                          border: Border.all(color: Colors.white, width: 3.2),
-                          borderRadius: BorderRadius.circular(90),
-                          color: Color(0xffF3F4F6),
-                        ),
-                        child: Center(
-                          child:
-                              (basic?.profileImage != null &&
-                                  basic!.profileImage!.isNotEmpty)
-                              ? CircleAvatar(
-                                  radius: 28.3,
-                                  backgroundImage: NetworkImage(
-                                    basic.profileImage!,
-                                  ),
-                                )
-                              : CircleAvatar(
-                                  radius: 28.3,
-                                  backgroundColor: Color(0xff851653),
-                                  child: Text(
-                                    (basic?.fullName ?? 'U')[0].toUpperCase(),
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 22,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                SizedBox(width: 10),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                Row(
                   children: [
-                    CustomText(
-                      text: basic!.fullName!,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 24,
-                      color: Color(0xff111927),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    _PatientAvatar(
+                      imageUrl: basic?.profileImage,
+                      initial: (basic?.fullName ?? 'U')[0].toUpperCase(),
+                      ringColor: (status?.membershipPlan ?? '').isNotEmpty
+                          ? membershipBadge.border
+                          : const Color(0xffE5E7EB),
                     ),
-                    SizedBox(height: 8),
-                    GestureDetector(
-                      onTap: () => _openChatWithPatient(widget.patientId),
-                      child: Container(
-                        padding: EdgeInsets.symmetric(vertical: 6.5),
-                        width: 147,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          border: Border.all(color: Color(0xffE5E7EB)),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Image.asset(
-                              'assets/icons/chat_icon.png',
-                              width: 16,
-                              height: 16,
-                              fit: BoxFit.cover,
-                            ),
-                            SizedBox(width: 8),
-                            CustomText(
-                              text: 'Chat with patient',
-                              fontWeight: FontWeight.w500,
-                              fontSize: 12,
-                              color: Color(0xff111927),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: 8),
-                    Container(
-                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: membershipBadge.background,
-                        border: Border.all(color: membershipBadge.border),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Image.asset(
-                            'assets/icons/star.png',
-                            width: 11.91,
-                            height: 12,
-                            fit: BoxFit.cover,
-                            color: membershipBadge.text,
-                            colorBlendMode: BlendMode.srcIn,
-                          ),
-                          SizedBox(width: 4),
                           CustomText(
-                            text: (status?.membershipPlan ?? '').isNotEmpty
-                                ? membershipBadge.label.toUpperCase()
-                                : 'NO MEMBERSHIP',
-                            fontWeight: FontWeight.w500,
-                            fontSize: 12,
-                            color: membershipBadge.text,
+                            text: basic!.fullName ?? '—',
+                            fontWeight: FontWeight.w700,
+                            fontSize: 20,
+                            color: const Color(0xff111927),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            height: 1.15,
+                          ),
+                          const SizedBox(height: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 9,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: membershipBadge.background,
+                              border: Border.all(color: membershipBadge.border),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.star_rounded,
+                                  size: 13,
+                                  color: membershipBadge.text,
+                                ),
+                                const SizedBox(width: 4),
+                                CustomText(
+                                  text: (status?.membershipPlan ?? '').isNotEmpty
+                                      ? membershipBadge.label.toUpperCase()
+                                      : 'NO MEMBERSHIP',
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 11,
+                                  color: membershipBadge.text,
+                                ),
+                              ],
+                            ),
                           ),
                         ],
                       ),
                     ),
                   ],
+                ),
+                const SizedBox(height: 14),
+                Material(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(10),
+                    onTap: () => _openChatWithPatient(widget.patientId),
+                    child: Container(
+                      height: 44,
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: const Color(0xff851653),
+                          width: 1.4,
+                        ),
+                      ),
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.chat_bubble_outline_rounded,
+                            size: 17,
+                            color: Color(0xff851653),
+                          ),
+                          SizedBox(width: 8),
+                          CustomText(
+                            text: 'Chat with patient',
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                            color: Color(0xff851653),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -1296,15 +1284,20 @@ class _PatientProfileViewState extends State<PatientProfileView> {
               ),
           ],
           // ── Exercise Plan section ─────────────────────────────────
-          // Always shown once firstConsultationId exists (same gate the old
-          // separate Create/Edit button used) - independent of the diet
-          // plan's own existence/consent state, an exercise plan doesn't
-          // require a diet plan to exist first. No separate entry-point
-          // button anymore: tapping any card (even an empty one) opens
-          // EditExerciseDayGroupSheet directly, which both creates the
-          // plan on first use and edits it after - see that widget's doc
-          // comment.
-          if (status.firstConsultationId != null)
+          // Gated on the same condition that makes diet-plan content
+          // available above: the first consultation exists AND either the
+          // patient has reviewed it and submitted consent, or a diet plan
+          // already exists (which implies they consented earlier). Right
+          // after the consultation is completed, while the patient still
+          // has to review it, the "Waiting for the patient to review..."
+          // banner above is the only thing shown - and editing a
+          // consultation after consent clears patientConsented server-side,
+          // so this section hides again until the patient re-reviews. No
+          // separate entry-point button: tapping any card (even an empty
+          // one) opens EditExerciseDayGroupSheet directly, which both
+          // creates the plan on first use and edits it after - see that
+          // widget's doc comment.
+          if (_exercisePlanVisible(status))
             Padding(
               padding: const EdgeInsets.only(left: 16, top: 12),
               child: CustomText(
@@ -1314,7 +1307,7 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                 color: Color(0xff530630),
               ),
             ),
-          if (status.firstConsultationId != null)
+          if (_exercisePlanVisible(status))
             Obx(() {
               // GetX's Obx only tracks observable reads that happen
               // synchronously inside its own builder - exercisesForDayGroup()
@@ -3262,6 +3255,18 @@ class _PatientProfileViewState extends State<PatientProfileView> {
     return s != null && s != 'Unpaid';
   }
 
+  // The Exercise Plan section becomes available on the same condition that
+  // makes diet-plan content available: a first consultation exists AND the
+  // patient has consented to it, or a diet plan already exists (which
+  // implies an earlier consent). Mirrors the "Create Diet Plan" gate -
+  // firstConsultationId + patientConsented - plus the "Weekly Diet Plans"
+  // gate - firstConsultationId + activeDietPlanId - so a just-completed
+  // consultation the patient hasn't reviewed yet shows neither.
+  bool _exercisePlanVisible(Status status) {
+    if (status.firstConsultationId == null) return false;
+    return status.patientConsented == true || status.activeDietPlanId != null;
+  }
+
   // Ground truth for "fully paid" vs. "partially paid" is the actual
   // received/pending amounts, not just the resting requestStatus label -
   // that label is set once at activation time and can go stale if amounts
@@ -3585,6 +3590,53 @@ class _PatientProfileViewState extends State<PatientProfileView> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Circular patient avatar (photo or name initial) inside a two-tone ring:
+/// an outer band in [ringColor] - the membership-tier colour - and a thin
+/// background-coloured gap that lifts the ring off the photo. Total
+/// diameter is 64.
+class _PatientAvatar extends StatelessWidget {
+  final String? imageUrl;
+  final String initial;
+  final Color ringColor;
+
+  const _PatientAvatar({
+    required this.imageUrl,
+    required this.initial,
+    required this.ringColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hasImage = imageUrl != null && imageUrl!.isNotEmpty;
+    return Container(
+      padding: const EdgeInsets.all(2.5),
+      decoration: BoxDecoration(shape: BoxShape.circle, color: ringColor),
+      child: Container(
+        padding: const EdgeInsets.all(2.5),
+        decoration: const BoxDecoration(
+          shape: BoxShape.circle,
+          color: Color(0xffFEF6FB),
+        ),
+        child: CircleAvatar(
+          radius: 27,
+          backgroundColor: const Color(0xff851653),
+          backgroundImage: hasImage ? NetworkImage(imageUrl!) : null,
+          child: hasImage
+              ? null
+              : Text(
+                  initial,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
         ),
       ),
     );
