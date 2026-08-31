@@ -1,4 +1,5 @@
 import 'package:docwellnesdoc/app/modules/receipes/models/recipe_model.dart';
+import 'package:docwellnesdoc/app/utils/common_widgets/app_toast.dart';
 import 'package:get/get.dart';
 
 import '../models/wizard_week_models.dart';
@@ -185,7 +186,22 @@ class RefinePortionsStepController extends GetxController {
       planItemId: item.id,
       newParentRecipeId: newParentRecipeId,
     );
-    if (result != null && result['success'] == true) await loadWeekPlanItems();
+    if (result != null && result['success'] == true) {
+      await loadWeekPlanItems();
+    } else {
+      // Surface a backend rejection (e.g. a recipe with unresolved
+      // ingredients - 404 with a message) instead of silently doing nothing.
+      _showSwapError(result);
+    }
+  }
+
+  void _showSwapError(dynamic result) {
+    final ctx = Get.overlayContext;
+    if (ctx == null) return;
+    final message = (result is Map && result['message'] is String && (result['message'] as String).trim().isNotEmpty)
+        ? result['message'] as String
+        : 'Could not swap that recipe.';
+    showAppToast(ctx, message: message, type: AppToastType.warning);
   }
 
   /// "Update Existing" on the Ingredient Editor's "Recipe Details" sheet -

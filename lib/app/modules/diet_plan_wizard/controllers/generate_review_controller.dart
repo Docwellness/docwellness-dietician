@@ -1,5 +1,6 @@
 import 'package:docwellnesdoc/app/modules/receipes/models/recipe_model.dart';
 import 'package:docwellnesdoc/app/modules/receipes/services/recipe_service.dart';
+import 'package:docwellnesdoc/app/utils/common_widgets/app_toast.dart';
 import 'package:docwellnesdoc/app/utils/functions/day_group_label.dart' as day_group_label;
 import 'package:get/get.dart';
 
@@ -75,7 +76,24 @@ class GenerateReviewController extends GetxController {
     final mealSlotId = currentSlot?.mealSlotId;
     if (mealSlotId == null) return;
     final result = await wizardService.addPlanItem(patientId: patientId, dietPlanId: dietPlanId, mealSlotId: mealSlotId, recipeId: recipeId);
-    if (result != null && result['success'] == true) await loadWeekPlanItems();
+    if (result != null && result['success'] == true) {
+      await loadWeekPlanItems();
+    } else {
+      _showItemActionError(result, 'Could not add that recipe.');
+    }
+  }
+
+  /// A plan-item add/swap can be rejected by the backend (most commonly a
+  /// recipe with unresolved ingredients - a 404 with an explanatory
+  /// message). Without this the failure was swallowed and the tap looked
+  /// like it did nothing.
+  void _showItemActionError(dynamic result, String fallback) {
+    final ctx = Get.overlayContext;
+    if (ctx == null) return;
+    final message = (result is Map && result['message'] is String && (result['message'] as String).trim().isNotEmpty)
+        ? result['message'] as String
+        : fallback;
+    showAppToast(ctx, message: message, type: AppToastType.warning);
   }
 
   Future<void> removeItem(WizardPlanItemV2 item) async {
@@ -90,7 +108,11 @@ class GenerateReviewController extends GetxController {
       planItemId: item.id,
       newParentRecipeId: newParentRecipeId,
     );
-    if (result != null && result['success'] == true) await loadWeekPlanItems();
+    if (result != null && result['success'] == true) {
+      await loadWeekPlanItems();
+    } else {
+      _showItemActionError(result, 'Could not swap that recipe.');
+    }
   }
 
   /// "Update Existing" on Recipe Details' AI-regenerated preview - see

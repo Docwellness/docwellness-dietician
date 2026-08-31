@@ -656,6 +656,13 @@ class RecipeListItem {
   // recipe picker group side/salad accompaniments under their own heading
   // instead of mixing them anonymously into the main list.
   final List<String> tags;
+  // Whether this recipe can actually be added to / swapped into a diet plan
+  // right now - false when it has no Active V1 RecipeVersion or that V1
+  // still has unresolved ingredients (see uploadRecipieController.listRecipes
+  // + planItemController.addPlanItem). Defaults true so callers that don't
+  // get the field from the backend are unaffected.
+  final bool addable;
+  final String? unaddableReason;
 
   RecipeListItem({
     required this.id,
@@ -670,6 +677,8 @@ class RecipeListItem {
     required this.description,
     this.createdAt,
     this.tags = const [],
+    this.addable = true,
+    this.unaddableReason,
   });
 
   bool get isSide => tags.contains('side');
@@ -695,6 +704,8 @@ class RecipeListItem {
           ? DateTime.tryParse(json['createdAt'])
           : null,
       tags: json['tags'] is List ? List<String>.from(json['tags']) : const [],
+      addable: json['addable'] != false,
+      unaddableReason: json['unaddableReason'] as String?,
     );
   }
 }
