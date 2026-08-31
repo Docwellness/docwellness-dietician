@@ -184,6 +184,7 @@ class RecipeService {
       if (response != null &&
           response.statusCode == 201 &&
           response.data['success'] == true) {
+        invalidateRecipeListCache();
         // Guard against future schema drift: if fromJson throws, the recipe
         // is still persisted on the server. Return a minimal SavedRecipe so
         // the UI doesn't prompt the user to retry (which would duplicate it).
@@ -308,6 +309,19 @@ class RecipeService {
     }
   }
 
+  // A short-lived cache for listRecipes, keyed by its query. The wizard's
+  // Add / Swap pickers re-fetch the same slot's recipe list every time
+  // they open - re-picking into one slot, or tabbing between slots and
+  // back, hit the network for an identical response each time. The master
+  // recipe catalog barely changes within a wizard session, so a ~45s
+  // cache makes every open after the first instant. Invalidated by
+  // invalidateRecipeListCache() after a create / edit that would change
+  // the list (see recipe_details.dart).
+  static final Map<String, _CachedRecipeList> _listCache = {};
+  static const Duration _listCacheTtl = Duration(seconds: 45);
+
+  static void invalidateRecipeListCache() => _listCache.clear();
+
   /// List all recipes with optional category/topCategory/servingTime filters
   /// GET /api/dietician/recipes
   Future<RecipeListResponse> listRecipes({
@@ -317,7 +331,15 @@ class RecipeService {
     String? tag,
     int page = 1,
     int limit = 20,
+    bool useCache = true,
   }) async {
+    final cacheKey = '$category|$topCategory|$servingTime|$tag|$page|$limit';
+    if (useCache) {
+      final hit = _listCache[cacheKey];
+      if (hit != null && DateTime.now().difference(hit.fetchedAt) < _listCacheTtl) {
+        return hit.response;
+      }
+    }
     try {
       // See listRecipesByServingTime above - values like "Night Drink" or
       // "Healthy Bowls" contain spaces, so building this as a raw string
@@ -344,7 +366,9 @@ class RecipeService {
       if (response != null &&
           response.statusCode == 200 &&
           response.data['success'] == true) {
-        return RecipeListResponse.fromJson(response.data);
+        final parsed = RecipeListResponse.fromJson(response.data);
+        _listCache[cacheKey] = _CachedRecipeList(parsed, DateTime.now());
+        return parsed;
       }
 
       return RecipeListResponse(recipes: [], pagination: null);
@@ -391,9 +415,11 @@ class RecipeService {
         headers: {'Authorization': 'Bearer $token'},
       );
 
-      return response != null &&
+      final ok = response != null &&
           response.statusCode == 200 &&
           response.data['success'] == true;
+      if (ok) invalidateRecipeListCache();
+      return ok;
     } catch (e) {
       print('❌ updateRecipeFields exception: $e');
       return false;
@@ -446,9 +472,11 @@ class RecipeService {
         headers: {'Authorization': 'Bearer $token'},
       );
 
-      return response != null &&
+      final ok = response != null &&
           response.statusCode == 200 &&
           response.data['success'] == true;
+      if (ok) invalidateRecipeListCache();
+      return ok;
     } catch (e) {
       print('❌ saveExistingRecipe exception: $e');
       return false;
@@ -727,4 +755,11 @@ class RecipeListResponse {
 
   int get total => pagination?['total'] ?? recipes.length;
   bool get hasMore => pagination?['hasMore'] ?? false;
+}
+
+/// One entry in RecipeService's short-lived listRecipes cache.
+class _CachedRecipeList {
+  final RecipeListResponse response;
+  final DateTime fetchedAt;
+  _CachedRecipeList(this.response, this.fetchedAt);
 }

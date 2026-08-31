@@ -48,6 +48,16 @@ class GenerateReviewController extends GetxController {
   void onInit() {
     super.onInit();
     if (dietPlanId.isNotEmpty) loadWeekPlanItems();
+    // Warm RecipeService's list cache for whichever slot is in view, and
+    // again whenever the serving-time tab changes, so the Add / Swap sheet
+    // opens against a cached response instead of a fresh network round-trip.
+    _prefetchSlotRecipes();
+    ever(selectedServingTime, (_) => _prefetchSlotRecipes());
+  }
+
+  void _prefetchSlotRecipes() {
+    // Fire-and-forget; the picker's own listRecipes call reuses the result.
+    recipeService.listRecipes(servingTime: selectedServingTime.value, limit: 50);
   }
 
   Future<void> loadWeekPlanItems() async {

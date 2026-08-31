@@ -204,6 +204,9 @@ class ReceipesController extends GetxController {
         tag: currentTagFilter,
         page: _currentPage,
         limit: 20,
+        // An explicit refresh (pull-to-refresh, or after a create/edit)
+        // must hit the network, not the short-lived list cache.
+        useCache: !refresh,
       );
 
       if (refresh || _currentPage == 1) {
