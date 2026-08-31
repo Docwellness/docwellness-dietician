@@ -64,6 +64,33 @@ double calculateBmr({
       : (10 * weight) + (6.25 * height) - (5 * age) - 161;
 }
 
+/// Physiological baseline for one patient: BMI (weight / height²), the
+/// Mifflin-St Jeor BMR, and the activity-adjusted TDEE - the same three
+/// numbers computeCalorieTiers() derives every calorie budget from,
+/// surfaced so the Targets step can show where those budgets start.
+({double bmi, double bmr, double tdee}) computeBodyMetrics({
+  required bool isMale,
+  required double weight,
+  required double height,
+  required int age,
+  required String activityLevel,
+}) {
+  final heightM = height / 100;
+  final bmi = heightM > 0 ? weight / (heightM * heightM) : 0.0;
+  final bmr = calculateBmr(isMale: isMale, weight: weight, height: height, age: age);
+  final tdee = bmr * activityMultiplier(activityLevel);
+  return (bmi: bmi, bmr: bmr, tdee: tdee);
+}
+
+/// WHO adult BMI bands. Empty string for a non-positive BMI (missing height).
+String bmiCategory(double bmi) {
+  if (bmi <= 0) return '';
+  if (bmi < 18.5) return 'Underweight';
+  if (bmi < 25) return 'Normal';
+  if (bmi < 30) return 'Overweight';
+  return 'Obese';
+}
+
 /// Clinical safety floor - never propose a budget below this regardless of
 /// how aggressive the selected deficit is.
 double applyCalorieSafetyFloor(double calories, bool isMale) {

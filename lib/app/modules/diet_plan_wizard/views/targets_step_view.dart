@@ -31,6 +31,14 @@ class TargetsStepView extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 8),
+          Obx(() {
+            final m = controller.bodyMetrics.value;
+            if (m == null) return const SizedBox.shrink();
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: _BodyMetricsCard(bmi: m.bmi, bmr: m.bmr, tdee: m.tdee),
+            );
+          }),
           const CustomText(
             text: 'Calories',
             fontWeight: FontWeight.w500,
@@ -95,6 +103,103 @@ class TargetsStepView extends StatelessWidget {
           const SizedBox(height: 24),
         ],
       ),
+    );
+  }
+}
+
+/// Read-only strip above the calorie cards: the patient's BMI, BMR and
+/// TDEE - the physiological baseline every calorie budget below is derived
+/// from. Not selectable, so it's deliberately styled apart from the tier
+/// cards (no radio, filled tint, hairline-divided columns).
+class _BodyMetricsCard extends StatelessWidget {
+  final double bmi;
+  final double bmr;
+  final double tdee;
+
+  const _BodyMetricsCard({required this.bmi, required this.bmr, required this.tdee});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      decoration: BoxDecoration(
+        color: const Color(0xffFEF6FB),
+        border: Border.all(color: _cardBorder, width: 1),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        children: [
+          IntrinsicHeight(
+            child: Row(
+              children: [
+                Expanded(
+                  child: _metric(
+                    'BMI',
+                    bmi > 0 ? bmi.toStringAsFixed(1) : '—',
+                    bmiCategory(bmi),
+                  ),
+                ),
+                const VerticalDivider(
+                  width: 1,
+                  thickness: 1,
+                  color: _cardBorder,
+                  indent: 6,
+                  endIndent: 6,
+                ),
+                Expanded(child: _metric('BMR', bmr.round().toString(), 'kcal/day')),
+                const VerticalDivider(
+                  width: 1,
+                  thickness: 1,
+                  color: _cardBorder,
+                  indent: 6,
+                  endIndent: 6,
+                ),
+                Expanded(child: _metric('TDEE', tdee.round().toString(), 'kcal/day')),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 14),
+            child: CustomText(
+              text: 'Each calorie plan below is TDEE minus its daily deficit.',
+              fontWeight: FontWeight.w400,
+              fontSize: 11.5,
+              color: _mutedColor,
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _metric(String label, String value, String sub) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        CustomText(
+          text: label,
+          fontWeight: FontWeight.w600,
+          fontSize: 11,
+          color: _mutedColor,
+        ),
+        const SizedBox(height: 3),
+        CustomText(
+          text: value,
+          fontWeight: FontWeight.w700,
+          fontSize: 20,
+          color: _headerColor,
+        ),
+        const SizedBox(height: 2),
+        CustomText(
+          text: sub,
+          fontWeight: FontWeight.w400,
+          fontSize: 10.5,
+          color: _mutedColor,
+        ),
+      ],
     );
   }
 }

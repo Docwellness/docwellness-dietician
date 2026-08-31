@@ -17,6 +17,10 @@ class TargetsStepController extends GetxController {
   final RxList<CalorieTierResult> calorieTiers = <CalorieTierResult>[].obs;
   final RxList<MacroOptionResult> macroOptions = <MacroOptionResult>[].obs;
 
+  /// BMI / BMR / TDEE for the patient - shown as a read-only strip above the
+  /// calorie cards. Null until the profile has loaded enough to compute it.
+  final Rxn<({double bmi, double bmr, double tdee})> bodyMetrics = Rxn();
+
   @override
   void onInit() {
     super.onInit();
@@ -53,6 +57,14 @@ class TargetsStepController extends GetxController {
         0;
     final isWeightGain = (health.primaryGoal ?? '').toLowerCase().contains(
       'gain',
+    );
+
+    bodyMetrics.value = computeBodyMetrics(
+      isMale: isMale,
+      weight: weight,
+      height: height,
+      age: age,
+      activityLevel: activity,
     );
 
     calorieTiers.assignAll(
