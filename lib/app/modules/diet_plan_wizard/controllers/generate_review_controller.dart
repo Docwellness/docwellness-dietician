@@ -72,14 +72,120 @@ class GenerateReviewController extends GetxController {
     return day.meals.cast<WizardMealSlotV2?>().firstWhere((m) => m?.servingTime == selectedServingTime.value, orElse: () => null);
   }
 
-  Future<void> addItem(String recipeId) async {
+  // ── Add / remove / swap ──────────────────────────────────────────────
+  // These update `weekDays` in place and skip the full-week refetch that
+  // getWeekPlanItems does (a large response the wizard used to re-pull
+  // after every single tap, which made this screen feel very slow).
+  // Step 3 (Refine) re-loads everything with full ingredient data on entry
+  // - a card added/swapped here only needs to show a name until then, so a
+  // lightweight local RecipeVersion stub is enough. On any backend
+  // rejection we surface the message and resync from the server.
+
+  Future<void> addItem(String recipeId, String recipeName) async {
     final mealSlotId = currentSlot?.mealSlotId;
     if (mealSlotId == null) return;
-    final result = await wizardService.addPlanItem(patientId: patientId, dietPlanId: dietPlanId, mealSlotId: mealSlotId, recipeId: recipeId);
-    if (result != null && result['success'] == true) {
-      await loadWeekPlanItems();
-    } else {
+    final result = await wizardService.addPlanItem(
+      patientId: patientId,
+      dietPlanId: dietPlanId,
+      mealSlotId: mealSlotId,
+      recipeId: recipeId,
+    );
+    if (result == null || result['success'] != true) {
       _showItemActionError(result, 'Could not add that recipe.');
+      return;
+    }
+    final planItem = result['data']?['planItem'] as Map<String, dynamic>?;
+    _insertItemLocally(
+      mealSlotId,
+      WizardPlanItemV2(
+        id: planItem?['_id']?.toString() ?? '',
+        recipeVersionId: planItem?['recipeVersionId']?.toString() ?? '',
+        recipeVersion: _stubVersion(recipeId, recipeName, planItem?['recipeVersionId']?.toString()),
+        locked: false,
+        isLinkedComponent: false,
+      ),
+    );
+  }
+
+  Future<void> removeItem(WizardPlanItemV2 item) async {
+    _removeItemLocally(item.id); // instant - reconcile only if the server disagrees
+    final result = await wizardService.removePlanItem(
+      patientId: patientId,
+      dietPlanId: dietPlanId,
+      planItemId: item.id,
+    );
+    if (result == null || result['success'] != true) {
+      _showItemActionError(result, 'Could not remove that recipe.');
+      await loadWeekPlanItems();
+    }
+  }
+
+  Future<void> swapItem(WizardPlanItemV2 item, String recipeId, String recipeName) async {
+    final result = await wizardService.swapRecipeVersion(
+      patientId: patientId,
+      dietPlanId: dietPlanId,
+      planItemId: item.id,
+      newParentRecipeId: recipeId,
+    );
+    if (result == null || result['success'] != true) {
+      _showItemActionError(result, 'Could not swap that recipe.');
+      return;
+    }
+    final swapped = result['data']?['item'] as Map<String, dynamic>?;
+    _replaceItemLocally(
+      item.id,
+      WizardPlanItemV2(
+        id: item.id,
+        recipeVersionId: swapped?['recipeVersionId']?.toString() ?? item.recipeVersionId,
+        recipeVersion: _stubVersion(recipeId, recipeName, swapped?['recipeVersionId']?.toString()),
+        locked: item.locked,
+        pinned: item.pinned,
+        isLinkedComponent: item.isLinkedComponent,
+      ),
+    );
+  }
+
+  WizardRecipeVersion _stubVersion(String recipeId, String recipeName, String? recipeVersionId) => WizardRecipeVersion(
+        id: recipeVersionId ?? '',
+        parentRecipeId: recipeId,
+        name: recipeName,
+        versionNumber: 1,
+        ingredients: const [],
+        steps: const [],
+        hasUnresolvedIngredients: false,
+      );
+
+  void _removeItemLocally(String itemId) {
+    for (final day in weekDays) {
+      for (final meal in day.meals) {
+        meal.items.removeWhere((i) => i.id == itemId);
+      }
+    }
+    weekDays.refresh();
+  }
+
+  void _insertItemLocally(String mealSlotId, WizardPlanItemV2 item) {
+    for (final day in weekDays) {
+      for (final meal in day.meals) {
+        if (meal.mealSlotId == mealSlotId) {
+          meal.items.add(item);
+          weekDays.refresh();
+          return;
+        }
+      }
+    }
+  }
+
+  void _replaceItemLocally(String itemId, WizardPlanItemV2 replacement) {
+    for (final day in weekDays) {
+      for (final meal in day.meals) {
+        final idx = meal.items.indexWhere((i) => i.id == itemId);
+        if (idx != -1) {
+          meal.items[idx] = replacement;
+          weekDays.refresh();
+          return;
+        }
+      }
     }
   }
 
@@ -94,25 +200,6 @@ class GenerateReviewController extends GetxController {
         ? result['message'] as String
         : fallback;
     showAppToast(ctx, message: message, type: AppToastType.warning);
-  }
-
-  Future<void> removeItem(WizardPlanItemV2 item) async {
-    final result = await wizardService.removePlanItem(patientId: patientId, dietPlanId: dietPlanId, planItemId: item.id);
-    if (result != null && result['success'] == true) await loadWeekPlanItems();
-  }
-
-  Future<void> swapItem(WizardPlanItemV2 item, String newParentRecipeId) async {
-    final result = await wizardService.swapRecipeVersion(
-      patientId: patientId,
-      dietPlanId: dietPlanId,
-      planItemId: item.id,
-      newParentRecipeId: newParentRecipeId,
-    );
-    if (result != null && result['success'] == true) {
-      await loadWeekPlanItems();
-    } else {
-      _showItemActionError(result, 'Could not swap that recipe.');
-    }
   }
 
   /// "Update Existing" on Recipe Details' AI-regenerated preview - see

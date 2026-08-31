@@ -222,7 +222,7 @@ class GenerateReviewView extends StatelessWidget {
         title: 'Add Recipe',
         servingTime: controller.selectedServingTime.value,
         excludeRecipeIds: slot.items.map((i) => i.parentRecipeId).toSet(),
-        onSelect: (recipe) => controller.addItem(recipe.id),
+        onSelect: (recipe) => controller.addItem(recipe.id, recipe.name),
       ),
     );
   }
@@ -265,7 +265,10 @@ class _ReviewRecipeCard extends StatelessWidget {
     // components/nutrition, not the unrelated master Recipe document's own
     // stored fields - see ingredient_editor_sheet.dart's identical mapping.
     final version = item.recipeVersion;
-    final recipeToShow = version == null
+    // A just-added/swapped card carries a name-only stub (no ingredients) -
+    // see GenerateReviewController._stubVersion. Fall back to the freshly
+    // fetched master recipe rather than overriding it with an empty list.
+    final recipeToShow = (version == null || version.ingredients.isEmpty)
         ? recipe
         : recipe.copyWithVersionOverride(
             ingredients: version.ingredients
@@ -301,7 +304,7 @@ class _ReviewRecipeCard extends StatelessWidget {
           isPlanItemPreview: true,
           scrollController: sheetScrollController,
           recipePreview: recipeToShow,
-          onSavedAsNew: (saved) => controller.swapItem(item, saved.id),
+          onSavedAsNew: (saved) => controller.swapItem(item, saved.id, saved.name),
           onUpdateExisting: (recipe) => controller.updateItemFromRecipeSnapshot(item, recipe),
         ),
       ),
@@ -318,7 +321,7 @@ class _ReviewRecipeCard extends StatelessWidget {
         title: 'Swap Recipe',
         servingTime: controller.selectedServingTime.value,
         excludeRecipeIds: {item.parentRecipeId, ...?slot?.items.map((i) => i.parentRecipeId)},
-        onSelect: (recipe) => controller.swapItem(item, recipe.id),
+        onSelect: (recipe) => controller.swapItem(item, recipe.id, recipe.name),
       ),
     );
   }
