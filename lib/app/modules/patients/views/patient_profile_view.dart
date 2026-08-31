@@ -1210,34 +1210,75 @@ class _PatientProfileViewState extends State<PatientProfileView> {
               ), // ClipRRect
             ), // Container
           ), // Padding
-          if (status.firstConsultationId != null &&
-              status.activeDietPlanId == null) ...[
+          // "Create Diet Plan" stays until the wizard is actually finished -
+          // not just until it was opened once. activeDietPlanId is set at
+          // the very first wizard step, so it can't gate this; _dietPlanReady
+          // (status Finalized/Active) does. An abandoned run leaves a 'Draft'
+          // plan - the backend's createAndGenerateDietPlan discards that
+          // draft and starts clean when this button is tapped again.
+          if (status.firstConsultationId != null && !_dietPlanReady(status)) ...[
             if (status.patientConsented == true)
               Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 16,
                   vertical: 2,
                 ),
-                child: CustomButton(
-                  onTap: () async {
-                    final wizardController = WizardController(
-                      patientId: widget.patientId,
-                      patientName: (basic.fullName ?? '').split(' ').first,
-                      firstConsultationId: status.firstConsultationId ?? '',
-                      requestId: status.requestId ?? '',
-                    );
-                    await Get.to(
-                      () => const WizardView(),
-                      binding: WizardBinding(wizardController),
-                    );
-                    // Refresh profile + weekly plans after the screen closes
-                    // so the Create Diet Plan button flips to the calorie
-                    // cards.
-                    await controller.getPatientProfile(widget.patientId);
-                  },
-                  text: 'Create Diet Plan',
-                  isOutline: false,
-                  fontSize: 14,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (status.activeDietPlanStatus == 'Draft') ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xffFDF2FA),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xffFAA7E0)),
+                        ),
+                        child: Row(
+                          children: const [
+                            Icon(Icons.info_outline,
+                                color: Color(0xff851653), size: 16),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: CustomText(
+                                text:
+                                    'A previous attempt was left unfinished. Starting again replaces it.',
+                                fontWeight: FontWeight.w400,
+                                fontSize: 12,
+                                color: Color(0xff851653),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                    CustomButton(
+                      onTap: () async {
+                        final wizardController = WizardController(
+                          patientId: widget.patientId,
+                          patientName:
+                              (basic.fullName ?? '').split(' ').first,
+                          firstConsultationId:
+                              status.firstConsultationId ?? '',
+                          requestId: status.requestId ?? '',
+                        );
+                        await Get.to(
+                          () => const WizardView(),
+                          binding: WizardBinding(wizardController),
+                        );
+                        // Refresh profile + weekly plans after the screen
+                        // closes so the button flips to the calorie cards.
+                        await controller.getPatientProfile(widget.patientId);
+                      },
+                      text: 'Create Diet Plan',
+                      isOutline: false,
+                      fontSize: 14,
+                    ),
+                  ],
                 ),
               )
             else
@@ -1407,8 +1448,10 @@ class _PatientProfileViewState extends State<PatientProfileView> {
             );
           }),
           // ── Weekly Diet Plan section ──────────────────────────────
-          if (status.firstConsultationId != null &&
-              status.activeDietPlanId != null)
+          // Only once the wizard is actually finished (_dietPlanReady) -
+          // an abandoned Draft would otherwise show a wall of "Locked"
+          // week cards with no way forward.
+          if (_dietPlanReady(status))
             Padding(
               padding: const EdgeInsets.only(left: 16, top: 8),
               child: CustomText(
@@ -1418,8 +1461,7 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                 color: Color(0xff530630),
               ),
             ),
-          if (status.firstConsultationId != null &&
-              status.activeDietPlanId != null)
+          if (_dietPlanReady(status))
             Padding(
               padding: const EdgeInsets.only(top: 10, left: 16, bottom: 8),
               child: SizedBox(
@@ -1745,8 +1787,8 @@ class _PatientProfileViewState extends State<PatientProfileView> {
             ),
 
           // Goal Journey Timeline card - same gate as the Weekly Diet Plans
-          // section above (needs an active plan to have a goal to show).
-          if (status.firstConsultationId != null && status.activeDietPlanId != null)
+          // section above (needs a real, finished plan to have a goal to show).
+          if (_dietPlanReady(status))
             PatientJourneyCard(
               userId: widget.patientId,
               patientName: controller.patientProfileModel.value?.basic?.fullName ?? 'this client',
@@ -3255,16 +3297,27 @@ class _PatientProfileViewState extends State<PatientProfileView> {
     return s != null && s != 'Unpaid';
   }
 
+  // A real diet plan exists for this patient - i.e. the wizard was actually
+  // finished. createAndGenerateDietPlan sets status.activeDietPlanId at the
+  // very first step (Targets), so a bare id only means "the wizard was
+  // opened once", not that a plan was built - an abandoned run leaves it
+  // pointing at a still-'Draft' plan. Only 'Finalized'/'Active'/'Completed'
+  // count. A stale id whose plan was deleted comes back with a null status
+  // and is likewise treated as "no plan".
+  bool _dietPlanReady(Status status) {
+    final s = status.activeDietPlanStatus;
+    return status.activeDietPlanId != null && s != null && s != 'Draft';
+  }
+
   // The Exercise Plan section becomes available on the same condition that
   // makes diet-plan content available: a first consultation exists AND the
-  // patient has consented to it, or a diet plan already exists (which
-  // implies an earlier consent). Mirrors the "Create Diet Plan" gate -
-  // firstConsultationId + patientConsented - plus the "Weekly Diet Plans"
-  // gate - firstConsultationId + activeDietPlanId - so a just-completed
-  // consultation the patient hasn't reviewed yet shows neither.
+  // patient has consented to it, or a real diet plan already exists (which
+  // implies an earlier consent). Mirrors the "Create Diet Plan" gate so a
+  // just-completed consultation the patient hasn't reviewed yet shows
+  // neither.
   bool _exercisePlanVisible(Status status) {
     if (status.firstConsultationId == null) return false;
-    return status.patientConsented == true || status.activeDietPlanId != null;
+    return status.patientConsented == true || _dietPlanReady(status);
   }
 
   // Ground truth for "fully paid" vs. "partially paid" is the actual
