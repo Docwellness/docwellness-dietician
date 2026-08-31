@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:dio/dio.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -67,6 +68,11 @@ Future<void> _bootstrap() async {
 
   await Get.putAsync(() => ConnectivityService().init(), permanent: true);
 
+  // Restore a persisted login before the first frame - mirrors
+  // docwellness-user's getUserData(). Without this the dietician was sent
+  // to the login screen far more often than she should have been.
+  await restoreSession();
+
   if (EnvService.supabaseUrl.isNotEmpty) {
     await Supabase.initialize(
       url: EnvService.supabaseUrl,
@@ -109,6 +115,86 @@ Future<void> _bootstrap() async {
   await Get.putAsync(() => SocketService().init());
 
   await _initPostHog();
+}
+
+/// Restores the persisted session at cold start so a logged-in dietician
+/// stays logged in across app launches - the same handling docwellness-user
+/// does in getUserData(). Only forces a logout (clearing the session so
+/// SplashView routes to AUTH) when there is genuinely no session, or the
+/// backend explicitly rejects the refresh token. A network blip / timeout /
+/// 5xx keeps the cached session and lets the app run (offline-tolerant),
+/// rather than bouncing her to the login screen. `userId` (not part of the
+/// JWT) is re-fetched from /auth/me every launch, which also self-heals a
+/// flaky secure-storage read.
+Future<void> restoreSession() async {
+  final session = SessionService.to;
+  final refreshToken = session.refreshToken;
+  if ((session.token?.isEmpty ?? true) || (refreshToken?.isEmpty ?? true)) {
+    await session.clear();
+    return;
+  }
+
+  final dio = Dio(
+    BaseOptions(
+      baseUrl: apiBaseUrl,
+      // Kept short: this blocks the first frame, and offline should fall
+      // through to "run with the cached session" fast, not hang on a splash.
+      connectTimeout: const Duration(seconds: 8),
+      receiveTimeout: const Duration(seconds: 12),
+      // 4xx returns normally so we can tell "refresh token rejected" (log
+      // out) apart from a thrown 5xx / network error (keep cached session).
+      validateStatus: (status) => status != null && status < 500,
+    ),
+  );
+
+  final expiresAt = int.tryParse(session.tokenExpiresAt ?? '');
+  final nowSeconds = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+  final needsRefresh = expiresAt == null || nowSeconds >= expiresAt - 30;
+
+  if (needsRefresh) {
+    try {
+      final res = await dio.post(
+        '/auth/refresh',
+        data: {'refreshToken': refreshToken},
+      );
+      final ok = res.statusCode == 200 &&
+          res.data is Map &&
+          res.data['success'] == true;
+      if (ok) {
+        final data = res.data['data'];
+        await session.setSession(
+          token: data['accessToken'],
+          refreshToken: data['refreshToken'],
+          expiresAt: (data['expiresAt'] as num?)?.toInt() ?? 0,
+        );
+        token = data['accessToken'];
+      } else {
+        // Backend answered and said this refresh token is no good - a real
+        // "please log in again".
+        debugPrint('restoreSession: refresh rejected (${res.statusCode}) - logging out');
+        await session.clear();
+        return;
+      }
+    } catch (e) {
+      // Timeout / DNS / 5xx / offline - says nothing about token validity.
+      // Keep the cached session so she isn't logged out over a hiccup.
+      debugPrint('restoreSession: refresh error, using cached token: $e');
+    }
+  }
+
+  try {
+    final me = await dio.get(
+      '/auth/me',
+      options: Options(headers: {'Authorization': 'Bearer ${session.token}'}),
+    );
+    if (me.statusCode == 200 && me.data is Map && me.data['success'] == true) {
+      userId = me.data['data']['_id'];
+    }
+  } catch (e) {
+    // 401/network/anything - don't touch userId; the getter already returns
+    // whatever SessionService.init() hydrated from secure storage.
+    debugPrint('restoreSession: /auth/me failed, using cached userId: $e');
+  }
 }
 
 Future<void> _initPostHog() async {
