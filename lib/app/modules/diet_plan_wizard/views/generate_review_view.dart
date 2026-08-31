@@ -431,12 +431,18 @@ class _RecipePickerState extends State<_RecipePicker> {
   }
 
   Future<void> _load() async {
-    final response = await _recipeService.listRecipes(servingTime: widget.servingTime, limit: 50);
-    if (!mounted) return;
-    setState(() {
-      _recipes = response.recipes.where((r) => !widget.excludeRecipeIds.contains(r.id)).toList();
-      _loading = false;
-    });
+    try {
+      final response = await _recipeService.listRecipes(servingTime: widget.servingTime, limit: 50);
+      if (!mounted) return;
+      setState(() {
+        _recipes = response.recipes.where((r) => !widget.excludeRecipeIds.contains(r.id)).toList();
+        _loading = false;
+      });
+    } catch (e) {
+      // Never leave the sheet stuck on a spinner - fall through to the
+      // empty state, which reads "No other recipes for this slot."
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   @override

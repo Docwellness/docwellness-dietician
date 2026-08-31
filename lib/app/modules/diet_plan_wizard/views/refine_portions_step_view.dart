@@ -351,12 +351,17 @@ class _SwapRecipePickerState extends State<_SwapRecipePicker> {
   }
 
   Future<void> _load() async {
-    final response = await _recipeService.listRecipes(servingTime: widget.servingTime, limit: 50);
-    if (!mounted) return;
-    setState(() {
-      _recipes = response.recipes.where((r) => r.id != widget.excludeRecipeId).toList();
-      _loading = false;
-    });
+    try {
+      final response = await _recipeService.listRecipes(servingTime: widget.servingTime, limit: 50);
+      if (!mounted) return;
+      setState(() {
+        _recipes = response.recipes.where((r) => r.id != widget.excludeRecipeId).toList();
+        _loading = false;
+      });
+    } catch (e) {
+      // Never leave the sheet stuck on a spinner.
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   @override
