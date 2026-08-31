@@ -629,6 +629,33 @@ class ReceipesController extends GetxController {
     generatedRecipe.value = current.copyWithIngredients(updated);
   }
 
+  /// Edit an existing ingredient in place (name/quantity/unit) - the way to
+  /// fix an ingredient whose name doesn't match the food library, so it
+  /// resolves for nutrition + diet-plan use on the next save. Keeps the
+  /// row's other fields (category/priceLevel/description/image) intact.
+  void updateIngredientAtEdit(
+    int index, {
+    required String name,
+    required num quantity,
+    required String unit,
+  }) {
+    final current = generatedRecipe.value;
+    if (current == null || index < 0 || index >= current.ingredients.length) return;
+    final existing = current.ingredients[index];
+    final updated = List<Ingredient>.from(current.ingredients);
+    updated[index] = Ingredient(
+      name: name,
+      quantity: quantity,
+      unit: unit,
+      category: existing.category,
+      priceLevel: existing.priceLevel,
+      description: existing.description,
+      isScalable: existing.isScalable,
+      image: existing.image,
+    );
+    generatedRecipe.value = current.copyWithIngredients(updated);
+  }
+
   /// Pre-fill form fields from existing recipe (for Update AI Inputs)
   void prefillFromRecipe(RecipePreview recipe) {
     recipeNameController.text = recipe.name;
