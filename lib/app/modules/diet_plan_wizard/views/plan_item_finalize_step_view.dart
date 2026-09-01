@@ -1,6 +1,7 @@
 import 'package:docwellnesdoc/app/modules/receipes/models/recipe_model.dart';
 import 'package:docwellnesdoc/app/modules/receipes/services/recipe_service.dart';
 import 'package:docwellnesdoc/app/modules/receipes/views/recipe_details.dart';
+import 'package:docwellnesdoc/app/utils/common_widgets/app_toast.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_button.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
 import 'package:docwellnesdoc/app/utils/functions/day_group_label.dart';
@@ -110,13 +111,21 @@ class PlanItemFinalizeStepView extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             child: Obx(
               () => CustomButton(
-                isLoading: controller.activating.value,
+                isLoading: controller.finalizing.value,
                 isDisabled: !controller.canActivate,
                 onTap: () async {
-                  final ok = await controller.finalizeAndActivate();
-                  if (ok) Get.back();
+                  final ok = await controller.finalizePlan();
+                  if (!ok) return;
+                  if (context.mounted) {
+                    showAppToast(
+                      context,
+                      message: 'Plan finalized. It goes live once the patient\'s payment is confirmed.',
+                      type: AppToastType.success,
+                    );
+                  }
+                  Get.back();
                 },
-                text: 'Confirm & Activate',
+                text: 'Finalize Plan',
                 isOutline: false,
                 buttonColor: WizardPalette.plum,
               ),
@@ -164,7 +173,7 @@ class _CalorieChecklist extends StatelessWidget {
           const Padding(
             padding: EdgeInsets.only(top: 2, bottom: 4),
             child: CustomText(
-              text: 'Every day must be within ±5% of the calorie target before this plan can be activated.',
+              text: 'Every day must be within ±5% of the calorie target before this plan can be finalized.',
               fontWeight: FontWeight.w400,
               fontSize: 12,
               color: WizardPalette.warn,

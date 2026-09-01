@@ -35,7 +35,6 @@ class FinalizeStepController extends GetxController {
   final RxList<WizardDayGroup> weekDays = <WizardDayGroup>[].obs;
   final RxList<WizardCalorieException> calorieExceptions = <WizardCalorieException>[].obs;
   final RxDouble tolerancePercent = 10.0.obs;
-  final RxBool activating = false.obs;
 
   String get patientId => wizard.patientId;
   String get dietPlanId => wizard.dietPlanId.value ?? '';
@@ -109,11 +108,19 @@ class FinalizeStepController extends GetxController {
         'selectedMeals': selectedMeals,
       }, patientId, dietPlanId);
 
-      if (response == null || response['success'] != true) {
-        errorMessage.value = response?['message']?.toString() ?? 'Finalize failed.';
+      if (response == null) {
+        errorMessage.value = 'Couldn\'t reach the server to finalize this week. Check your connection and try again.';
+        return false;
+      }
+      if (response['success'] != true) {
+        errorMessage.value = response['message']?.toString() ?? 'Finalize failed.';
         return false;
       }
       isFinalized.value = true;
+      // Refresh the patient profile so it reflects the plan's new
+      // Finalized status (the payment screen keys its "activate" action
+      // off that) once the wizard is popped.
+      await wizard.patientsController.getPatientProfile(patientId);
       await Future.wait([loadWeekDays(), loadExceptions()]);
       return true;
     } finally {
@@ -152,13 +159,4 @@ class FinalizeStepController extends GetxController {
     );
   }
 
-  Future<bool> activatePlan() async {
-    activating.value = true;
-    try {
-      await wizard.patientsController.activateDietPlan(patientId, dietPlanId);
-      return true;
-    } finally {
-      activating.value = false;
-    }
-  }
 }

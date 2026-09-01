@@ -51,6 +51,11 @@ class TimelineStepController extends GetxController {
   final RxList<RecipeListItem> availableSupplements = <RecipeListItem>[].obs;
   final RxBool loadingSupplements = false.obs;
 
+  /// True while the "Continue" button is flushing staged supplements. Drives
+  /// the button's spinner/disabled state so a slow network round-trip reads
+  /// as "working", not "frozen on the Timeline step".
+  final RxBool continuing = false.obs;
+
   @override
   void onInit() {
     super.onInit();
@@ -104,7 +109,7 @@ class TimelineStepController extends GetxController {
   }) async {
     final isPlanItem = wizard.dataModel.value == 'plan-item';
     int failures = 0;
-    for (final supplement in stagedSupplements) {
+    for (final supplement in List<StagedSupplement>.from(stagedSupplements)) {
       final result = isPlanItem
           ? await wizardService.upsertTimelineSupplement(
               patientId: patientId,
@@ -131,5 +136,28 @@ class TimelineStepController extends GetxController {
       if (result == null || result['success'] != true) failures++;
     }
     return failures;
+  }
+
+  /// The Timeline step's "Continue" action: flush any staged supplements
+  /// (best-effort - a supplement failing to attach must never block the move
+  /// to Finalize; generation itself already succeeded) while showing a
+  /// spinner, then report how many failed so the view can warn. A wedged
+  /// connection is capped at 25s rather than hanging the button on dio's
+  /// 120s receive timeout per call.
+  Future<int> continueFromTimeline({
+    required String patientId,
+    required String dietPlanId,
+    required int week,
+  }) async {
+    if (stagedSupplements.isEmpty) return 0;
+    continuing.value = true;
+    try {
+      return await flushToBackend(patientId: patientId, dietPlanId: dietPlanId, week: week)
+          .timeout(const Duration(seconds: 25), onTimeout: () => stagedSupplements.length);
+    } catch (_) {
+      return stagedSupplements.length;
+    } finally {
+      continuing.value = false;
+    }
   }
 }

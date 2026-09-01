@@ -1,3 +1,4 @@
+import 'package:docwellnesdoc/app/utils/common_widgets/app_toast.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_button.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
 import 'package:docwellnesdoc/app/utils/functions/day_group_label.dart';
@@ -64,24 +65,39 @@ class TimelineStepView extends StatelessWidget {
         ),
         Padding(
           padding: const EdgeInsets.all(16),
-          child: CustomButton(
-            onTap: () async {
-              // v4.0 new-plan flow: Timeline now runs AFTER Generate (see
-              // wizard_controller.dart's isNewPlanFlow doc comment), so
-              // dietPlanId already exists - flush staged supplements to the
-              // real endpoint right away instead of waiting for
-              // GenerationStepController (which already ran, earlier).
-              if (wizard.isNewPlanFlow && controller.stagedSupplements.isNotEmpty) {
+          child: Obx(
+            () => CustomButton(
+              isLoading: controller.continuing.value,
+              isDisabled: controller.continuing.value,
+              onTap: () async {
+                // v4.0 new-plan flow: Timeline now runs AFTER Generate (see
+                // wizard_controller.dart's isNewPlanFlow doc comment), so
+                // dietPlanId already exists - flush staged supplements to the
+                // real endpoint right away instead of waiting for
+                // GenerationStepController (which already ran, earlier).
+                // A supplement failing to save is surfaced but never blocks
+                // moving on - the plan itself is already generated.
                 final dietPlanId = wizard.dietPlanId.value;
-                if (dietPlanId != null && dietPlanId.isNotEmpty) {
-                  await controller.flushToBackend(patientId: wizard.patientId, dietPlanId: dietPlanId, week: wizard.targetWeek.value);
+                if (wizard.isNewPlanFlow && controller.stagedSupplements.isNotEmpty && dietPlanId != null && dietPlanId.isNotEmpty) {
+                  final failed = await controller.continueFromTimeline(
+                    patientId: wizard.patientId,
+                    dietPlanId: dietPlanId,
+                    week: wizard.targetWeek.value,
+                  );
+                  if (failed > 0 && context.mounted) {
+                    showAppToast(
+                      context,
+                      message: '$failed supplement${failed == 1 ? '' : 's'} couldn\'t be saved - add ${failed == 1 ? 'it' : 'them'} again from the plan later.',
+                      type: AppToastType.warning,
+                    );
+                  }
                 }
-              }
-              wizard.nextStep();
-            },
-            text: 'Continue',
-            isOutline: false,
-            buttonColor: _headerColor,
+                wizard.nextStep();
+              },
+              text: 'Continue',
+              isOutline: false,
+              buttonColor: _headerColor,
+            ),
           ),
         ),
       ],

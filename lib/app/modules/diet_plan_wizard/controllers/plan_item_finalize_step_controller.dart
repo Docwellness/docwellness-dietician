@@ -11,8 +11,10 @@ import 'wizard_controller.dart';
 /// refinement already happened at Step 3 (refine_portions_step_controller.dart)
 /// - this step is now purely the read-only "Sanity Check" detail view the
 /// v4.0 spec describes: exact recipe name/ingredients/steps/supplements for
-/// every item, then "Confirm & Activate" (which finalizes this week AND
-/// activates the plan in one tap, matching the spec's single button).
+/// every item, then "Finalize Plan" which locks the week (status ->
+/// Finalized). Activation is deliberately NOT part of this step: a plan
+/// goes Active only once the patient's payment is confirmed, from the
+/// payment screen (payment_status_view.dart -> activateDietPlan).
 class PlanItemFinalizeStepController extends GetxController {
   final WizardController wizard = Get.find<WizardController>();
   final DietPlanWizardService wizardService = DietPlanWizardService();
@@ -20,7 +22,7 @@ class PlanItemFinalizeStepController extends GetxController {
   final RxBool loading = false.obs;
   final RxnString errorMessage = RxnString();
   final RxList<WizardDayGroupV2> weekDays = <WizardDayGroupV2>[].obs;
-  final RxBool activating = false.obs;
+  final RxBool finalizing = false.obs;
 
   /// Which day-group's meal timeline the Review screen is showing (the
   /// screen renders one day-group at a time now, selected from a chip row at
@@ -40,7 +42,7 @@ class PlanItemFinalizeStepController extends GetxController {
 
   /// The Step 1 calorie budget, or null if it was never set (Step 1 should
   /// always set it before Generation runs, but a resumed/regenerated plan
-  /// could in principle skip that - see finalizeAndActivate/the backend's
+  /// could in principle skip that - see finalizePlan/the backend's
   /// own 400 for the same missing-target case).
   double? get targetCalories =>
       (wizard.patientsController.selectedCalorieStrategy['calorieBudget'] as num?)?.toDouble();
@@ -59,9 +61,9 @@ class PlanItemFinalizeStepController extends GetxController {
     }).toList();
   }
 
-  /// False whenever activation would be rejected by the server anyway (no
-  /// target set, or any generated day outside +/-5%) - drives the Confirm &
-  /// Activate button's disabled state so the dietician sees the block before
+  /// False whenever finalize would be rejected by the server anyway (no
+  /// target set, or any generated day outside +/-5%) - drives the Finalize
+  /// Plan button's disabled state so the dietician sees the block before
   /// tapping, not just as an error message after.
   bool get canActivate {
     final target = targetCalories;
@@ -111,23 +113,30 @@ class PlanItemFinalizeStepController extends GetxController {
     return null;
   }
 
-  /// Finalizes this week (POST .../finalize-plan-item-week, sets
-  /// workflowStatus:'finalized') and then activates the plan - one action
-  /// for the spec's single "[ Confirm & Activate ]" button. If finalize
-  /// fails, activation is not attempted.
-  Future<bool> finalizeAndActivate() async {
-    activating.value = true;
+  /// Finalizes this week (POST .../finalize-plan-item-week: sets
+  /// workflowStatus:'finalized' and promotes the plan Draft -> Finalized).
+  /// Activation is a separate, later step gated on the patient's payment
+  /// (see payment_status_view.dart) - it is intentionally not done here.
+  Future<bool> finalizePlan() async {
+    finalizing.value = true;
     errorMessage.value = null;
     try {
       final finalizeResponse = await wizardService.finalizePlanItemWeek(patientId: patientId, dietPlanId: dietPlanId);
-      if (finalizeResponse == null || finalizeResponse['success'] != true) {
-        errorMessage.value = finalizeResponse?['message']?.toString() ?? 'Finalize failed.';
+      if (finalizeResponse == null) {
+        // Service returns null only when the request never got a response
+        // (timeout / offline / 5xx with no body) - a data-level rejection
+        // still comes back as a Map with success:false and a message.
+        errorMessage.value = 'Couldn\'t reach the server to finalize this plan. Check your connection and try again.';
         return false;
       }
-      await wizard.patientsController.activateDietPlan(patientId, dietPlanId);
+      if (finalizeResponse['success'] != true) {
+        errorMessage.value = finalizeResponse['message']?.toString() ?? 'Finalize failed.';
+        return false;
+      }
+      await wizard.patientsController.getPatientProfile(patientId);
       return true;
     } finally {
-      activating.value = false;
+      finalizing.value = false;
     }
   }
 }

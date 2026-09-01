@@ -86,7 +86,7 @@ class _DraftReviewView extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 const CustomText(
-                  text: 'Once finalized, Week Tweak, Swap vs Scale, and Exception Review become available for adjustments.',
+                  text: 'Finalizing locks this week\'s meals. The plan is activated later, once the patient\'s payment is confirmed.',
                   fontWeight: FontWeight.w400,
                   fontSize: 13,
                   color: _mutedColor,
@@ -201,17 +201,23 @@ class _CleverAdjustmentsView extends StatelessWidget {
         ),
         Padding(
           padding: const EdgeInsets.all(16),
-          child: Obx(
-            () => CustomButton(
-              isLoading: controller.activating.value,
-              onTap: () async {
-                final ok = await controller.activatePlan();
-                if (ok) Get.back();
-              },
-              text: 'Confirm & Activate',
-              isOutline: false,
-              buttonColor: _headerColor,
-            ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const CustomText(
+                text: 'This week is finalized. The plan goes live once the patient\'s payment is confirmed.',
+                fontWeight: FontWeight.w400,
+                fontSize: 12,
+                color: _mutedColor,
+              ),
+              const SizedBox(height: 10),
+              CustomButton(
+                onTap: () => Get.back(),
+                text: 'Done',
+                isOutline: false,
+                buttonColor: _headerColor,
+              ),
+            ],
           ),
         ),
       ],

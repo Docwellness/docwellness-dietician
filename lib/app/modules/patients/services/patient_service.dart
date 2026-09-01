@@ -309,6 +309,12 @@ class PatientService {
           response.data['success'] == true) {
         return response.data;
       }
+      // A data-level rejection (e.g. 422 - days outside the calorie
+      // tolerance) still carries an explanatory `message` the Finalize step
+      // shows verbatim. Only a genuine no-response failure returns null.
+      if (response != null && response.data is Map) {
+        return response.data;
+      }
     } catch (e) {
       debugPrint('-----------------------> $e');
     }
