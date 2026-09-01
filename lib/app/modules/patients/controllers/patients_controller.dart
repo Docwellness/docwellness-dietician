@@ -993,8 +993,14 @@ class PatientsController extends GetxController {
   }
 
   // api functions
-  Future<void> getPatientProfile(String patientId) async {
-    isProfileLoading.value = true;
+  /// [silent] does the same full model refresh without flipping
+  /// isProfileLoading (which blanks the whole screen to a spinner) - for a
+  /// refresh right after a user action, where the screen should just update
+  /// in place. Unlike silentRefreshPatientProfile, this always assigns the
+  /// new model, so a change with no status/calorie delta (e.g. the diet
+  /// start date moving) still lands.
+  Future<void> getPatientProfile(String patientId, {bool silent = false}) async {
+    if (!silent) isProfileLoading.value = true;
     try {
       final response = await service.getPatientProfile(patientId);
 
@@ -1013,7 +1019,7 @@ class PatientsController extends GetxController {
     } catch (e) {
       debugPrint('-------------$e');
     }
-    isProfileLoading.value = false;
+    if (!silent) isProfileLoading.value = false;
   }
 
   final ExerciseService _exerciseService = ExerciseService();
@@ -3138,7 +3144,13 @@ class PatientsController extends GetxController {
       final response = await service.updateDietStartDate(patientId, startDate);
       final ok = response != null && response['success'] == true;
       if (ok) {
-        await getPatientProfile(patientId);
+        // Refresh everything the date feeds: the Basic Info field + the
+        // Weekly Diet Plans week ranges (both from the profile) and the
+        // exercise plan (a separate fetch).
+        await Future.wait([
+          getPatientProfile(patientId, silent: true),
+          fetchExercisePlan(patientId),
+        ]);
         showAppToast(
           Get.overlayContext!,
           message: 'Diet start date updated.',
