@@ -25,7 +25,10 @@ class WizardStepFooter extends StatelessWidget {
   /// The secondary (outline) button. Defaults to "Save & Exit" - the
   /// reopened-plan review screen overrides it to "Regenerate Plan".
   final String secondaryLabel;
-  final VoidCallback onSaveExit;
+
+  /// Null renders just the primary button, full-width (the reopened-plan
+  /// review's single "Done").
+  final VoidCallback? onSaveExit;
   final bool primaryLoading;
   final bool primaryDisabled;
 
@@ -37,7 +40,7 @@ class WizardStepFooter extends StatelessWidget {
     super.key,
     required this.primaryLabel,
     required this.onPrimary,
-    required this.onSaveExit,
+    this.onSaveExit,
     this.secondaryLabel = 'Save & Exit',
     this.primaryLoading = false,
     this.primaryDisabled = false,
@@ -46,32 +49,33 @@ class WizardStepFooter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final primary = CustomButton(
+      onTap: onPrimary ?? () {},
+      text: primaryLabel,
+      isOutline: false,
+      isLoading: primaryLoading,
+      isDisabled: primaryDisabled,
+      buttonColor: WizardPalette.plum,
+    );
     return Padding(
       padding: padding,
-      child: Row(
-        children: [
-          Expanded(
-            child: CustomButton(
-              onTap: onSaveExit,
-              text: secondaryLabel,
-              isOutline: true,
-              outlineButtonColor: WizardPalette.plum,
-              textColor: WizardPalette.plum,
+      child: onSaveExit == null
+          ? primary
+          : Row(
+              children: [
+                Expanded(
+                  child: CustomButton(
+                    onTap: onSaveExit!,
+                    text: secondaryLabel,
+                    isOutline: true,
+                    outlineButtonColor: WizardPalette.plum,
+                    textColor: WizardPalette.plum,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(child: primary),
+              ],
             ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: CustomButton(
-              onTap: onPrimary ?? () {},
-              text: primaryLabel,
-              isOutline: false,
-              isLoading: primaryLoading,
-              isDisabled: primaryDisabled,
-              buttonColor: WizardPalette.plum,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

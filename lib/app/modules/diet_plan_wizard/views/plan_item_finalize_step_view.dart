@@ -120,15 +120,13 @@ class PlanItemFinalizeStepView extends StatelessWidget {
             // "improper use of a GetX" guard.
             final finalizing = controller.finalizing.value;
             final canActivate = controller.canActivate;
-            // Reopened from the profile's Weekly Diet Plans row: this plan
-            // is already finalized, so instead of "Finalize" the actions
-            // are to Refine the portions or Regenerate the whole plan.
+            // Reopened from the profile's Weekly Diet Plans row to VIEW the
+            // plan: a single "Done" leaves it untouched. Refine / Regenerate
+            // live in the header's top-right menu.
             if (controller.isAlreadyFinalized) {
               return WizardStepFooter(
-                primaryLabel: 'Refine Plan',
-                onPrimary: () => wizard.goToStep(3),
-                secondaryLabel: 'Regenerate Plan',
-                onSaveExit: () => _confirmRegenerate(context, wizard),
+                primaryLabel: 'Done',
+                onPrimary: () => Get.back(),
               );
             }
             return WizardStepFooter(
@@ -153,37 +151,6 @@ class PlanItemFinalizeStepView extends StatelessWidget {
         ],
       );
     });
-  }
-
-  /// "Regenerate Plan": confirm (it discards every current recipe and any
-  /// hand-tuned portions), then send the dietician back to Targets with a
-  /// flag the Generation step consumes to re-run the AI menu.
-  Future<void> _confirmRegenerate(BuildContext context, WizardController wizard) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const CustomText(text: 'Regenerate this plan?', fontWeight: FontWeight.w600, fontSize: 16, color: WizardPalette.plum),
-        content: const CustomText(
-          text: 'The current recipes and any portion edits are replaced with a fresh AI selection. You can adjust the calorie and macro targets first. This cannot be undone.',
-          fontWeight: FontWeight.w400,
-          fontSize: 13,
-          color: WizardPalette.ink,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const CustomText(text: 'Cancel', fontWeight: FontWeight.w500, fontSize: 13, color: WizardPalette.muted),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const CustomText(text: 'Regenerate', fontWeight: FontWeight.w600, fontSize: 13, color: WizardPalette.plum),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-    wizard.regenerateRequested = true;
-    wizard.goToStep(1);
   }
 }
 

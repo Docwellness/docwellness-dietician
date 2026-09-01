@@ -70,6 +70,10 @@ class WizardController extends GetxController {
   /// candidate for reordering in the first place.
   final bool isNewPlanFlow;
 
+  /// See the constructor param - true only when the wizard was opened to
+  /// view an already-built plan from the patient profile.
+  final bool reopenedPlanView;
+
   final PatientsController patientsController = Get.find<PatientsController>();
   final DietPlanWizardService _wizardService = DietPlanWizardService();
 
@@ -192,6 +196,11 @@ class WizardController extends GetxController {
     // supplements to the right endpoint.
     bool resumeInPlace = false,
     String? initialDataModel,
+    // Opened from the patient profile's Weekly Diet Plans row to VIEW a
+    // built plan (not to build one): the Finalize/review step drops its
+    // back button and moves Refine / Regenerate into a top-right menu, and
+    // its footer is a single "Done" that leaves without changes.
+    this.reopenedPlanView = false,
   }) : targetWeek = initialWeek.obs,
        weeksToGenerate = weeksToGenerate ?? [initialWeek],
        currentStep = initialStep.clamp(1, stepCount).obs,
@@ -240,4 +249,21 @@ class WizardController extends GetxController {
   bool get isFirstStep => currentStep.value == 1;
 
   bool get isLastStep => currentStep.value == stepCount;
+
+  // ── Reopened-plan-view actions (from the Finalize step's top-right menu) ──
+
+  /// The review step this flow lands on and returns to.
+  static const int reopenedReviewStep = 5;
+
+  bool get isOnReopenedReview => reopenedPlanView && currentStep.value == reopenedReviewStep;
+
+  /// "Refine Plan" - jump to the Refine step to adjust portions.
+  void startRefine() => goToStep(3);
+
+  /// "Regenerate Plan" - back to Targets, with the flag the Generation
+  /// step consumes to re-run the AI menu.
+  void startRegenerate() {
+    regenerateRequested = true;
+    goToStep(1);
+  }
 }

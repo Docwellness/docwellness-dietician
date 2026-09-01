@@ -110,30 +110,56 @@ class _WizardHeader extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Obx(
-                () => IconButton(
-                  onPressed: wizard.isFirstStep
-                      ? () => Get.back()
-                      : wizard.previousStep,
-                  icon: Icon(
-                    wizard.isFirstStep ? Icons.close : Icons.arrow_back,
+          Obx(() {
+            final step = wizard.currentStep.value;
+            // Reopened-plan review (step 5): no back button - the way out is
+            // the "Done" footer. On Refine (reached from the menu) the back
+            // arrow returns to that review, not down the linear step order.
+            final onReopenReview = wizard.reopenedPlanView && step == WizardController.reopenedReviewStep;
+            final onReopenRefine = wizard.reopenedPlanView && step == 3;
+            return Row(
+              children: [
+                if (onReopenReview)
+                  const SizedBox(width: 8)
+                else
+                  IconButton(
+                    onPressed: onReopenRefine
+                        ? () => wizard.goToStep(WizardController.reopenedReviewStep)
+                        : (wizard.isFirstStep ? () => Get.back() : wizard.previousStep),
+                    icon: Icon(
+                      wizard.isFirstStep && !onReopenRefine ? Icons.close : Icons.arrow_back,
+                      color: _headerColor,
+                    ),
+                  ),
+                Expanded(
+                  child: CustomText(
+                    text: onReopenReview
+                        ? 'Diet Plan - ${wizard.patientName}'
+                        : 'Create Diet Plan - ${wizard.patientName}',
+                    fontWeight: FontWeight.w500,
+                    fontSize: 16,
                     color: _headerColor,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-              ),
-              Expanded(
-                child: CustomText(
-                  text: 'Create Diet Plan - ${wizard.patientName}',
-                  fontWeight: FontWeight.w500,
-                  fontSize: 16,
-                  color: _headerColor,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
+                if (onReopenReview)
+                  PopupMenuButton<String>(
+                    icon: const Icon(Icons.more_vert, color: _headerColor),
+                    onSelected: (value) {
+                      if (value == 'refine') {
+                        wizard.startRefine();
+                      } else if (value == 'regenerate') {
+                        _confirmRegenerate(context, wizard);
+                      }
+                    },
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(value: 'refine', child: Text('Refine Plan')),
+                      PopupMenuItem(value: 'regenerate', child: Text('Regenerate Plan')),
+                    ],
+                  ),
+              ],
+            );
+          }),
           const SizedBox(height: 8),
           Obx(() {
             final labels = wizard.isNewPlanFlow ? _newPlanStepLabels : _regenerationStepLabels;
@@ -171,5 +197,34 @@ class _WizardHeader extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  /// "Regenerate Plan" from the review menu: confirm (it discards every
+  /// current recipe and any hand-tuned portions), then hand off to the
+  /// wizard which sends the dietician to Targets and re-runs generation.
+  Future<void> _confirmRegenerate(BuildContext context, WizardController wizard) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const CustomText(text: 'Regenerate this plan?', fontWeight: FontWeight.w600, fontSize: 16, color: _headerColor),
+        content: const CustomText(
+          text: 'The current recipes and any portion edits are replaced with a fresh AI selection. You can adjust the calorie and macro targets first. This cannot be undone.',
+          fontWeight: FontWeight.w400,
+          fontSize: 13,
+          color: Color(0xff1F2A37),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const CustomText(text: 'Cancel', fontWeight: FontWeight.w500, fontSize: 13, color: _mutedColor),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const CustomText(text: 'Regenerate', fontWeight: FontWeight.w600, fontSize: 13, color: _headerColor),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) wizard.startRegenerate();
   }
 }

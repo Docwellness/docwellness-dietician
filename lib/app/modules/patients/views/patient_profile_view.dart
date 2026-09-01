@@ -404,6 +404,7 @@ class _PatientProfileViewState extends State<PatientProfileView> {
       resumeInPlace: isPlanItem,
       initialDataModel: isPlanItem ? 'plan-item' : null,
       initialStep: isPlanItem ? 5 : 2,
+      reopenedPlanView: isPlanItem,
     );
     await Get.to(
       () => const WizardView(),
