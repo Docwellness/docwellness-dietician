@@ -45,8 +45,12 @@ class RefinePortionsStepController extends GetxController {
   /// Same source TargetsStepController writes to - a plain per-day calorie
   /// figure, not the per-slot mealDistribution split (auto-balance operates
   /// on a day/week total, see services/ingredientAutoBalanceService.js).
+  /// Falls back to the plan's own stored budget (from getWeekPlanItems) so a
+  /// wizard resumed straight to this step - Targets never run this session -
+  /// still auto-balances against the right number.
   double? get dailyCalorieTarget =>
-      (wizard.patientsController.selectedCalorieStrategy['calorieBudget'] as num?)?.toDouble();
+      (wizard.patientsController.selectedCalorieStrategy['calorieBudget'] as num?)?.toDouble() ??
+      wizard.planCalorieTarget;
 
   @override
   void onInit() {

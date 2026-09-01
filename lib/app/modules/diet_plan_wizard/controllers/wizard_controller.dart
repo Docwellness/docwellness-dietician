@@ -132,6 +132,16 @@ class WizardController extends GetxController {
     _weekPlanItemsCacheKey = null;
   }
 
+  /// The plan's Step-1 calorie budget, read from the last getWeekPlanItems
+  /// response. The authoritative fallback for Refine / Finalize when the
+  /// wizard was resumed straight to a later step and Targets never ran this
+  /// session to populate patientsController.selectedCalorieStrategy.
+  double? get planCalorieTarget {
+    final data = _weekPlanItemsCache?['data'];
+    if (data is! Map) return null;
+    return (data['calorieTarget'] as num?)?.toDouble();
+  }
+
   WizardController({
     required this.patientId,
     required this.patientName,
@@ -141,12 +151,24 @@ class WizardController extends GetxController {
     int initialWeek = 1,
     List<int>? weeksToGenerate,
     int initialStep = 1,
+    // Resume an unfinished Draft in place: keep the new-plan 5-step order
+    // (Targets -> Generate -> Refine -> Timeline -> Finalize) even though a
+    // dietPlanId is already known - unlike the days-array regeneration flow,
+    // which passing initialDietPlanId alone would otherwise switch to. The
+    // caller also supplies initialStep (from the plan's workflowStatus) and
+    // initialDataModel so a resume straight to Timeline still flushes
+    // supplements to the right endpoint.
+    bool resumeInPlace = false,
+    String? initialDataModel,
   }) : targetWeek = initialWeek.obs,
        weeksToGenerate = weeksToGenerate ?? [initialWeek],
        currentStep = initialStep.clamp(1, stepCount).obs,
-       isNewPlanFlow = initialDietPlanId == null || initialDietPlanId.isEmpty {
+       isNewPlanFlow = resumeInPlace || initialDietPlanId == null || initialDietPlanId.isEmpty {
     if (initialDietPlanId != null && initialDietPlanId.isNotEmpty) {
       dietPlanId.value = initialDietPlanId;
+    }
+    if (initialDataModel != null && initialDataModel.isNotEmpty) {
+      dataModel.value = initialDataModel;
     }
   }
 

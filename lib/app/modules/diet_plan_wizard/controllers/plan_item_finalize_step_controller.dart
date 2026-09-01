@@ -40,12 +40,14 @@ class PlanItemFinalizeStepController extends GetxController {
   String get dietPlanId => wizard.dietPlanId.value ?? '';
   int get week => wizard.targetWeek.value;
 
-  /// The Step 1 calorie budget, or null if it was never set (Step 1 should
-  /// always set it before Generation runs, but a resumed/regenerated plan
-  /// could in principle skip that - see finalizePlan/the backend's
-  /// own 400 for the same missing-target case).
+  /// The Step 1 calorie budget. Prefers this session's Targets selection,
+  /// then falls back to the plan's own stored budget (from getWeekPlanItems)
+  /// so a wizard resumed straight to Finalize still has the same target the
+  /// backend's +/-5% gate validates against. Null only if the plan genuinely
+  /// has no budget - see finalizePlan / the backend's own 400.
   double? get targetCalories =>
-      (wizard.patientsController.selectedCalorieStrategy['calorieBudget'] as num?)?.toDouble();
+      (wizard.patientsController.selectedCalorieStrategy['calorieBudget'] as num?)?.toDouble() ??
+      wizard.planCalorieTarget;
 
   /// Per-day {dayGroup, totalCalories, withinTolerance} - only for days that
   /// actually have generated items, mirroring

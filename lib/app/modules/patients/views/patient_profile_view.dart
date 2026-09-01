@@ -1214,73 +1214,88 @@ class _PatientProfileViewState extends State<PatientProfileView> {
           // not just until it was opened once. activeDietPlanId is set at
           // the very first wizard step, so it can't gate this; _dietPlanReady
           // (status Finalized/Active) does. An abandoned run leaves a 'Draft'
-          // plan - the backend's createAndGenerateDietPlan discards that
-          // draft and starts clean when this button is tapped again.
+          // plan; the wizard now resumes it at the step it reached (from
+          // workflowStatus), with an explicit "Start over" for a clean slate.
           if (status.firstConsultationId != null && !_dietPlanReady(status)) ...[
             if (status.patientConsented == true)
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 2,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (status.activeDietPlanStatus == 'Draft') ...[
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xffFDF2FA),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: const Color(0xffFAA7E0)),
-                        ),
-                        child: Row(
-                          children: const [
-                            Icon(Icons.info_outline,
-                                color: Color(0xff851653), size: 16),
-                            SizedBox(width: 8),
-                            Expanded(
-                              child: CustomText(
-                                text:
-                                    'A previous attempt was left unfinished. Starting again replaces it.',
-                                fontWeight: FontWeight.w400,
-                                fontSize: 12,
-                                color: Color(0xff851653),
+              Builder(builder: (context) {
+                final resumable = status.activeDietPlanStatus == 'Draft' &&
+                    _resumeStepForWorkflow(status.activeDietPlanWorkflowStatus) > 1;
+
+                Future<void> openWizard({required bool resume}) async {
+                  final wizardController = WizardController(
+                    patientId: widget.patientId,
+                    patientName: (basic.fullName ?? '').split(' ').first,
+                    firstConsultationId: status.firstConsultationId ?? '',
+                    requestId: status.requestId ?? '',
+                    initialDietPlanId: resume ? status.activeDietPlanId : null,
+                    initialDataModel: resume ? status.activeDietPlanDataModel : null,
+                    resumeInPlace: resume,
+                    initialStep: resume
+                        ? _resumeStepForWorkflow(status.activeDietPlanWorkflowStatus)
+                        : 1,
+                  );
+                  await Get.to(
+                    () => const WizardView(),
+                    binding: WizardBinding(wizardController),
+                  );
+                  // Refresh profile + weekly plans after the screen closes so
+                  // the button flips to the calorie cards / next state.
+                  await controller.getPatientProfile(widget.patientId);
+                }
+
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (resumable) ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xffFDF2FA),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: const Color(0xffFAA7E0)),
+                          ),
+                          child: Row(
+                            children: const [
+                              Icon(Icons.history_rounded, color: Color(0xff851653), size: 16),
+                              SizedBox(width: 8),
+                              Expanded(
+                                child: CustomText(
+                                  text: 'This plan is in progress. Resume picks up where you left off.',
+                                  fontWeight: FontWeight.w400,
+                                  fontSize: 12,
+                                  color: Color(0xff851653),
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
+                        const SizedBox(height: 8),
+                      ],
+                      CustomButton(
+                        onTap: () => openWizard(resume: resumable),
+                        text: resumable ? 'Resume Diet Plan' : 'Create Diet Plan',
+                        isOutline: false,
+                        fontSize: 14,
                       ),
-                      const SizedBox(height: 8),
+                      if (resumable) ...[
+                        const SizedBox(height: 6),
+                        TextButton(
+                          onPressed: () => openWizard(resume: false),
+                          child: const CustomText(
+                            text: 'Start over instead',
+                            fontWeight: FontWeight.w500,
+                            fontSize: 12,
+                            color: Color(0xff851653),
+                          ),
+                        ),
+                      ],
                     ],
-                    CustomButton(
-                      onTap: () async {
-                        final wizardController = WizardController(
-                          patientId: widget.patientId,
-                          patientName:
-                              (basic.fullName ?? '').split(' ').first,
-                          firstConsultationId:
-                              status.firstConsultationId ?? '',
-                          requestId: status.requestId ?? '',
-                        );
-                        await Get.to(
-                          () => const WizardView(),
-                          binding: WizardBinding(wizardController),
-                        );
-                        // Refresh profile + weekly plans after the screen
-                        // closes so the button flips to the calorie cards.
-                        await controller.getPatientProfile(widget.patientId);
-                      },
-                      text: 'Create Diet Plan',
-                      isOutline: false,
-                      fontSize: 14,
-                    ),
-                  ],
-                ),
-              )
+                  ),
+                );
+              })
             else
               // Patient hasn't reviewed/consented yet - a silently-missing
               // button here would be confusing, so explain what's blocking
@@ -3307,6 +3322,27 @@ class _PatientProfileViewState extends State<PatientProfileView> {
   bool _dietPlanReady(Status status) {
     final s = status.activeDietPlanStatus;
     return status.activeDietPlanId != null && s != null && s != 'Draft';
+  }
+
+  // Which wizard step an unfinished Draft should resume at, from the plan's
+  // workflowStatus (planItemController.js advances it: targets_set ->
+  // menu_generated -> portions_refined -> finalized). Maps to the new-plan
+  // 5-step order: 1 Targets, 2 Generate, 3 Refine, 4 Timeline, 5 Finalize.
+  // Returns 1 (start fresh) for null / an unrecognized value.
+  int _resumeStepForWorkflow(String? workflowStatus) {
+    switch (workflowStatus) {
+      case 'targets_set':
+        return 2;
+      case 'menu_generated':
+        return 3;
+      case 'portions_refined':
+      case 'timeline_defined':
+        return 4;
+      case 'finalized':
+        return 5;
+      default:
+        return 1;
+    }
   }
 
   // The Exercise Plan section becomes available on the same condition that

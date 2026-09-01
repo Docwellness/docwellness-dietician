@@ -37,6 +37,11 @@ class GenerationStepController extends GetxController {
 
     final existingDietPlanId = wizard.dietPlanId.value;
     final isNewPlan = existingDietPlanId == null || existingDietPlanId.isEmpty;
+    // Resuming a new-plan-flow Draft that got as far as Targets (a
+    // dietPlanId exists, but generate-menu never ran) - the plan is already
+    // created, it just needs its menu, so neither generateDietPlan nor the
+    // days-array regenerateWeek applies.
+    final isResumeBeforeMenu = !isNewPlan && wizard.isNewPlanFlow;
 
     // Defensive guard, not the normal path: within one uninterrupted wizard
     // session this controller's own onInit-gated call site already only
@@ -80,6 +85,16 @@ class GenerationStepController extends GetxController {
             wizard.patientsController.lastDietPlanGenerationError ??
             'Generation failed - please try again.';
       }
+    } else if (isResumeBeforeMenu) {
+      // Plan already exists; generate-menu below does the rest. A Draft
+      // that reached workflowStatus 'targets_set' is always plan-item (see
+      // createAndGenerateDietPlan) - default it so the generate-menu branch
+      // still runs even if the resumed profile didn't carry a data model.
+      if ((wizard.dataModel.value ?? '').isEmpty) {
+        wizard.dataModel.value = 'plan-item';
+      }
+      resultDietPlanId = existingDietPlanId;
+      success = true;
     } else {
       final response = await wizard.patientsController.regenerateWeek(
         wizard.patientId,
@@ -121,7 +136,7 @@ class GenerationStepController extends GetxController {
       // mirroring utils/membershipTiers.js's TIER_INITIAL_WEEKS, so Silver
       // still gets all 4 weeks up front and Golden gets 1-2, matching the
       // exact cadence a days-array plan already gets for free.
-      final weekNumbers = isNewPlan ? _initialWeeksForTier() : wizard.weeksToGenerate;
+      final weekNumbers = (isNewPlan || isResumeBeforeMenu) ? _initialWeeksForTier() : wizard.weeksToGenerate;
       final menuResult = await wizardService.generateMenu(
         patientId: wizard.patientId,
         dietPlanId: resultDietPlanId!,

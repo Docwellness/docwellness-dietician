@@ -235,6 +235,13 @@ class Status {
   // Status of the plan activeDietPlanId points at right now - 'Finalized'
   // means it needs Confirm & Activate, 'Active' means it's already live.
   String? activeDietPlanStatus;
+  // How far the build wizard got on a still-Draft plan: targets_set ->
+  // menu_generated -> portions_refined -> finalized. Null when there's no
+  // in-progress plan. Lets "Create Diet Plan" resume at the right step.
+  String? activeDietPlanWorkflowStatus;
+  // 'plan-item' | 'days-array' | null - the resumed wizard needs this for
+  // the Timeline step's supplement-flush endpoint choice.
+  String? activeDietPlanDataModel;
   // Which renewal cycle the active plan belongs to (1 = first plan ever
   // built for this patient, incremented per renewal) - see
   // PatientProfileModel.displayWeek().
@@ -257,6 +264,8 @@ class Status {
     this.patientConsented,
     this.activeDietPlanId,
     this.activeDietPlanStatus,
+    this.activeDietPlanWorkflowStatus,
+    this.activeDietPlanDataModel,
     this.cycleNumber,
     this.requestId,
     this.requestStatus,
@@ -275,6 +284,8 @@ class Status {
     patientConsented = json['patientConsented'] == true;
     activeDietPlanId = json['activeDietPlanId'];
     activeDietPlanStatus = json['activeDietPlanStatus'];
+    activeDietPlanWorkflowStatus = json['activeDietPlanWorkflowStatus'];
+    activeDietPlanDataModel = json['activeDietPlanDataModel'];
     cycleNumber = json['cycleNumber'];
     requestId = json['requestId'];
     requestStatus = json['requestStatus'];
