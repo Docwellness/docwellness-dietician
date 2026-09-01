@@ -46,11 +46,7 @@ class GenerationStepController extends GetxController {
     // only the explicit, confirmed "Regenerate" action (regenerateMenu
     // below) may do that.
     if (!isNewPlan) {
-      final existing = await wizardService.getWeekPlanItems(
-        patientId: wizard.patientId,
-        dietPlanId: existingDietPlanId,
-        week: wizard.targetWeek.value,
-      );
+      final existing = await wizard.loadWeekPlanItems();
       final days = (existing?['data']?['days'] as List?) ?? const [];
       final alreadyHasItems = days.any((day) => ((day as Map)['meals'] as List? ?? []).any((meal) => ((meal as Map)['items'] as List? ?? []).isNotEmpty));
       if (alreadyHasItems) {
@@ -151,6 +147,12 @@ class GenerationStepController extends GetxController {
       }
     }
 
+    // Warm the shared week plan-items cache now, while the "generating"
+    // animation is still on screen - so the Generate review step that
+    // renders next opens against ready data instead of firing its own
+    // heavy fetch and showing a spinner.
+    await wizard.loadWeekPlanItems(forceRefresh: true);
+
     phase.value = GenerationPhase.done;
   }
 
@@ -173,6 +175,10 @@ class GenerationStepController extends GetxController {
     final success = result != null && result['success'] == true;
     if (!success) {
       errorMessage.value = result?['message']?.toString() ?? 'Regeneration failed - please try again.';
+    } else {
+      // A fresh menu replaces every plan item - the shared cache is now
+      // stale for every step.
+      wizard.invalidateWeekPlanItems();
     }
     phase.value = GenerationPhase.done;
     return success;

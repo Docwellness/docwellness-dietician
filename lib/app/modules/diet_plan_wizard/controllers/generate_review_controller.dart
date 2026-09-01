@@ -48,23 +48,22 @@ class GenerateReviewController extends GetxController {
   void onInit() {
     super.onInit();
     if (dietPlanId.isNotEmpty) loadWeekPlanItems();
-    // Warm RecipeService's list cache for whichever slot is in view, and
-    // again whenever the serving-time tab changes, so the Add / Swap sheet
-    // opens against a cached response instead of a fresh network round-trip.
-    _prefetchSlotRecipes();
-    ever(selectedServingTime, (_) => _prefetchSlotRecipes());
+    // The Add / Swap pickers' recipe lists come from the catalog
+    // WizardController.onInit already warmed in one request - no per-slot
+    // prefetch here anymore. prefetchWizardCatalog() is idempotent, so this
+    // is just a backstop for a deep-link straight onto this step.
+    recipeService.prefetchWizardCatalog();
   }
 
-  void _prefetchSlotRecipes() {
-    // Fire-and-forget; the picker's own listRecipes call reuses the result.
-    recipeService.listRecipes(servingTime: selectedServingTime.value, limit: 50);
-  }
-
-  Future<void> loadWeekPlanItems() async {
+  /// Reads through WizardController's shared week plan-items cache so
+  /// entering this step doesn't re-run the heavy join Step 4's generation
+  /// guard (or a previous visit to this step) already paid for. Pass
+  /// [forceRefresh] after a mutation that isn't reflected locally.
+  Future<void> loadWeekPlanItems({bool forceRefresh = false}) async {
     loading.value = true;
     errorMessage.value = null;
     try {
-      final response = await wizardService.getWeekPlanItems(patientId: patientId, dietPlanId: dietPlanId, week: week);
+      final response = await wizard.loadWeekPlanItems(forceRefresh: forceRefresh);
       if (response == null || response['success'] != true) {
         errorMessage.value = 'Could not load this week\'s plan.';
         return;
@@ -115,6 +114,9 @@ class GenerateReviewController extends GetxController {
         isLinkedComponent: false,
       ),
     );
+    // The optimistic update above keeps THIS screen right; drop the shared
+    // cache so Step 3 (Refine) refetches the real, fully-joined item.
+    wizard.invalidateWeekPlanItems();
   }
 
   Future<void> removeItem(WizardPlanItemV2 item) async {
@@ -126,8 +128,10 @@ class GenerateReviewController extends GetxController {
     );
     if (result == null || result['success'] != true) {
       _showItemActionError(result, 'Could not remove that recipe.');
-      await loadWeekPlanItems();
+      await loadWeekPlanItems(forceRefresh: true);
+      return;
     }
+    wizard.invalidateWeekPlanItems();
   }
 
   Future<void> swapItem(WizardPlanItemV2 item, String recipeId, String recipeName) async {
@@ -153,6 +157,7 @@ class GenerateReviewController extends GetxController {
         isLinkedComponent: item.isLinkedComponent,
       ),
     );
+    wizard.invalidateWeekPlanItems();
   }
 
   WizardRecipeVersion _stubVersion(String recipeId, String recipeName, String? recipeVersionId) => WizardRecipeVersion(
@@ -230,7 +235,7 @@ class GenerateReviewController extends GetxController {
       },
     );
     final ok = result != null && result['success'] == true;
-    if (ok) await loadWeekPlanItems();
+    if (ok) await loadWeekPlanItems(forceRefresh: true);
     return ok;
   }
 }

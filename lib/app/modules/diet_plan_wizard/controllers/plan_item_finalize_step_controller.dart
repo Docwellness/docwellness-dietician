@@ -82,7 +82,10 @@ class PlanItemFinalizeStepController extends GetxController {
     loading.value = true;
     errorMessage.value = null;
     try {
-      final response = await wizardService.getWeekPlanItems(patientId: patientId, dietPlanId: dietPlanId, week: week);
+      // Shared cache: if Refine didn't touch anything after its last load
+      // (or auto-balance already refreshed it), this is a free read - no
+      // second heavy fetch just to render the review.
+      final response = await wizard.loadWeekPlanItems();
       if (response == null || response['success'] != true) {
         errorMessage.value = 'Could not load this week\'s plan.';
         return;

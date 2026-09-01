@@ -320,7 +320,65 @@ class RecipeService {
   static final Map<String, _CachedRecipeList> _listCache = {};
   static const Duration _listCacheTtl = Duration(seconds: 45);
 
-  static void invalidateRecipeListCache() => _listCache.clear();
+  static void invalidateRecipeListCache() {
+    _listCache.clear();
+    clearWizardCatalog();
+  }
+
+  // ── Wizard recipe catalog ───────────────────────────────────────────
+  // The diet-plan wizard warms the WHOLE addable catalog in one request at
+  // its start (see WizardController.onInit -> prefetchWizardCatalog). While
+  // it's warm, every listRecipes(servingTime:) call the Add / Swap pickers
+  // make is answered from this in memory - no per-slot network round-trip.
+  // Cleared when the wizard closes, or by any recipe create/edit.
+  static List<RecipeListItem>? _wizardCatalog;
+  static DateTime? _wizardCatalogAt;
+  static Future<void>? _wizardCatalogInFlight;
+  static const Duration _wizardCatalogTtl = Duration(minutes: 15);
+  static const Set<String> _sideSaladSlots = {'Lunch', 'Dinner'};
+
+  static void clearWizardCatalog() {
+    _wizardCatalog = null;
+    _wizardCatalogAt = null;
+  }
+
+  bool get _wizardCatalogWarm {
+    final at = _wizardCatalogAt;
+    return _wizardCatalog != null && at != null && DateTime.now().difference(at) < _wizardCatalogTtl;
+  }
+
+  /// Fetch the full non-supplement recipe catalog once and hold it for the
+  /// wizard session. Idempotent + de-duped: concurrent callers share one
+  /// request, and a still-warm catalog is a no-op.
+  Future<void> prefetchWizardCatalog() {
+    if (_wizardCatalogWarm) return Future.value();
+    return _wizardCatalogInFlight ??=
+        _loadWizardCatalog().whenComplete(() => _wizardCatalogInFlight = null);
+  }
+
+  Future<void> _loadWizardCatalog() async {
+    // One request for everything - the backend caps limit at 500, well
+    // above the ~200-recipe catalog. useCache:false so this always reflects
+    // the current catalog when the wizard opens.
+    final resp = await listRecipes(limit: 500, useCache: false);
+    if (resp.recipes.isNotEmpty) {
+      _wizardCatalog = resp.recipes;
+      _wizardCatalogAt = DateTime.now();
+    }
+  }
+
+  /// The warm catalog sliced for one meal slot, mirroring the backend
+  /// listRecipes filter exactly: a recipe belongs to a slot if its own
+  /// servingTime matches, or it's tagged side/salad and the slot is
+  /// Lunch/Dinner (SIDE_SALAD_ELIGIBLE_SLOTS server-side). Null when the
+  /// catalog isn't warm - callers then fall through to the network.
+  List<RecipeListItem>? _wizardCatalogSliceFor(String servingTime) {
+    if (!_wizardCatalogWarm) return null;
+    final crossList = _sideSaladSlots.contains(servingTime);
+    return _wizardCatalog!
+        .where((r) => r.servingTime == servingTime || (crossList && (r.isSide || r.isSalad)))
+        .toList();
+  }
 
   /// List all recipes with optional category/topCategory/servingTime filters
   /// GET /api/dietician/recipes
@@ -333,6 +391,22 @@ class RecipeService {
     int limit = 20,
     bool useCache = true,
   }) async {
+    // A plain per-slot listing (only servingTime set) can be sliced straight
+    // out of the wizard's warm catalog - no network. Any other filter
+    // (category/topCategory/tag) or a later page falls through to the API.
+    final isPlainSlotQuery = servingTime != null &&
+        servingTime.isNotEmpty &&
+        (category == null || category == 'All') &&
+        (topCategory == null || topCategory == 'All') &&
+        (tag == null || tag.isEmpty) &&
+        page == 1;
+    if (useCache && isPlainSlotQuery) {
+      final slice = _wizardCatalogSliceFor(servingTime);
+      if (slice != null) {
+        return RecipeListResponse(recipes: slice.take(limit).toList(), pagination: null);
+      }
+    }
+
     final cacheKey = '$category|$topCategory|$servingTime|$tag|$page|$limit';
     if (useCache) {
       final hit = _listCache[cacheKey];

@@ -1,5 +1,8 @@
 import 'package:docwellnesdoc/app/modules/patients/controllers/patients_controller.dart';
+import 'package:docwellnesdoc/app/modules/receipes/services/recipe_service.dart';
 import 'package:get/get.dart';
+
+import '../services/diet_plan_wizard_service.dart';
 
 /// Owns ONLY cross-step orchestration for the 5-Step Wizard: which step is
 /// active, the patient/plan identity every step needs, and step-to-step
@@ -68,6 +71,66 @@ class WizardController extends GetxController {
   final bool isNewPlanFlow;
 
   final PatientsController patientsController = Get.find<PatientsController>();
+  final DietPlanWizardService _wizardService = DietPlanWizardService();
+
+  // ── Shared week plan-items cache ─────────────────────────────────────
+  // getWeekPlanItems is a heavy multi-collection join (DayPlan -> MealSlot
+  // -> PlanItem -> RecipeVersion -> FoodItem, plus supplements). Steps 2/3/5
+  // each used to fetch it independently on entry - so moving Generate ->
+  // Refine -> Finalize re-paid the full cost three times even when nothing
+  // had changed. This memoizes the last successful response for the current
+  // (dietPlanId, week); any step that MUTATES plan items or supplements
+  // passes forceRefresh:true (which also repopulates the cache) or calls
+  // invalidateWeekPlanItems(). Concurrent identical calls share one request.
+  Map<String, dynamic>? _weekPlanItemsCache;
+  String? _weekPlanItemsCacheKey;
+  Future<Map<String, dynamic>?>? _weekPlanItemsInFlight;
+
+  String get _weekKey => '${dietPlanId.value ?? ''}|${targetWeek.value}';
+
+  /// Shared getWeekPlanItems - returns the cached response for the current
+  /// plan/week unless [forceRefresh]. A null/failed response is never
+  /// cached. Safe to call from several controllers at once: an in-flight
+  /// request is reused rather than duplicated.
+  Future<Map<String, dynamic>?> loadWeekPlanItems({bool forceRefresh = false}) async {
+    final planId = dietPlanId.value ?? '';
+    if (planId.isEmpty) return null;
+
+    if (!forceRefresh && _weekPlanItemsCache != null && _weekPlanItemsCacheKey == _weekKey) {
+      return _weekPlanItemsCache;
+    }
+    if (_weekPlanItemsInFlight != null) return _weekPlanItemsInFlight;
+
+    final future = _fetchWeekPlanItems(planId, targetWeek.value);
+    _weekPlanItemsInFlight = future;
+    try {
+      return await future;
+    } finally {
+      _weekPlanItemsInFlight = null;
+    }
+  }
+
+  Future<Map<String, dynamic>?> _fetchWeekPlanItems(String planId, int week) async {
+    final response = await _wizardService.getWeekPlanItems(
+      patientId: patientId,
+      dietPlanId: planId,
+      week: week,
+    );
+    if (response is Map<String, dynamic> && response['success'] == true) {
+      _weekPlanItemsCache = response;
+      _weekPlanItemsCacheKey = '$planId|$week';
+      return response;
+    }
+    return response is Map<String, dynamic> ? response : null;
+  }
+
+  /// Drop the cached week plan-items so the next [loadWeekPlanItems] refetches.
+  /// Call after any add / remove / swap / ingredient edit / auto-balance /
+  /// supplement change that a later step needs to see.
+  void invalidateWeekPlanItems() {
+    _weekPlanItemsCache = null;
+    _weekPlanItemsCacheKey = null;
+  }
 
   WizardController({
     required this.patientId,
@@ -95,6 +158,20 @@ class WizardController extends GetxController {
     if (patientsController.patientProfileModel.value?.id != patientId) {
       patientsController.getPatientProfile(patientId);
     }
+    // Warm the whole recipe catalog in ONE request now, at the very start
+    // of the wizard - long before Step 2's Add / Swap pickers need it. Was
+    // previously a per-serving-time GET fired lazily on the Generate screen
+    // (up to 7, plus one per picker open). Fire-and-forget; every later
+    // listRecipes(servingTime:) call reads from this instead of the network.
+    RecipeService().prefetchWizardCatalog();
+  }
+
+  @override
+  void onClose() {
+    // The catalog is wizard-session-scoped - don't let it leak into an
+    // unrelated later screen's listRecipes calls.
+    RecipeService.clearWizardCatalog();
+    super.onClose();
   }
 
   void goToStep(int step) {

@@ -135,6 +135,9 @@ class TimelineStepController extends GetxController {
             );
       if (result == null || result['success'] != true) failures++;
     }
+    // Supplements are part of getWeekPlanItems' response - the Finalize step
+    // reads them from the shared cache, so drop it whenever any landed.
+    if (failures < stagedSupplements.length) wizard.invalidateWeekPlanItems();
     return failures;
   }
 

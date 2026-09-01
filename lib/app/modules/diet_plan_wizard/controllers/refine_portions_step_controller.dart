@@ -76,11 +76,15 @@ class RefinePortionsStepController extends GetxController {
     }
   }
 
-  Future<void> loadWeekPlanItems() async {
+  /// Reads through WizardController's shared week plan-items cache. The
+  /// initial step load / re-entry can reuse whatever Step 2 left warm;
+  /// every reload AFTER a mutation here (edit / auto-balance / swap) passes
+  /// [forceRefresh] so it re-reads the just-changed portions.
+  Future<void> loadWeekPlanItems({bool forceRefresh = false}) async {
     loading.value = true;
     errorMessage.value = null;
     try {
-      final response = await wizardService.getWeekPlanItems(patientId: patientId, dietPlanId: dietPlanId, week: week);
+      final response = await wizard.loadWeekPlanItems(forceRefresh: forceRefresh);
       if (response == null || response['success'] != true) {
         errorMessage.value = 'Could not load this week\'s plan.';
         return;
@@ -115,7 +119,7 @@ class RefinePortionsStepController extends GetxController {
       ingredients: updatedIngredients.map((i) => i.toJson()).toList(),
     );
     final ok = result != null && result['success'] == true;
-    if (ok) await loadWeekPlanItems();
+    if (ok) await loadWeekPlanItems(forceRefresh: true);
     return ok;
   }
 
@@ -136,7 +140,7 @@ class RefinePortionsStepController extends GetxController {
         dayPlanId: dayPlanId,
         targetDailyCalories: target,
       );
-      if (result != null && result['success'] == true) await loadWeekPlanItems();
+      if (result != null && result['success'] == true) await loadWeekPlanItems(forceRefresh: true);
     } finally {
       balancingDayPlanId.value = null;
     }
@@ -159,7 +163,7 @@ class RefinePortionsStepController extends GetxController {
         dietPlanId: dietPlanId,
         targetDailyCalories: target,
       );
-      if (result != null && result['success'] == true) await loadWeekPlanItems();
+      if (result != null && result['success'] == true) await loadWeekPlanItems(forceRefresh: true);
     } finally {
       loading.value = false;
     }
@@ -187,7 +191,7 @@ class RefinePortionsStepController extends GetxController {
       newParentRecipeId: newParentRecipeId,
     );
     if (result != null && result['success'] == true) {
-      await loadWeekPlanItems();
+      await loadWeekPlanItems(forceRefresh: true);
     } else {
       // Surface a backend rejection (e.g. a recipe with unresolved
       // ingredients - 404 with a message) instead of silently doing nothing.
@@ -226,7 +230,7 @@ class RefinePortionsStepController extends GetxController {
       },
     );
     final ok = result != null && result['success'] == true;
-    if (ok) await loadWeekPlanItems();
+    if (ok) await loadWeekPlanItems(forceRefresh: true);
     return ok;
   }
 }
