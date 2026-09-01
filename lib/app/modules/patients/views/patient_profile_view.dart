@@ -526,18 +526,28 @@ class _PatientProfileViewState extends State<PatientProfileView> {
   /// the one field a dietician can change).
   Widget _boxField({required String label, required String value, VoidCallback? onTap}) {
     final hasValue = value.trim().isNotEmpty && value != '—';
+    final editable = onTap != null;
+    // The read-only fields sit flat with a plum hairline. An editable field
+    // gets the app's "actionable" treatment instead: a pink fill, the
+    // magenta accent border, and an edit affordance - so it reads as a
+    // control, not just another label.
+    final borderColor = editable
+        ? const Color(0xff851653)
+        : (hasValue ? const Color(0xff530630) : const Color(0xff6C737F));
     final field = InputDecorator(
       decoration: InputDecoration(
         contentPadding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-        suffixIcon: onTap == null
-            ? null
-            : const Icon(Icons.edit_calendar_outlined, size: 18, color: Color(0xff851653)),
+        filled: editable,
+        fillColor: const Color(0xffFDF2FA),
+        suffixIcon: editable
+            ? const Icon(Icons.edit_calendar_outlined, size: 18, color: Color(0xff851653))
+            : null,
         label: hasValue
             ? Container(
                 height: 16,
                 padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                 decoration: BoxDecoration(
-                  color: const Color(0xffFEF6FB),
+                  color: editable ? const Color(0xffFDF2FA) : const Color(0xffFEF6FB),
                   borderRadius: BorderRadius.circular(2),
                 ),
                 child: CustomText(
@@ -557,15 +567,11 @@ class _PatientProfileViewState extends State<PatientProfileView> {
               ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(4),
-          borderSide: BorderSide(
-            color: hasValue ? const Color(0xff530630) : const Color(0xff6C737F),
-          ),
+          borderSide: BorderSide(color: borderColor, width: editable ? 1.4 : 1),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(4),
-          borderSide: BorderSide(
-            color: hasValue ? const Color(0xff530630) : const Color(0xff6C737F),
-          ),
+          borderSide: BorderSide(color: borderColor, width: editable ? 1.4 : 1),
         ),
       ),
       child: Text(
@@ -577,7 +583,7 @@ class _PatientProfileViewState extends State<PatientProfileView> {
         ),
       ),
     );
-    if (onTap == null) return field;
+    if (!editable) return field;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(4),
