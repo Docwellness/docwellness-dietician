@@ -114,6 +114,12 @@ class PlanItemFinalizeStepView extends StatelessWidget {
             ),
           ),
           Obx(() {
+            // Keep this Obx subscribed to a real observable - isAlreadyFinalized
+            // reads a plain cache getter and the true-branch below wouldn't
+            // otherwise touch anything reactive, which trips GetX's
+            // "improper use of a GetX" guard.
+            final finalizing = controller.finalizing.value;
+            final canActivate = controller.canActivate;
             // Reopened from the profile's Weekly Diet Plans row: this plan
             // is already finalized, so instead of "Finalize" the actions
             // are to Refine the portions or Regenerate the whole plan.
@@ -127,8 +133,8 @@ class PlanItemFinalizeStepView extends StatelessWidget {
             }
             return WizardStepFooter(
               primaryLabel: 'Finalize Plan',
-              primaryLoading: controller.finalizing.value,
-              primaryDisabled: !controller.canActivate,
+              primaryLoading: finalizing,
+              primaryDisabled: !canActivate,
               onSaveExit: () => Get.back(),
               onPrimary: () async {
                 final ok = await controller.finalizePlan();
