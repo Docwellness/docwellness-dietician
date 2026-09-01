@@ -40,6 +40,15 @@ class PlanItemFinalizeStepController extends GetxController {
   String get dietPlanId => wizard.dietPlanId.value ?? '';
   int get week => wizard.targetWeek.value;
 
+  /// True when this plan has already been finalized (or activated) - i.e.
+  /// the dietician opened this step to VIEW the built plan from the
+  /// patient profile's Weekly Diet Plans row, not to finalize a draft.
+  /// The view then shows a plain "Done" instead of "Finalize Plan".
+  bool get isAlreadyFinalized {
+    final s = wizard.patientsController.patientProfileModel.value?.status?.activeDietPlanStatus;
+    return s != null && s != 'Draft';
+  }
+
   /// The Step 1 calorie budget. Prefers this session's Targets selection,
   /// then falls back to the plan's own stored budget (from getWeekPlanItems)
   /// so a wizard resumed straight to Finalize still has the same target the

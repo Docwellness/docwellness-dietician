@@ -373,7 +373,13 @@ class _PatientProfileViewState extends State<PatientProfileView> {
     }
   }
 
-  /// Opens the 5-Step Wizard for Week 2/3/4 (an already-created plan).
+  /// Opens a week card from the Weekly Diet Plans row.
+  ///
+  /// - A v4.0 plan-item plan: open the wizard at its read-only Review &
+  ///   Finalize step for that week, so tapping a week shows the plan that
+  ///   was built (recipes, portions, macros) instead of the days-array
+  ///   regeneration flow, which doesn't apply to it.
+  /// - A days-array plan: the existing Week 2/3/4 (re)generation wizard.
   Future<void> _openWeightDialogForWeek(
     BuildContext context,
     int weekNum,
@@ -383,6 +389,7 @@ class _PatientProfileViewState extends State<PatientProfileView> {
   }) async {
     if (!context.mounted) return;
 
+    final isPlanItem = status.activeDietPlanDataModel == 'plan-item';
     final wizardController = WizardController(
       patientId: widget.patientId,
       patientName: (basic.fullName ?? '').split(' ').first,
@@ -391,10 +398,12 @@ class _PatientProfileViewState extends State<PatientProfileView> {
       initialDietPlanId: status.activeDietPlanId,
       initialWeek: weekNum,
       weeksToGenerate: weeksToGenerate,
-      // Regenerating an existing plan/week - Targets is meaningful (a fresh
-      // calorie/macro pick) but Context is already known, so skip straight
-      // to it.
-      initialStep: 2,
+      // plan-item: keep the 5-step order and jump straight to Finalize
+      // (Review) for this week - it's the view of the built plan.
+      // days-array: skip straight to Targets for a fresh calorie pick.
+      resumeInPlace: isPlanItem,
+      initialDataModel: isPlanItem ? 'plan-item' : null,
+      initialStep: isPlanItem ? 5 : 2,
     );
     await Get.to(
       () => const WizardView(),
@@ -436,9 +445,15 @@ class _PatientProfileViewState extends State<PatientProfileView> {
     String? tier,
     List<int> generatedWeeks,
     Set<int> finalizedWeeks,
-    List<WeekScheduleEntry> weekSchedule,
-  ) {
+    List<WeekScheduleEntry> weekSchedule, {
+    String? dataModel,
+  }) {
     if (generatedWeeks.contains(weekNum)) return _WeekCardState.generated;
+    // A v4.0 plan-item plan has exactly the weeks the wizard generated -
+    // there's no per-week regeneration for it (see
+    // generation_step_controller.dart), so a week that isn't in
+    // generatedWeeks is simply not part of this plan. Never "eligible".
+    if (dataModel == 'plan-item') return _WeekCardState.locked;
     if (tier == 'golden') {
       if (weekNum == 3 || weekNum == 4) {
         return finalizedWeeks.contains(2) &&
@@ -1551,6 +1566,7 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                       generatedWeeks,
                       finalizedWeeks,
                       weekSchedule,
+                      dataModel: status.activeDietPlanDataModel,
                     );
 
                     // ── LOCKED CARD (not yet eligible to generate) ────

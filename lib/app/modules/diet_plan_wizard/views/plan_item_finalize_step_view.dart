@@ -106,8 +106,17 @@ class PlanItemFinalizeStepView extends StatelessWidget {
               ),
             ),
           ),
-          Obx(
-            () => WizardStepFooter(
+          Obx(() {
+            // Opened to VIEW an already-finalized plan (from the profile's
+            // Weekly Diet Plans row) - nothing to finalize, just a way out.
+            if (controller.isAlreadyFinalized) {
+              return WizardStepFooter(
+                primaryLabel: 'Done',
+                onSaveExit: () => Get.back(),
+                onPrimary: () => Get.back(),
+              );
+            }
+            return WizardStepFooter(
               primaryLabel: 'Finalize Plan',
               primaryLoading: controller.finalizing.value,
               primaryDisabled: !controller.canActivate,
@@ -124,8 +133,8 @@ class PlanItemFinalizeStepView extends StatelessWidget {
                 }
                 Get.back();
               },
-            ),
-          ),
+            );
+          }),
         ],
       );
     });
