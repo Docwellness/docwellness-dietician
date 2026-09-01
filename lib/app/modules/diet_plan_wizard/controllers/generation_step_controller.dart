@@ -51,8 +51,18 @@ class GenerationStepController extends GetxController {
     // only the explicit, confirmed "Regenerate" action (regenerateMenu
     // below) may do that.
     if (!isNewPlan) {
-      final existing = await wizard.loadWeekPlanItems();
-      final days = (existing?['data']?['days'] as List?) ?? const [];
+      final existing = await wizard
+          .loadWeekPlanItems()
+          .timeout(const Duration(seconds: 30), onTimeout: () => null);
+      // Couldn't reach the server to check - do NOT fall through to
+      // generation (that would double-generate an already-filled plan on a
+      // resume). Fail with a retry instead.
+      if (existing == null) {
+        errorMessage.value = 'Couldn\'t load the existing plan - check your connection and retry.';
+        phase.value = GenerationPhase.failed;
+        return;
+      }
+      final days = (existing['data']?['days'] as List?) ?? const [];
       final alreadyHasItems = days.any((day) => ((day as Map)['meals'] as List? ?? []).any((meal) => ((meal as Map)['items'] as List? ?? []).isNotEmpty));
       if (alreadyHasItems) {
         wizard.dataModel.value = 'plan-item';
@@ -147,10 +157,19 @@ class GenerationStepController extends GetxController {
         phase.value = GenerationPhase.failed;
         return;
       }
+      // generate-menu returns the review week's plan items in its own
+      // response - seed the shared cache with it so the Generate review
+      // screen renders straight from it, with no separate (heavy)
+      // GET .../plan-items round-trip right after this one.
+      final weekPlanItems = menuResult['data']?['weekPlanItems'];
+      if (weekPlanItems is Map<String, dynamic>) {
+        wizard.primeWeekPlanItems(weekPlanItems);
+      }
     }
 
     // Now that a real dietPlanId exists, attach whatever supplements were
-    // staged in Step 3.
+    // staged in Step 3. A supplement changes what getWeekPlanItems returns,
+    // so drop the just-primed cache if any landed.
     if (Get.isRegistered<TimelineStepController>()) {
       final timelineController = Get.find<TimelineStepController>();
       if (timelineController.stagedSupplements.isNotEmpty) {
@@ -162,11 +181,15 @@ class GenerationStepController extends GetxController {
       }
     }
 
-    // Warm the shared week plan-items cache now, while the "generating"
-    // animation is still on screen - so the Generate review step that
-    // renders next opens against ready data instead of firing its own
-    // heavy fetch and showing a spinner.
-    await wizard.loadWeekPlanItems(forceRefresh: true);
+    // Fallback: if generate-menu didn't carry the items (older backend) or
+    // the supplement flush dropped the primed cache, warm it the old way so
+    // the review screen still opens ready - capped so a wedged connection
+    // can't sit on "Balancing calories..." forever.
+    if (wizard.dataModel.value == 'plan-item' && !wizard.hasWeekPlanItemsCached) {
+      await wizard
+          .loadWeekPlanItems(forceRefresh: true)
+          .timeout(const Duration(seconds: 30), onTimeout: () => null);
+    }
 
     phase.value = GenerationPhase.done;
   }

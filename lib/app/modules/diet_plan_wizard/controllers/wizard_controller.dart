@@ -132,6 +132,21 @@ class WizardController extends GetxController {
     _weekPlanItemsCacheKey = null;
   }
 
+  /// Seed the shared cache with a plan-items payload that came back inside
+  /// another response (generate-menu returns the review week's items), so
+  /// the Generate review screen renders straight from it with no separate
+  /// GET .../plan-items round-trip. [weekPayload] is the `weekPlanItems`
+  /// object (same shape as getWeekPlanItems' `data`).
+  void primeWeekPlanItems(Map<String, dynamic> weekPayload) {
+    _weekPlanItemsCache = {'success': true, 'data': weekPayload};
+    _weekPlanItemsCacheKey = _weekKey;
+  }
+
+  /// True when [loadWeekPlanItems] would return without a network call for
+  /// the current plan/week.
+  bool get hasWeekPlanItemsCached =>
+      _weekPlanItemsCache != null && _weekPlanItemsCacheKey == _weekKey;
+
   /// The plan's Step-1 calorie budget, read from the last getWeekPlanItems
   /// response. The authoritative fallback for Refine / Finalize when the
   /// wizard was resumed straight to a later step and Targets never ran this
