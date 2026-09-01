@@ -74,7 +74,12 @@ class RefinePortionsStepController extends GetxController {
   Future<void> _loadAndAutoBalanceOnce() async {
     await loadWeekPlanItems();
     final target = dailyCalorieTarget;
-    if (!_autoBalancedOnce && target != null && target > 0 && weekDays.isNotEmpty) {
+    // Only auto-balance a menu that hasn't been balanced yet. A plan that's
+    // already 'portions_refined' / 'finalized' (e.g. reopened from the
+    // profile via "Refine Plan") keeps the portions it was finalized with -
+    // silently rebalancing them would undo the dietician's work.
+    final needsBalance = wizard.planWorkflowStatus == null || wizard.planWorkflowStatus == 'menu_generated';
+    if (!_autoBalancedOnce && needsBalance && target != null && target > 0 && weekDays.isNotEmpty) {
       _autoBalancedOnce = true;
       await autoBalanceWholePlan();
     }

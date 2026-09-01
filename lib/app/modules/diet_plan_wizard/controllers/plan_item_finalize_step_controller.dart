@@ -40,13 +40,18 @@ class PlanItemFinalizeStepController extends GetxController {
   String get dietPlanId => wizard.dietPlanId.value ?? '';
   int get week => wizard.targetWeek.value;
 
-  /// True when this plan has already been finalized (or activated) - i.e.
-  /// the dietician opened this step to VIEW the built plan from the
-  /// patient profile's Weekly Diet Plans row, not to finalize a draft.
-  /// The view then shows a plain "Done" instead of "Finalize Plan".
+  /// True when this plan's build workflow is already complete - i.e. the
+  /// dietician opened this step to VIEW the built plan from the patient
+  /// profile's Weekly Diet Plans row, not to finalize a draft. The view
+  /// then offers "Refine Plan" / "Regenerate Plan" instead of "Finalize
+  /// Plan". Keyed on workflowStatus, not the model-wide status, so a
+  /// regenerate (which resets workflowStatus but leaves the plan Active)
+  /// correctly flips this back to the finalize flow.
   bool get isAlreadyFinalized {
-    final s = wizard.patientsController.patientProfileModel.value?.status?.activeDietPlanStatus;
-    return s != null && s != 'Draft';
+    if (wizard.planWorkflowStatus == 'finalized') return true;
+    if (wizard.planWorkflowStatus != null) return false;
+    // No plan-items response yet - fall back to the profile's snapshot.
+    return wizard.patientsController.patientProfileModel.value?.status?.activeDietPlanWorkflowStatus == 'finalized';
   }
 
   /// The Step 1 calorie budget. Prefers this session's Targets selection,

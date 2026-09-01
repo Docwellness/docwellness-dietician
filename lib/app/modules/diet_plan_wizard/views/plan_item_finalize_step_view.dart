@@ -71,10 +71,17 @@ class PlanItemFinalizeStepView extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const SizedBox(height: 8),
-                  const CustomText(text: 'Review & Finalize', fontWeight: FontWeight.w600, fontSize: 20, color: WizardPalette.plum),
+                  CustomText(
+                    text: controller.isAlreadyFinalized ? 'Diet Plan' : 'Review & Finalize',
+                    fontWeight: FontWeight.w600,
+                    fontSize: 20,
+                    color: WizardPalette.plum,
+                  ),
                   const SizedBox(height: 4),
-                  const CustomText(
-                    text: 'Exactly what will be prescribed - review each day before confirming.',
+                  CustomText(
+                    text: controller.isAlreadyFinalized
+                        ? 'Exactly what your patient sees - refine portions, or regenerate for a fresh AI plan.'
+                        : 'Exactly what will be prescribed - review each day before confirming.',
                     fontWeight: FontWeight.w400,
                     fontSize: 13,
                     color: WizardPalette.muted,
@@ -107,13 +114,15 @@ class PlanItemFinalizeStepView extends StatelessWidget {
             ),
           ),
           Obx(() {
-            // Opened to VIEW an already-finalized plan (from the profile's
-            // Weekly Diet Plans row) - nothing to finalize, just a way out.
+            // Reopened from the profile's Weekly Diet Plans row: this plan
+            // is already finalized, so instead of "Finalize" the actions
+            // are to Refine the portions or Regenerate the whole plan.
             if (controller.isAlreadyFinalized) {
               return WizardStepFooter(
-                primaryLabel: 'Done',
-                onSaveExit: () => Get.back(),
-                onPrimary: () => Get.back(),
+                primaryLabel: 'Refine Plan',
+                onPrimary: () => wizard.goToStep(3),
+                secondaryLabel: 'Regenerate Plan',
+                onSaveExit: () => _confirmRegenerate(context, wizard),
               );
             }
             return WizardStepFooter(
@@ -138,6 +147,37 @@ class PlanItemFinalizeStepView extends StatelessWidget {
         ],
       );
     });
+  }
+
+  /// "Regenerate Plan": confirm (it discards every current recipe and any
+  /// hand-tuned portions), then send the dietician back to Targets with a
+  /// flag the Generation step consumes to re-run the AI menu.
+  Future<void> _confirmRegenerate(BuildContext context, WizardController wizard) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const CustomText(text: 'Regenerate this plan?', fontWeight: FontWeight.w600, fontSize: 16, color: WizardPalette.plum),
+        content: const CustomText(
+          text: 'The current recipes and any portion edits are replaced with a fresh AI selection. You can adjust the calorie and macro targets first. This cannot be undone.',
+          fontWeight: FontWeight.w400,
+          fontSize: 13,
+          color: WizardPalette.ink,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const CustomText(text: 'Cancel', fontWeight: FontWeight.w500, fontSize: 13, color: WizardPalette.muted),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const CustomText(text: 'Regenerate', fontWeight: FontWeight.w600, fontSize: 13, color: WizardPalette.plum),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    wizard.regenerateRequested = true;
+    wizard.goToStep(1);
   }
 }
 

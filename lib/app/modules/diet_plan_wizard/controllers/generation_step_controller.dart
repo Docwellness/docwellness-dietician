@@ -42,15 +42,19 @@ class GenerationStepController extends GetxController {
     // created, it just needs its menu, so neither generateDietPlan nor the
     // days-array regenerateWeek applies.
     final isResumeBeforeMenu = !isNewPlan && wizard.isNewPlanFlow;
+    // "Regenerate Plan" from the reopened-plan review screen: an explicit,
+    // confirmed re-run of the AI menu for an existing plan-item plan
+    // (generate-menu itself replaces each slot's items, not appends).
+    final forceRegenerate = !isNewPlan && wizard.regenerateRequested;
+    wizard.regenerateRequested = false;
 
     // Defensive guard, not the normal path: within one uninterrupted wizard
     // session this controller's own onInit-gated call site already only
     // calls generate() once. But a freshly constructed controller reaching
     // this screen with a dietPlanId that already has generated items (e.g.
     // resuming) must not silently re-run the whole AI generation pipeline -
-    // only the explicit, confirmed "Regenerate" action (regenerateMenu
-    // below) may do that.
-    if (!isNewPlan) {
+    // only the explicit, confirmed "Regenerate" action may do that.
+    if (!isNewPlan && !forceRegenerate) {
       final existing = await wizard
           .loadWeekPlanItems()
           .timeout(const Duration(seconds: 30), onTimeout: () => null);
@@ -95,11 +99,11 @@ class GenerationStepController extends GetxController {
             wizard.patientsController.lastDietPlanGenerationError ??
             'Generation failed - please try again.';
       }
-    } else if (isResumeBeforeMenu) {
-      // Plan already exists; generate-menu below does the rest. A Draft
-      // that reached workflowStatus 'targets_set' is always plan-item (see
-      // createAndGenerateDietPlan) - default it so the generate-menu branch
-      // still runs even if the resumed profile didn't carry a data model.
+    } else if (isResumeBeforeMenu || forceRegenerate) {
+      // Plan already exists; generate-menu below does the rest (and for a
+      // regenerate, replaces the current items). A plan that got this far
+      // is always plan-item - default it so the generate-menu branch still
+      // runs even if the resumed profile didn't carry a data model.
       if ((wizard.dataModel.value ?? '').isEmpty) {
         wizard.dataModel.value = 'plan-item';
       }
@@ -151,6 +155,12 @@ class GenerationStepController extends GetxController {
         patientId: wizard.patientId,
         dietPlanId: resultDietPlanId!,
         weekNumbers: weekNumbers,
+        // On a regenerate, carry whatever targets the dietician (re-)picked
+        // on the Targets step so the new menu is built against them - a
+        // plain re-run with no target change sends null and the plan's
+        // existing budget stands.
+        calorieStrategy: forceRegenerate ? _nonEmpty(wizard.patientsController.selectedCalorieStrategy) : null,
+        macroStrategy: forceRegenerate ? _nonEmpty(wizard.patientsController.selectedMacroStrategy) : null,
       );
       if (menuResult == null || menuResult['success'] != true) {
         errorMessage.value = menuResult?['message']?.toString() ?? 'Menu generation failed - please try again.';
@@ -213,12 +223,13 @@ class GenerationStepController extends GetxController {
     final success = result != null && result['success'] == true;
     if (!success) {
       errorMessage.value = result?['message']?.toString() ?? 'Regeneration failed - please try again.';
+      phase.value = GenerationPhase.failed;
     } else {
       // A fresh menu replaces every plan item - the shared cache is now
       // stale for every step.
       wizard.invalidateWeekPlanItems();
+      phase.value = GenerationPhase.done;
     }
-    phase.value = GenerationPhase.done;
     return success;
   }
 
@@ -233,6 +244,8 @@ class GenerationStepController extends GetxController {
     if (tier == 'golden') return [1, 2];
     return [1];
   }
+
+  Map<String, dynamic>? _nonEmpty(Map<String, dynamic> m) => m.isEmpty ? null : m;
 
   Future<void> _advancePhaseAfter(GenerationPhase next, Duration delay) async {
     await Future.delayed(delay);

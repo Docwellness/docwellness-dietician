@@ -73,6 +73,12 @@ class WizardController extends GetxController {
   final PatientsController patientsController = Get.find<PatientsController>();
   final DietPlanWizardService _wizardService = DietPlanWizardService();
 
+  /// Set true by "Regenerate Plan" on the reopened-plan review screen. The
+  /// Generation step reads and clears it: when set, it re-runs the AI menu
+  /// generation (replacing the current recipes) instead of just showing the
+  /// plan that already exists.
+  bool regenerateRequested = false;
+
   // ── Shared week plan-items cache ─────────────────────────────────────
   // getWeekPlanItems is a heavy multi-collection join (DayPlan -> MealSlot
   // -> PlanItem -> RecipeVersion -> FoodItem, plus supplements). Steps 2/3/5
@@ -155,6 +161,17 @@ class WizardController extends GetxController {
     final data = _weekPlanItemsCache?['data'];
     if (data is! Map) return null;
     return (data['calorieTarget'] as num?)?.toDouble();
+  }
+
+  /// The plan's workflowStatus from the last getWeekPlanItems response -
+  /// 'menu_generated' means the menu exists but its portions haven't been
+  /// balanced yet, so Step 3 (Refine) should auto-balance on entry; a
+  /// 'portions_refined' / 'finalized' plan is already balanced and Refine
+  /// must NOT silently rebalance it (e.g. a reopened finalized plan).
+  String? get planWorkflowStatus {
+    final data = _weekPlanItemsCache?['data'];
+    if (data is! Map) return null;
+    return data['workflowStatus'] as String?;
   }
 
   WizardController({

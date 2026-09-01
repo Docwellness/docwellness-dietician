@@ -21,6 +21,10 @@ import 'wizard_theme.dart';
 class WizardStepFooter extends StatelessWidget {
   final String primaryLabel;
   final VoidCallback? onPrimary;
+
+  /// The secondary (outline) button. Defaults to "Save & Exit" - the
+  /// reopened-plan review screen overrides it to "Regenerate Plan".
+  final String secondaryLabel;
   final VoidCallback onSaveExit;
   final bool primaryLoading;
   final bool primaryDisabled;
@@ -34,6 +38,7 @@ class WizardStepFooter extends StatelessWidget {
     required this.primaryLabel,
     required this.onPrimary,
     required this.onSaveExit,
+    this.secondaryLabel = 'Save & Exit',
     this.primaryLoading = false,
     this.primaryDisabled = false,
     this.padding = const EdgeInsets.all(16),
@@ -48,7 +53,7 @@ class WizardStepFooter extends StatelessWidget {
           Expanded(
             child: CustomButton(
               onTap: onSaveExit,
-              text: 'Save & Exit',
+              text: secondaryLabel,
               isOutline: true,
               outlineButtonColor: WizardPalette.plum,
               textColor: WizardPalette.plum,

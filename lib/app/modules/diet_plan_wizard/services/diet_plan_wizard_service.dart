@@ -107,6 +107,8 @@ class DietPlanWizardService {
     required String dietPlanId,
     List<int>? weekNumbers,
     bool restrictNonVegToDayGroups = false,
+    Map<String, dynamic>? calorieStrategy,
+    Map<String, dynamic>? macroStrategy,
   }) async {
     try {
       final response = await service.request(
@@ -116,6 +118,10 @@ class DietPlanWizardService {
         data: {
           if (weekNumbers != null) 'weekNumbers': weekNumbers,
           'restrictNonVegToDayGroups': restrictNonVegToDayGroups,
+          // Only sent on a regenerate where the dietician changed targets;
+          // the backend persists them to the plan before building the menu.
+          if (calorieStrategy != null) 'calorieStrategy': calorieStrategy,
+          if (macroStrategy != null) 'macroStrategy': macroStrategy,
         },
       );
       if (response != null && response.data is Map) return response.data;
