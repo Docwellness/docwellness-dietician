@@ -188,6 +188,26 @@ class PatientService {
     return null;
   }
 
+  /// Moves the whole diet's start date (the one editable field in Basic
+  /// Information) - updates the request and cascades the active diet plan's
+  /// week schedule and the exercise plan's start date, all server-side.
+  Future<dynamic> updateDietStartDate(String patientId, DateTime startDate) async {
+    try {
+      final response = await service.request(
+        endPoint: '/patients/$patientId/diet-start-date',
+        method: 'PATCH',
+        headers: {'Authorization': "Bearer $token"},
+        data: {'startDate': startDate.toIso8601String()},
+      );
+      if (response != null && response.data is Map) {
+        return response.data;
+      }
+    } catch (e) {
+      debugPrint('updateDietStartDate error: $e');
+    }
+    return null;
+  }
+
   Future<dynamic> getAiGeneratedDietPlan(
     String patientId,
     String dietPlanId,

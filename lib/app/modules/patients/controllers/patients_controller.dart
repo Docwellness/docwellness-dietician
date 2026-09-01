@@ -3126,6 +3126,42 @@ class PatientsController extends GetxController {
     isProofLoading.value = false;
   }
 
+  final RxBool updateDietStartDateLoading = false.obs;
+
+  /// Moves the diet's start date - the one field in Basic Information a
+  /// dietician can edit. The backend cascades the active diet plan's week
+  /// schedule and the exercise plan's start date. Refreshes the profile on
+  /// success so every date shown updates at once.
+  Future<void> updateDietStartDate(String patientId, DateTime startDate) async {
+    updateDietStartDateLoading.value = true;
+    try {
+      final response = await service.updateDietStartDate(patientId, startDate);
+      final ok = response != null && response['success'] == true;
+      if (ok) {
+        await getPatientProfile(patientId);
+        showAppToast(
+          Get.overlayContext!,
+          message: 'Diet start date updated.',
+          type: AppToastType.success,
+        );
+      } else {
+        showAppToast(
+          Get.overlayContext!,
+          message: response?['message']?.toString() ?? 'Could not update the start date. Please try again.',
+          type: AppToastType.error,
+        );
+      }
+    } catch (e) {
+      showAppToast(
+        Get.overlayContext!,
+        message: 'Could not update the start date. Please try again.',
+        type: AppToastType.error,
+      );
+    } finally {
+      updateDietStartDateLoading.value = false;
+    }
+  }
+
   Future<void> activateDietPlan(String patientId, String dietPlanId) async {
     // Check if dietPlanId is valid
     if (dietPlanId.isEmpty) {

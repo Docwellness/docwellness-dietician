@@ -521,11 +521,17 @@ class _PatientProfileViewState extends State<PatientProfileView> {
   /// Read-only bordered field matching the patient app's CustomField look
   /// (floating label chip, same border/label colors) - used to mirror the
   /// Request Diet Plan screen's layout exactly in Basic Information.
-  Widget _boxField({required String label, required String value}) {
+  /// When [onTap] is set the field becomes editable: it shows an edit
+  /// affordance and taps through to [onTap] (used for "Start Date for Diet",
+  /// the one field a dietician can change).
+  Widget _boxField({required String label, required String value, VoidCallback? onTap}) {
     final hasValue = value.trim().isNotEmpty && value != '—';
-    return InputDecorator(
+    final field = InputDecorator(
       decoration: InputDecoration(
         contentPadding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+        suffixIcon: onTap == null
+            ? null
+            : const Icon(Icons.edit_calendar_outlined, size: 18, color: Color(0xff851653)),
         label: hasValue
             ? Container(
                 height: 16,
@@ -571,6 +577,72 @@ class _PatientProfileViewState extends State<PatientProfileView> {
         ),
       ),
     );
+    if (onTap == null) return field;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(4),
+      child: field,
+    );
+  }
+
+  /// dd-MM-yyyy (the backend's formatDate output shown in Basic Info) -> DateTime.
+  DateTime? _parseBackendDate(String? value) {
+    if (value == null) return null;
+    final parts = value.split('-');
+    if (parts.length != 3) return null;
+    final day = int.tryParse(parts[0]);
+    final month = int.tryParse(parts[1]);
+    final year = int.tryParse(parts[2]);
+    if (day == null || month == null || year == null) return null;
+    return DateTime(year, month, day);
+  }
+
+  /// "Start Date for Diet" tap: pick a new date, confirm (it shifts the
+  /// whole diet - and the exercise plan - forward/back), then persist.
+  Future<void> _editDietStartDate(String? currentValue) async {
+    final ctx0 = Get.context;
+    if (ctx0 == null) return;
+    final today = DateTime.now();
+    final todayMidnight = DateTime(today.year, today.month, today.day);
+    final current = _parseBackendDate(currentValue);
+    final initial = (current != null && !current.isBefore(todayMidnight)) ? current : todayMidnight;
+
+    final picked = await showDatePicker(
+      context: ctx0,
+      initialDate: initial,
+      firstDate: todayMidnight,
+      lastDate: todayMidnight.add(const Duration(days: 365)),
+      helpText: 'Start date for the diet',
+    );
+    if (picked == null) return;
+    final ctx1 = Get.context;
+    if (ctx1 == null) return;
+
+    final confirmed = await showDialog<bool>(
+      // ignore: use_build_context_synchronously
+      context: ctx1,
+      builder: (ctx) => AlertDialog(
+        title: const CustomText(text: 'Move the diet start date?', fontWeight: FontWeight.w600, fontSize: 16, color: Color(0xff530630)),
+        content: CustomText(
+          text: 'The diet plan\'s week schedule and the exercise plan (if generated) will shift to start on ${DateFormat('dd MMM yyyy').format(picked)}.',
+          fontWeight: FontWeight.w400,
+          fontSize: 13,
+          color: const Color(0xff1F2A37),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const CustomText(text: 'Cancel', fontWeight: FontWeight.w500, fontSize: 13, color: Color(0xff6C737F)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const CustomText(text: 'Update', fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xff530630)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await controller.updateDietStartDate(widget.patientId, picked);
   }
 
   Widget _buildProfileContent() {
@@ -812,9 +884,14 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                           padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
                           child: Column(
                             children: [
-                              _boxField(
-                                label: 'Start Date for Diet',
-                                value: healthSummary?.startDateForDiet ?? '—',
+                              Obx(
+                                () => _boxField(
+                                  label: 'Start Date for Diet',
+                                  value: healthSummary?.startDateForDiet ?? '—',
+                                  onTap: controller.updateDietStartDateLoading.value
+                                      ? null
+                                      : () => _editDietStartDate(healthSummary?.startDateForDiet),
+                                ),
                               ),
                               const SizedBox(height: 16),
                               _boxField(
