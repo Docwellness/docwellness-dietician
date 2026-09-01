@@ -258,35 +258,22 @@ class _ReviewRecipeCard extends StatelessWidget {
   Future<void> _openDetails(BuildContext context) async {
     final parentRecipeId = item.parentRecipeId;
     if (parentRecipeId.isEmpty) return;
-    final recipe = await RecipeService().getRecipeById(parentRecipeId);
-    if (recipe == null || !context.mounted) return;
 
-    // Show this item's actually-assigned recipe version's ingredients/
-    // components/nutrition, not the unrelated master Recipe document's own
-    // stored fields - see ingredient_editor_sheet.dart's identical mapping.
+    // This item's recipe version - ingredients/components/steps/nutrition -
+    // already came down with GET .../plan-items, so the sheet can open with
+    // no network wait. Only a just-added/swapped card (a name-only stub,
+    // see GenerateReviewController._stubVersion) still needs the blocking
+    // GET /recipes/:id to have anything to show.
     final version = item.recipeVersion;
-    // A just-added/swapped card carries a name-only stub (no ingredients) -
-    // see GenerateReviewController._stubVersion. Fall back to the freshly
-    // fetched master recipe rather than overriding it with an empty list.
-    final recipeToShow = (version == null || version.ingredients.isEmpty)
-        ? recipe
-        : recipe.copyWithVersionOverride(
-            ingredients: version.ingredients
-                .map(
-                  (i) => Ingredient(
-                    name: i.foodItemName ?? 'Ingredient',
-                    quantity: i.rawQuantity,
-                    unit: i.unit,
-                    category: 'Other',
-                    priceLevel: '₹₹',
-                    description: i.preparation ?? '',
-                  ),
-                )
-                .toList(),
-            components: version.components.map((c) => RecipeComponent(label: c.label, quantity: c.quantity, unit: c.unit)).toList(),
-            nutrition: version.nutritionPerServing != null ? Nutrition.fromJson(version.nutritionPerServing!) : null,
-            cookingSteps: version.steps,
-          );
+    RecipePreview recipeToShow;
+    if (version != null && version.ingredients.isNotEmpty) {
+      recipeToShow = version.toRecipePreview(servingTime: controller.selectedServingTime.value);
+    } else {
+      final recipe = await RecipeService().getRecipeById(parentRecipeId);
+      if (recipe == null || !context.mounted) return;
+      recipeToShow = recipe;
+    }
+    if (!context.mounted) return;
 
     showModalBottomSheet(
       context: context,

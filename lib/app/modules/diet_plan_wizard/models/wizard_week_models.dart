@@ -1,3 +1,5 @@
+import 'package:docwellnesdoc/app/modules/receipes/models/recipe_model.dart';
+
 /// Parses GET .../weeks/:week/days' response (dietPlanController.js's
 /// getWeekDays) - the typed days[] schema WITH subdocument _ids, used by
 /// Step 5's Smart Recipe Cards to target a specific item for swap/scale.
@@ -318,6 +320,47 @@ class WizardRecipeVersion {
           .toList(),
       nutritionPerServing: json['nutritionPerServing'] as Map<String, dynamic>?,
       hasUnresolvedIngredients: json['hasUnresolvedIngredients'] == true,
+    );
+  }
+}
+
+extension WizardRecipeVersionPreview on WizardRecipeVersion {
+  /// A RecipePreview built straight from this version's own embedded data -
+  /// which GET .../plan-items already delivered - so the wizard's recipe
+  /// detail sheet opens with no network wait. Previously every card tap
+  /// did a blocking GET /recipes/:id just to render fields the version
+  /// already carries; the master Recipe only adds cosmetic extras (image,
+  /// description). Pass [servingTime]/[category] when the caller knows them
+  /// (e.g. the meal slot the item sits in) so an "Update AI Inputs" from
+  /// this sheet still has a real serving time to regenerate against.
+  RecipePreview toRecipePreview({String servingTime = '', String category = 'Other'}) {
+    return RecipePreview(
+      id: parentRecipeId,
+      name: name,
+      description: '',
+      category: category,
+      cuisine: '',
+      servingTime: servingTime,
+      servings: 1,
+      dietaryHabits: DietaryHabits.fromJson(const {}),
+      freeFrom: FreeFrom.fromJson(const {}),
+      ingredients: ingredients
+          .map((i) => Ingredient(
+                name: i.foodItemName ?? 'Ingredient',
+                quantity: i.rawQuantity,
+                unit: i.unit,
+                category: 'Other',
+                priceLevel: '₹₹',
+                description: i.preparation ?? '',
+              ))
+          .toList(),
+      servingSize: ServingSize.fromJson(const {}),
+      nutrition: Nutrition.fromJson(nutritionPerServing ?? const {}),
+      cookingSteps: steps,
+      warnings: const [],
+      components: components
+          .map((c) => RecipeComponent(label: c.label, quantity: c.quantity, unit: c.unit))
+          .toList(),
     );
   }
 }

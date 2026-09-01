@@ -210,7 +210,7 @@ class _DayTimeline extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   for (final item in meal.items) ...[
-                    _RecipeCard(item: item),
+                    _RecipeCard(item: item, servingTime: meal.servingTime),
                     const SizedBox(height: 8),
                   ],
                   for (final supplement in meal.supplements)
@@ -229,8 +229,9 @@ class _DayTimeline extends StatelessWidget {
 
 class _RecipeCard extends StatelessWidget {
   final WizardPlanItemV2 item;
+  final String servingTime;
 
-  const _RecipeCard({required this.item});
+  const _RecipeCard({required this.item, required this.servingTime});
 
   String? get _portionLabel {
     final components = item.recipeVersion?.components ?? const [];
@@ -263,33 +264,24 @@ class _RecipeCard extends StatelessWidget {
 
   /// Opens the shared Recipe Details bottom sheet for this plan item, showing
   /// its actually-assigned recipe version's ingredients / components / steps /
-  /// nutrition (not the master Recipe's stale values) - same mapping the
-  /// Generate review screen and the Ingredient Editor use. Read-only here:
+  /// nutrition (not the master Recipe's stale values). Read-only here:
   /// Finalize is a review step, so no save/apply callbacks are wired.
+  ///
+  /// The version's data (already in hand from GET .../plan-items) is enough
+  /// to render this sheet, so it opens instantly - no blocking GET
+  /// /recipes/:id round-trip. The master Recipe is only fetched as a
+  /// fallback when a card somehow has no resolved version yet.
   Future<void> _openRecipeDetails(BuildContext context) async {
-    final recipe = await RecipeService().getRecipeById(item.parentRecipeId);
-    if (recipe == null || !context.mounted) return;
-
     final version = item.recipeVersion;
-    final recipeToShow = version == null
-        ? recipe
-        : recipe.copyWithVersionOverride(
-            ingredients: version.ingredients
-                .map((i) => Ingredient(
-                      name: i.foodItemName ?? 'Ingredient',
-                      quantity: i.rawQuantity,
-                      unit: i.unit,
-                      category: 'Other',
-                      priceLevel: '₹₹',
-                      description: i.preparation ?? '',
-                    ))
-                .toList(),
-            components: version.components
-                .map((c) => RecipeComponent(label: c.label, quantity: c.quantity, unit: c.unit))
-                .toList(),
-            nutrition: version.nutritionPerServing != null ? Nutrition.fromJson(version.nutritionPerServing!) : null,
-            cookingSteps: version.steps,
-          );
+    RecipePreview recipeToShow;
+    if (version != null && version.ingredients.isNotEmpty) {
+      recipeToShow = version.toRecipePreview(servingTime: servingTime);
+    } else {
+      final recipe = await RecipeService().getRecipeById(item.parentRecipeId);
+      if (recipe == null || !context.mounted) return;
+      recipeToShow = recipe;
+    }
+    if (!context.mounted) return;
 
     showModalBottomSheet(
       context: context,
