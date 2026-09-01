@@ -1,3 +1,4 @@
+import 'package:docwellnesdoc/app/utils/common_widgets/custom_button.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
 import 'package:docwellnesdoc/app/utils/functions/quantity_label.dart';
 import 'package:flutter/material.dart';
@@ -9,6 +10,66 @@ import 'wizard_theme.dart';
 /// diet-plan-wizard/wizard-visual-language). A recipe card looks the same on
 /// the Generate review screen and the Review & Finalize screen because both
 /// build it from here.
+
+/// The action row every wizard step ends with: a secondary "Save & Exit"
+/// next to the step's primary action. Every step persists its work to the
+/// backend as it goes (the plan and its items exist after Generate; portion
+/// edits, supplements and finalize all write on their own), so "Save & Exit"
+/// just closes the wizard - re-opening it resumes at the step reached.
+/// Matches the Generate review screen's own footer so every step reads the
+/// same.
+class WizardStepFooter extends StatelessWidget {
+  final String primaryLabel;
+  final VoidCallback? onPrimary;
+  final VoidCallback onSaveExit;
+  final bool primaryLoading;
+  final bool primaryDisabled;
+
+  /// Zero it when the parent already applies horizontal padding (e.g. a
+  /// step whose whole body is one scroll view).
+  final EdgeInsetsGeometry padding;
+
+  const WizardStepFooter({
+    super.key,
+    required this.primaryLabel,
+    required this.onPrimary,
+    required this.onSaveExit,
+    this.primaryLoading = false,
+    this.primaryDisabled = false,
+    this.padding = const EdgeInsets.all(16),
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: padding,
+      child: Row(
+        children: [
+          Expanded(
+            child: CustomButton(
+              onTap: onSaveExit,
+              text: 'Save & Exit',
+              isOutline: true,
+              outlineButtonColor: WizardPalette.plum,
+              textColor: WizardPalette.plum,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: CustomButton(
+              onTap: onPrimary ?? () {},
+              text: primaryLabel,
+              isOutline: false,
+              isLoading: primaryLoading,
+              isDisabled: primaryDisabled,
+              buttonColor: WizardPalette.plum,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 /// The real serving amount as an outline pill - "1 piece", "75 g (~5 tbsp)".
 class PortionPill extends StatelessWidget {

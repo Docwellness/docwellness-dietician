@@ -1,11 +1,11 @@
 import 'package:docwellnesdoc/app/modules/patients/utils/diet_target_calculations.dart';
-import 'package:docwellnesdoc/app/utils/common_widgets/custom_button.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../controllers/targets_step_controller.dart';
 import '../controllers/wizard_controller.dart';
+import '../widgets/wizard_widgets.dart';
 
 const _headerColor = Color(0xff530630);
 const _bodyColor = Color(0xff384250);
@@ -93,11 +93,12 @@ class TargetsStepView extends StatelessWidget {
           }),
           const SizedBox(height: 24),
           Obx(
-            () => CustomButton(
-              onTap: controller.canContinue ? wizard.nextStep : () {},
-              text: 'Continue',
-              isOutline: false,
-              buttonColor: controller.canContinue ? _headerColor : _mutedColor,
+            () => WizardStepFooter(
+              primaryLabel: 'Continue',
+              onPrimary: controller.canContinue ? wizard.nextStep : null,
+              primaryDisabled: !controller.canContinue,
+              onSaveExit: () => Get.back(),
+              padding: EdgeInsets.zero,
             ),
           ),
           const SizedBox(height: 24),

@@ -2,7 +2,6 @@ import 'package:docwellnesdoc/app/modules/receipes/models/recipe_model.dart';
 import 'package:docwellnesdoc/app/modules/receipes/services/recipe_service.dart';
 import 'package:docwellnesdoc/app/modules/receipes/views/recipe_details.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/app_toast.dart';
-import 'package:docwellnesdoc/app/utils/common_widgets/custom_button.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
 import 'package:docwellnesdoc/app/utils/functions/day_group_label.dart';
 import 'package:docwellnesdoc/app/utils/functions/quantity_label.dart';
@@ -107,28 +106,24 @@ class PlanItemFinalizeStepView extends StatelessWidget {
               ),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Obx(
-              () => CustomButton(
-                isLoading: controller.finalizing.value,
-                isDisabled: !controller.canActivate,
-                onTap: () async {
-                  final ok = await controller.finalizePlan();
-                  if (!ok) return;
-                  if (context.mounted) {
-                    showAppToast(
-                      context,
-                      message: 'Plan finalized. It goes live once the patient\'s payment is confirmed.',
-                      type: AppToastType.success,
-                    );
-                  }
-                  Get.back();
-                },
-                text: 'Finalize Plan',
-                isOutline: false,
-                buttonColor: WizardPalette.plum,
-              ),
+          Obx(
+            () => WizardStepFooter(
+              primaryLabel: 'Finalize Plan',
+              primaryLoading: controller.finalizing.value,
+              primaryDisabled: !controller.canActivate,
+              onSaveExit: () => Get.back(),
+              onPrimary: () async {
+                final ok = await controller.finalizePlan();
+                if (!ok) return;
+                if (context.mounted) {
+                  showAppToast(
+                    context,
+                    message: 'Plan finalized. It goes live once the patient\'s payment is confirmed.',
+                    type: AppToastType.success,
+                  );
+                }
+                Get.back();
+              },
             ),
           ),
         ],

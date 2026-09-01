@@ -1,5 +1,4 @@
 import 'package:docwellnesdoc/app/utils/common_widgets/app_toast.dart';
-import 'package:docwellnesdoc/app/utils/common_widgets/custom_button.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
 import 'package:docwellnesdoc/app/utils/functions/day_group_label.dart';
 import 'package:flutter/material.dart';
@@ -9,6 +8,7 @@ import '../controllers/timeline_step_controller.dart';
 import '../controllers/wizard_controller.dart';
 import '../widgets/supplement_picker_sheet.dart';
 import '../widgets/wizard_theme.dart';
+import '../widgets/wizard_widgets.dart';
 
 const _headerColor = WizardPalette.plum;
 const _bodyColor = WizardPalette.ink;
@@ -63,41 +63,37 @@ class TimelineStepView extends StatelessWidget {
             ),
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: Obx(
-            () => CustomButton(
-              isLoading: controller.continuing.value,
-              isDisabled: controller.continuing.value,
-              onTap: () async {
-                // v4.0 new-plan flow: Timeline now runs AFTER Generate (see
-                // wizard_controller.dart's isNewPlanFlow doc comment), so
-                // dietPlanId already exists - flush staged supplements to the
-                // real endpoint right away instead of waiting for
-                // GenerationStepController (which already ran, earlier).
-                // A supplement failing to save is surfaced but never blocks
-                // moving on - the plan itself is already generated.
-                final dietPlanId = wizard.dietPlanId.value;
-                if (wizard.isNewPlanFlow && controller.stagedSupplements.isNotEmpty && dietPlanId != null && dietPlanId.isNotEmpty) {
-                  final failed = await controller.continueFromTimeline(
-                    patientId: wizard.patientId,
-                    dietPlanId: dietPlanId,
-                    week: wizard.targetWeek.value,
+        Obx(
+          () => WizardStepFooter(
+            primaryLabel: 'Continue',
+            primaryLoading: controller.continuing.value,
+            primaryDisabled: controller.continuing.value,
+            onSaveExit: () => Get.back(),
+            onPrimary: () async {
+              // v4.0 new-plan flow: Timeline now runs AFTER Generate (see
+              // wizard_controller.dart's isNewPlanFlow doc comment), so
+              // dietPlanId already exists - flush staged supplements to the
+              // real endpoint right away instead of waiting for
+              // GenerationStepController (which already ran, earlier).
+              // A supplement failing to save is surfaced but never blocks
+              // moving on - the plan itself is already generated.
+              final dietPlanId = wizard.dietPlanId.value;
+              if (wizard.isNewPlanFlow && controller.stagedSupplements.isNotEmpty && dietPlanId != null && dietPlanId.isNotEmpty) {
+                final failed = await controller.continueFromTimeline(
+                  patientId: wizard.patientId,
+                  dietPlanId: dietPlanId,
+                  week: wizard.targetWeek.value,
+                );
+                if (failed > 0 && context.mounted) {
+                  showAppToast(
+                    context,
+                    message: '$failed supplement${failed == 1 ? '' : 's'} couldn\'t be saved - add ${failed == 1 ? 'it' : 'them'} again from the plan later.',
+                    type: AppToastType.warning,
                   );
-                  if (failed > 0 && context.mounted) {
-                    showAppToast(
-                      context,
-                      message: '$failed supplement${failed == 1 ? '' : 's'} couldn\'t be saved - add ${failed == 1 ? 'it' : 'them'} again from the plan later.',
-                      type: AppToastType.warning,
-                    );
-                  }
                 }
-                wizard.nextStep();
-              },
-              text: 'Continue',
-              isOutline: false,
-              buttonColor: _headerColor,
-            ),
+              }
+              wizard.nextStep();
+            },
           ),
         ),
       ],

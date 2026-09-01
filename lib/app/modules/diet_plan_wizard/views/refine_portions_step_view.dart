@@ -1,5 +1,4 @@
 import 'package:docwellnesdoc/app/modules/receipes/services/recipe_service.dart';
-import 'package:docwellnesdoc/app/utils/common_widgets/custom_button.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
 import 'package:docwellnesdoc/app/utils/functions/day_group_label.dart';
 import 'package:docwellnesdoc/app/utils/functions/quantity_label.dart';
@@ -98,14 +97,10 @@ class RefinePortionsStepView extends StatelessWidget {
               ),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: CustomButton(
-              onTap: wizard.nextStep,
-              text: 'Continue',
-              isOutline: false,
-              buttonColor: _headerColor,
-            ),
+          WizardStepFooter(
+            primaryLabel: 'Continue',
+            onPrimary: wizard.nextStep,
+            onSaveExit: () => Get.back(),
           ),
         ],
       );

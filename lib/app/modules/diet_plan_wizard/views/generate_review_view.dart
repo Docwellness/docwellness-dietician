@@ -1,7 +1,6 @@
 import 'package:docwellnesdoc/app/modules/receipes/models/recipe_model.dart';
 import 'package:docwellnesdoc/app/modules/receipes/services/recipe_service.dart';
 import 'package:docwellnesdoc/app/modules/receipes/views/recipe_details.dart';
-import 'package:docwellnesdoc/app/utils/common_widgets/custom_button.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -131,40 +130,20 @@ class GenerateReviewView extends StatelessWidget {
                     ],
                   ),
           ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Expanded(
-                  child: CustomButton(
-                    onTap: () => Get.back(),
-                    text: 'Save & Exit',
-                    isOutline: true,
-                    outlineButtonColor: _headerColor,
-                    textColor: _headerColor,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: CustomButton(
-                    onTap: () {
-                      // Step 3 (Refine Portions) is a GetX singleton for the
-                      // wizard's lifetime - if it already loaded once, force
-                      // it to refresh and re-balance against whatever the
-                      // plan items actually are now, since Step 2 may have
-                      // added/removed/swapped one since then.
-                      if (Get.isRegistered<RefinePortionsStepController>()) {
-                        Get.find<RefinePortionsStepController>().refreshForReentry();
-                      }
-                      wizard.nextStep();
-                    },
-                    text: 'Continue',
-                    isOutline: false,
-                    buttonColor: _headerColor,
-                  ),
-                ),
-              ],
-            ),
+          WizardStepFooter(
+            primaryLabel: 'Continue',
+            onSaveExit: () => Get.back(),
+            onPrimary: () {
+              // Step 3 (Refine Portions) is a GetX singleton for the
+              // wizard's lifetime - if it already loaded once, force it to
+              // refresh and re-balance against whatever the plan items
+              // actually are now, since Step 2 may have added/removed/
+              // swapped one since then.
+              if (Get.isRegistered<RefinePortionsStepController>()) {
+                Get.find<RefinePortionsStepController>().refreshForReentry();
+              }
+              wizard.nextStep();
+            },
           ),
         ],
       );
