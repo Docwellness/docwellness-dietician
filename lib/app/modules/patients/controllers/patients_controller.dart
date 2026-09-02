@@ -1020,10 +1020,19 @@ class PatientsController extends GetxController {
   /// in place. Unlike silentRefreshPatientProfile, this always assigns the
   /// new model, so a change with no status/calorie delta (e.g. the diet
   /// start date moving) still lands.
+  /// True when the last (non-silent) getPatientProfile call failed with
+  /// nothing already on screen - drives the profile screen's retry state so
+  /// a network blip no longer just shows a blank spinner-less screen.
+  final RxBool profileError = false.obs;
+
   Future<void> getPatientProfile(String patientId, {bool silent = false}) async {
-    if (!silent) isProfileLoading.value = true;
+    if (!silent) {
+      isProfileLoading.value = true;
+      profileError.value = false;
+    }
     try {
       final response = await service.getPatientProfile(patientId);
+      if (isClosed) return;
 
       if (response != null) {
         patientProfileModel.value = PatientProfileModel.fromJson(
@@ -1036,11 +1045,16 @@ class PatientsController extends GetxController {
         // Sync deactivation toggle with backend
         isProfileDeactivated.value =
             patientProfileModel.value?.status?.isActive == false;
+      } else if (!silent && patientProfileModel.value == null) {
+        profileError.value = true;
       }
     } catch (e) {
-      debugPrint('-------------$e');
+      debugPrint('getPatientProfile error: $e');
+      if (!isClosed && !silent && patientProfileModel.value == null) {
+        profileError.value = true;
+      }
     }
-    if (!silent) isProfileLoading.value = false;
+    if (!isClosed && !silent) isProfileLoading.value = false;
   }
 
   final ExerciseService _exerciseService = ExerciseService();
@@ -1054,9 +1068,9 @@ class PatientsController extends GetxController {
   bool get hasExercisePlan => exercisePlan.value != null;
 
   Future<void> fetchExercisePlan(String patientId) async {
-    exercisePlan.value = await _exerciseService.getCurrentExercisePlan(
-      patientId,
-    );
+    final plan = await _exerciseService.getCurrentExercisePlan(patientId);
+    if (isClosed) return;
+    exercisePlan.value = plan;
   }
 
   /// This plan's dailyExercises entries for one of utils/dayGroups.js's 4
@@ -1188,13 +1202,15 @@ class PatientsController extends GetxController {
   Future<void> fetchAllTrackingData(String patientId) async {
     isTrackingLoading.value = true;
     try {
+      // Each fetch catches its own error, so one failing chart doesn't blank
+      // the others.
       await Future.wait([
         fetchCalorieTrackingData(patientId),
         fetchWeightTrackingData(patientId),
         fetchBmiTrackingData(patientId),
       ]);
     } finally {
-      isTrackingLoading.value = false;
+      if (!isClosed) isTrackingLoading.value = false;
     }
   }
 
@@ -1205,6 +1221,7 @@ class PatientsController extends GetxController {
         startDate: calorieRangeStart.value,
         endDate: calorieRangeEnd.value,
       );
+      if (isClosed) return;
       if (response != null && response['data'] != null) {
         final tracking = TrackingData.fromJson(response['data']);
         calorieTrackingData.value = tracking;
@@ -1226,6 +1243,7 @@ class PatientsController extends GetxController {
         startDate: weightRangeStart.value,
         endDate: weightRangeEnd.value,
       );
+      if (isClosed) return;
       if (response != null && response['data'] != null) {
         final tracking = TrackingData.fromJson(response['data']);
         weightTrackingData.value = tracking;
@@ -1247,6 +1265,7 @@ class PatientsController extends GetxController {
         startDate: bmiRangeStart.value,
         endDate: bmiRangeEnd.value,
       );
+      if (isClosed) return;
       if (response != null && response['data'] != null) {
         final tracking = TrackingData.fromJson(response['data']);
         bmiTrackingData.value = tracking;
@@ -1286,6 +1305,7 @@ class PatientsController extends GetxController {
     isAutoMilestonesLoaded.value = false;
     try {
       final response = await service.getPatientJourneyMilestones(patientId);
+      if (isClosed) return;
       debugPrint(
         '📸 fetchAutoJourneyMilestones response: ${response != null ? 'OK' : 'NULL'}',
       );
@@ -1330,7 +1350,7 @@ class PatientsController extends GetxController {
     } catch (e) {
       debugPrint('fetchAutoJourneyMilestones error: $e');
     }
-    isAutoMilestonesLoaded.value = true;
+    if (!isClosed) isAutoMilestonesLoaded.value = true;
   }
 
   /// Fetch all journey images for a patient
@@ -1338,6 +1358,7 @@ class PatientsController extends GetxController {
     isJourneyLoading.value = true;
     try {
       final response = await service.getPatientJourneyImages(patientId);
+      if (isClosed) return;
       if (response != null && response['success'] == true) {
         final List data = response['data'] ?? [];
         journeyImages.value = data
@@ -1347,7 +1368,7 @@ class PatientsController extends GetxController {
     } catch (e) {
       debugPrint('fetchJourneyImages error: $e');
     }
-    isJourneyLoading.value = false;
+    if (!isClosed) isJourneyLoading.value = false;
   }
 
   /// Upload journey images for a patient
@@ -3889,6 +3910,7 @@ class PatientsController extends GetxController {
     isDoctorNotesLoading.value = true;
     try {
       final response = await service.fetchDoctorNotes(patientId);
+      if (isClosed) return;
       if (response != null && response['success'] == true) {
         final List data = response['data'] ?? [];
         doctorNotes.value = data
@@ -3898,7 +3920,7 @@ class PatientsController extends GetxController {
     } catch (e) {
       debugPrint('fetchDoctorNotes error: $e');
     }
-    isDoctorNotesLoading.value = false;
+    if (!isClosed) isDoctorNotesLoading.value = false;
   }
 
   Future<bool> sendDoctorNote({

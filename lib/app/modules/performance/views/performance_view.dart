@@ -127,8 +127,26 @@ class PerformanceView extends GetView<PerformanceController> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
               child: Obx(
-                () => Row(
+                () => Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    if (controller.statsError.value)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Row(
+                          children: [
+                            const Expanded(
+                              child: Text("Couldn't load performance stats"),
+                            ),
+                            TextButton(
+                              onPressed: controller.fetchPerformanceStats,
+                              child: const Text('Retry'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    Row(
+                      children: [
                     Expanded(
                       child: PatientCard(
                         values: controller.patientsTrend,
@@ -147,6 +165,8 @@ class PerformanceView extends GetView<PerformanceController> {
                         ),
                         changePercent: controller.revenueChangePercent.value,
                       ),
+                    ),
+                      ],
                     ),
                   ],
                 ),

@@ -99,14 +99,23 @@ class PerformanceController extends GetxController {
     super.onClose();
   }
 
+  /// Set when the stats fetch fails (or returns nothing) with no data yet on
+  /// screen - drives the header's retry affordance.
+  final RxBool statsError = false.obs;
+
   Future<void> fetchPerformanceStats({bool silent = false}) async {
     if (!silent) {
       isStatsLoading.value = true;
+      statsError.value = false;
     }
 
     try {
       final data = await _statsService.getPerformanceTrends();
-      if (data == null) return;
+      if (isClosed) return;
+      if (data == null) {
+        if (!silent && patientsTrend.isEmpty) statsError.value = true;
+        return;
+      }
 
       totalPatients.value = (data['totalPatients'] as num?)?.toInt() ?? 0;
       totalRevenue.value = (data['totalRevenue'] as num?)?.toDouble() ?? 0.0;
@@ -120,8 +129,11 @@ class PerformanceController extends GetxController {
 
       patientsTrend.value = _normalize(pWeekly);
       revenueTrend.value = _normalize(rWeekly);
+    } catch (e) {
+      debugPrint('fetchPerformanceStats error: $e');
+      if (!isClosed && !silent && patientsTrend.isEmpty) statsError.value = true;
     } finally {
-      if (!silent) {
+      if (!isClosed && !silent) {
         isStatsLoading.value = false;
       }
     }
@@ -140,9 +152,10 @@ class PerformanceController extends GetxController {
     isVideosLoading.value = true;
     try {
       final data = await _videoService.getVideos();
+      if (isClosed) return;
       videosList.value = data;
     } finally {
-      isVideosLoading.value = false;
+      if (!isClosed) isVideosLoading.value = false;
     }
   }
 
@@ -447,9 +460,10 @@ class PerformanceController extends GetxController {
     isQuotesLoading.value = true;
     try {
       final data = await _quoteService.getQuotes();
+      if (isClosed) return;
       quotesList.value = data;
     } finally {
-      isQuotesLoading.value = false;
+      if (!isClosed) isQuotesLoading.value = false;
     }
   }
 
@@ -633,11 +647,12 @@ class PerformanceController extends GetxController {
     isCouponsLoading.value = true;
     try {
       final data = await _couponService.getCoupons();
+      if (isClosed) return;
       couponsList.value = data;
       // Sync count with HomeController
       _syncCouponCount();
     } finally {
-      isCouponsLoading.value = false;
+      if (!isClosed) isCouponsLoading.value = false;
     }
   }
 

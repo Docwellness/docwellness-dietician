@@ -231,7 +231,23 @@ class _PatientProfileViewState extends State<PatientProfileView> {
         }
 
         if (controller.patientProfileModel.value == null) {
-          return Center(child: Text("No profile data found"));
+          if (controller.profileError.value) {
+            return Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text("Couldn't load this patient's profile"),
+                  const SizedBox(height: 12),
+                  OutlinedButton(
+                    onPressed: () =>
+                        controller.getPatientProfile(widget.patientId),
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
+            );
+          }
+          return const Center(child: Text("No profile data found"));
         }
 
         return _buildProfileContent();
