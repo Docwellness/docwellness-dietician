@@ -30,25 +30,38 @@ class HomeController extends GetxController {
   RxList<RecipeCategory> recipeCategories = <RecipeCategory>[].obs;
   RxBool isLoadingCategories = false.obs;
 
-  // Filtered list: resting states only (not mid-workflow) for dashboard display
-  List<PatientRequestModel> get filteredPatientRequests =>
-      allRequestedPatientList
-          .where(
-            (e) =>
-                e.status == 'Unpaid' ||
-                e.status == 'Paid' ||
-                e.status == 'PartiallyPaid',
-          )
-          .toList();
+  // Dashboard request buckets, memoized. These getters were previously
+  // recomputed (a full .where().toList()) on every read - and home_view's
+  // ListView.builder reads filteredPatientRequests ~9x per rebuild. Now
+  // they're derived once, whenever allRequestedPatientList changes, by an
+  // ever() worker (see onInit -> _recomputeRequestBuckets).
+  final RxList<PatientRequestModel> _restingRequests =
+      <PatientRequestModel>[].obs;
+  final RxList<PatientRequestModel> _pendingPaymentRequests =
+      <PatientRequestModel>[].obs;
 
-  List<PatientRequestModel> get pendingPaymentRequests =>
-      allRequestedPatientList
-          .where(
-            (e) =>
-                e.status == 'PaymentRequested' ||
-                e.status == 'PaymentSubmitted',
-          )
-          .toList();
+  // Filtered list: resting states only (not mid-workflow) for dashboard display
+  List<PatientRequestModel> get filteredPatientRequests => _restingRequests;
+
+  List<PatientRequestModel> get pendingPaymentRequests => _pendingPaymentRequests;
+
+  void _recomputeRequestBuckets(List<PatientRequestModel> all) {
+    _restingRequests.assignAll(
+      all.where(
+        (e) =>
+            e.status == 'Unpaid' ||
+            e.status == 'Paid' ||
+            e.status == 'PartiallyPaid',
+      ),
+    );
+    _pendingPaymentRequests.assignAll(
+      all.where(
+        (e) =>
+            e.status == 'PaymentRequested' ||
+            e.status == 'PaymentSubmitted',
+      ),
+    );
+  }
 
   // Dashboard action tile stats
   RxInt messagesReceived = 0.obs;
@@ -81,8 +94,14 @@ class HomeController extends GetxController {
   StreamSubscription? _messageSub;
   Timer? _dashboardDebounce;
 
+  Worker? _requestBucketsWorker;
+
   @override
   void onInit() {
+    // Keep the dashboard request buckets in sync with the source list.
+    _requestBucketsWorker =
+        ever(allRequestedPatientList, _recomputeRequestBuckets);
+    _recomputeRequestBuckets(allRequestedPatientList); // seed (ever fires on change only)
     loadHomeData();
     _listenForNotifications();
     _listenForMessages();
@@ -104,6 +123,7 @@ class HomeController extends GetxController {
     _notifSub?.cancel();
     _messageSub?.cancel();
     _dashboardDebounce?.cancel();
+    _requestBucketsWorker?.dispose();
     super.onClose();
   }
 
