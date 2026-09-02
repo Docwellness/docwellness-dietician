@@ -14,6 +14,7 @@ class NewWidget extends StatefulWidget {
 class _NewWidgetState extends State<NewWidget> {
   late final PatientsController controller;
   final TextEditingController searchController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
@@ -24,11 +25,21 @@ class _NewWidgetState extends State<NewWidget> {
     }
     controller = Get.find<PatientsController>();
     controller.fetchNewPatients();
+    _scrollController.addListener(_onScroll);
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 300) {
+      controller.fetchNewPatients(loadMore: true);
+    }
   }
 
   @override
   void dispose() {
     searchController.dispose();
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -42,7 +53,7 @@ class _NewWidgetState extends State<NewWidget> {
             Expanded(
               child: TextField(
                 controller: searchController,
-                onChanged: (value) => controller.searchQuery.value = value,
+                onChanged: controller.onSearchChanged,
                 decoration: InputDecoration(
                   filled: true,
                   fillColor: const Color(0xffFCFCFD),
@@ -128,12 +139,29 @@ class _NewWidgetState extends State<NewWidget> {
             }
 
             return RefreshIndicator(
-              onRefresh: controller.fetchNewPatients,
+              onRefresh: () => controller.fetchNewPatients(),
               child: ListView.separated(
+                controller: _scrollController,
                 padding: EdgeInsets.zero,
-                itemCount: patients.length,
+                itemCount: patients.length + 1,
                 separatorBuilder: (_, __) => const SizedBox(height: 12),
                 itemBuilder: (context, index) {
+                  if (index == patients.length) {
+                    return Obx(
+                      () => controller.newLoadingMore.value
+                          ? const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 16),
+                              child: Center(
+                                child: SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                ),
+                              ),
+                            )
+                          : const SizedBox.shrink(),
+                    );
+                  }
                   final patient = patients[index];
                   return NewPatientsContainer(
                     patientId: patient.patientId,

@@ -6,15 +6,20 @@ import 'package:flutter/widgets.dart';
 class PatientService {
   final ApiService service = ApiService();
 
-  /// Fetch patients by tab (ongoing, new, past) with pagination
+  /// Fetch patients by tab (ongoing, new, past) with pagination and an
+  /// optional server-side name [search].
   Future<dynamic> getPatientsByTab({
     required String tab,
     int page = 1,
     int limit = 20,
+    String search = '',
   }) async {
     try {
+      final q = search.trim().isEmpty
+          ? ''
+          : '&search=${Uri.encodeQueryComponent(search.trim())}';
       final response = await service.request(
-        endPoint: '/patients?tab=$tab&page=$page&limit=$limit',
+        endPoint: '/patients?tab=$tab&page=$page&limit=$limit$q',
         method: 'GET',
         headers: {'Authorization': "Bearer $token"},
       );

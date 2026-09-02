@@ -50,6 +50,21 @@ class PatientsController extends GetxController {
   RxBool newError = false.obs;
   RxBool pastError = false.obs;
 
+  // Pagination state per tab (cross-app performance optimization, task 1.8).
+  // The list used to load one page and filter/search it client-side, so a
+  // dietician could never see - or search for - a patient past the first
+  // page. Now each tab pages in on scroll and search is a server param.
+  static const int _patientsPageSize = 20;
+  int _ongoingPage = 1;
+  int _newPage = 1;
+  int _pastPage = 1;
+  final RxBool ongoingHasMore = false.obs;
+  final RxBool newHasMore = false.obs;
+  final RxBool pastHasMore = false.obs;
+  final RxBool ongoingLoadingMore = false.obs;
+  final RxBool newLoadingMore = false.obs;
+  final RxBool pastLoadingMore = false.obs;
+
   // Sort (P7-04) - alphabetical by default; for the Ongoing tab, "needs
   // attention first" resorts by adherence ascending (worst first) using
   // the same adherencePercent already driving PatientWidget's accent
@@ -691,6 +706,7 @@ class PatientsController extends GetxController {
   @override
   void onClose() {
     stopConsultationDraftAutosave();
+    _searchDebounce?.cancel();
     for (final c in [
       totalAmount,
       pendingAmount,
@@ -1538,60 +1554,126 @@ class PatientsController extends GetxController {
     }
   }
 
-  /// Fetch ongoing patients (Paid + Active plan)
-  Future<void> fetchOngoingPatients() async {
-    isOngoingLoading.value = true;
-    ongoingError.value = false;
+  /// Fetch ongoing patients (Paid + Active plan). [loadMore] appends the next
+  /// page instead of reloading from page 1.
+  Future<void> fetchOngoingPatients({bool loadMore = false}) =>
+      _loadPatientTab('ongoing', loadMore: loadMore);
+
+  /// Fetch new patients (Unpaid, no active plan).
+  Future<void> fetchNewPatients({bool loadMore = false}) =>
+      _loadPatientTab('new', loadMore: loadMore);
+
+  /// Fetch past patients (Completed).
+  Future<void> fetchPastPatients({bool loadMore = false}) =>
+      _loadPatientTab('past', loadMore: loadMore);
+
+  /// One paged, searchable fetch for any of the three tabs. Page 1 replaces
+  /// the list; [loadMore] appends. `searchQuery` is passed straight to the
+  /// server so it works across every page, not just the loaded one.
+  Future<void> _loadPatientTab(String tab, {bool loadMore = false}) async {
+    final RxBool loading;
+    final RxBool error;
+    final RxBool hasMore;
+    final RxBool loadingMore;
+    int currentPage;
+    switch (tab) {
+      case 'ongoing':
+        (loading, error, hasMore, loadingMore) =
+            (isOngoingLoading, ongoingError, ongoingHasMore, ongoingLoadingMore);
+        currentPage = _ongoingPage;
+        break;
+      case 'past':
+        (loading, error, hasMore, loadingMore) =
+            (isPastLoading, pastError, pastHasMore, pastLoadingMore);
+        currentPage = _pastPage;
+        break;
+      default:
+        (loading, error, hasMore, loadingMore) =
+            (isNewLoading, newError, newHasMore, newLoadingMore);
+        currentPage = _newPage;
+    }
+
+    if (loadMore) {
+      if (loadingMore.value || !hasMore.value) return;
+      loadingMore.value = true;
+      currentPage += 1;
+    } else {
+      currentPage = 1;
+      loading.value = true;
+      error.value = false;
+    }
+
     try {
-      final response = await service.getPatientsByTab(tab: 'ongoing');
+      final response = await service.getPatientsByTab(
+        tab: tab,
+        page: currentPage,
+        limit: _patientsPageSize,
+        search: searchQuery.value,
+      );
+      if (isClosed) return;
+
       if (response != null && response['data'] != null) {
-        ongoingPatients.value = (response['data'] as List)
-            .map((e) => OngoingPatientModel.fromJson(e))
-            .toList();
+        final page = (response['data'] as List);
+        _applyPatientPage(tab, page, append: loadMore);
+        hasMore.value = response['pagination']?['hasMore'] == true;
+        _setPatientPage(tab, currentPage);
+      } else if (!loadMore) {
+        error.value = true;
       }
     } catch (e) {
-      debugPrint('fetchOngoingPatients error: $e');
-      ongoingError.value = true;
+      debugPrint('_loadPatientTab($tab) error: $e');
+      if (!isClosed && !loadMore) error.value = true;
+    } finally {
+      if (!isClosed) {
+        loading.value = false;
+        loadingMore.value = false;
+      }
     }
-    isOngoingLoading.value = false;
   }
 
-  /// Fetch new patients (Unpaid, no active plan)
-  Future<void> fetchNewPatients() async {
-    isNewLoading.value = true;
-    newError.value = false;
-    try {
-      final response = await service.getPatientsByTab(tab: 'new');
-      if (response != null && response['data'] != null) {
-        newPatients.value = (response['data'] as List)
-            .map((e) => NewPatientModel.fromJson(e))
-            .toList()
-            .reversed
-            .toList();
-      }
-    } catch (e) {
-      debugPrint('fetchNewPatients error: $e');
-      newError.value = true;
+  void _setPatientPage(String tab, int page) {
+    switch (tab) {
+      case 'ongoing':
+        _ongoingPage = page;
+        break;
+      case 'past':
+        _pastPage = page;
+        break;
+      default:
+        _newPage = page;
     }
-    isNewLoading.value = false;
   }
 
-  /// Fetch past patients (Completed)
-  Future<void> fetchPastPatients() async {
-    isPastLoading.value = true;
-    pastError.value = false;
-    try {
-      final response = await service.getPatientsByTab(tab: 'past');
-      if (response != null && response['data'] != null) {
-        pastPatients.value = (response['data'] as List)
-            .map((e) => PastPatientModel.fromJson(e))
-            .toList();
-      }
-    } catch (e) {
-      debugPrint('fetchPastPatients error: $e');
-      pastError.value = true;
+  void _applyPatientPage(String tab, List<dynamic> raw, {required bool append}) {
+    switch (tab) {
+      case 'ongoing':
+        final parsed = raw.map((e) => OngoingPatientModel.fromJson(e)).toList();
+        append ? ongoingPatients.addAll(parsed) : ongoingPatients.value = parsed;
+        break;
+      case 'past':
+        final parsed = raw.map((e) => PastPatientModel.fromJson(e)).toList();
+        append ? pastPatients.addAll(parsed) : pastPatients.value = parsed;
+        break;
+      default:
+        final parsed = raw.map((e) => NewPatientModel.fromJson(e)).toList();
+        append ? newPatients.addAll(parsed) : newPatients.value = parsed;
     }
-    isPastLoading.value = false;
+  }
+
+  Timer? _searchDebounce;
+
+  /// Called (debounced) from each tab's search box. Reloads every tab from
+  /// page 1 with the new term so switching tabs mid-search shows filtered
+  /// results immediately.
+  void onSearchChanged(String value) {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 350), () {
+      if (isClosed) return;
+      searchQuery.value = value.trim();
+      fetchOngoingPatients();
+      fetchNewPatients();
+      fetchPastPatients();
+    });
   }
 
   /// Load all patient lists
@@ -1606,17 +1688,9 @@ class PatientsController extends GetxController {
   /// Filtered + sorted ongoing patients based on search query and
   /// sortByAttentionFirst (see field doc comment).
   List<OngoingPatientModel> get filteredOngoingPatients {
-    var list = searchQuery.value.isEmpty
-        ? ongoingPatients.toList()
-        : ongoingPatients
-            .where(
-              (p) =>
-                  p.fullName?.toLowerCase().contains(
-                    searchQuery.value.toLowerCase(),
-                  ) ??
-                  false,
-            )
-            .toList();
+    // Name search is now applied server-side (see _loadPatientTab) so it
+    // works across every page; this getter only orders the loaded rows.
+    final list = ongoingPatients.toList();
     if (sortByAttentionFirst.value) {
       list.sort(
         (a, b) => (a.adherencePercent ?? 100).compareTo(
@@ -1636,17 +1710,7 @@ class PatientsController extends GetxController {
   /// Filtered + sorted new patients based on search query (alphabetical -
   /// no adherence metric exists for this tab, see sortByAttentionFirst).
   List<NewPatientModel> get filteredNewPatients {
-    var list = searchQuery.value.isEmpty
-        ? newPatients.toList()
-        : newPatients
-            .where(
-              (p) =>
-                  p.fullName?.toLowerCase().contains(
-                    searchQuery.value.toLowerCase(),
-                  ) ??
-                  false,
-            )
-            .toList();
+    final list = newPatients.toList();
     if (sortByAttentionFirst.value) {
       list.sort(
         (a, b) => (a.fullName ?? '').toLowerCase().compareTo(
@@ -1660,17 +1724,7 @@ class PatientsController extends GetxController {
   /// Filtered + sorted past patients based on search query (alphabetical -
   /// no adherence metric exists for this tab, see sortByAttentionFirst).
   List<PastPatientModel> get filteredPastPatients {
-    var list = searchQuery.value.isEmpty
-        ? pastPatients.toList()
-        : pastPatients
-            .where(
-              (p) =>
-                  p.fullName?.toLowerCase().contains(
-                    searchQuery.value.toLowerCase(),
-                  ) ??
-                  false,
-            )
-            .toList();
+    final list = pastPatients.toList();
     if (sortByAttentionFirst.value) {
       list.sort(
         (a, b) => (a.fullName ?? '').toLowerCase().compareTo(
