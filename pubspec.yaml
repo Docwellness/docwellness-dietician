@@ -44,7 +44,6 @@ dependencies:
   image_picker: ^1.2.1
   video_thumbnail: ^0.5.6
   lottie: ^3.3.2
-  dotted_border: ^3.1.0
   speech_to_text: ^7.3.0
   intl: ^0.19.0
   cached_network_image: ^3.4.1
@@ -53,8 +52,6 @@ dependencies:
   firebase_core: ^4.7.0
   firebase_messaging: ^16.2.0
   flutter_local_notifications: ^21.0.0
-  record: ^6.2.0
-  audioplayers: ^6.6.0
   sentry_flutter: ^8.14.2
   posthog_flutter: ^5.31.0
   supabase_flutter: ^2.16.0
