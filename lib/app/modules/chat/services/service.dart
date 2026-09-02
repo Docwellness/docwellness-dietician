@@ -28,11 +28,20 @@ class ChatService {
     return null;
   }
 
-  Future<dynamic> getPatientChat(String id) async {
+  /// [before] (ISO-8601, UTC) is the cursor for older-page loads - the oldest
+  /// message currently on screen; omit for the first page. [limit] caps the
+  /// page size. With neither, the backend returns the whole history.
+  Future<dynamic> getPatientChat(String id, {String? before, int? limit}) async {
     debugPrint('-------------------$id');
     try {
+      final params = <String>[
+        if (limit != null) 'limit=$limit',
+        if (before != null && before.isNotEmpty)
+          'before=${Uri.encodeQueryComponent(before)}',
+      ];
+      final query = params.isEmpty ? '' : '?${params.join('&')}';
       final response = await service.request(
-        endPoint: '/chat/conversations/$id/messages',
+        endPoint: '/chat/conversations/$id/messages$query',
         method: 'GET',
         headers: {'Authorization': "Bearer $token"},
       );

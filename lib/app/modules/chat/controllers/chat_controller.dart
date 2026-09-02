@@ -26,6 +26,14 @@ class ChatController extends GetxController {
   String? currentConversationId;
   String? currentReceiverId;
 
+  // Message history pagination - cursor based. `chatList` is newest-first, so
+  // the last entry is the oldest loaded message and the cursor for the next
+  // older page (`?before=`). Cursor paging stays correct when a new message
+  // arrives while the dietician scrolls back through history.
+  final int messagesPerPage = 50;
+  bool hasMoreMessages = true;
+  bool _isLoadingOlder = false;
+
   // Typing indicator
   final RxBool isOtherUserTyping = false.obs;
   Timer? _typingTimer;
@@ -82,15 +90,19 @@ class ChatController extends GetxController {
   /// catch up, not flash the screen back to a loading state.
   Future<void> _silentRefetchMessages(String conversationId) async {
     try {
-      final response = await service.getPatientChat(conversationId);
+      // Refresh the window the dietician has actually loaded, not the whole
+      // history - clamped so a very long open session can't balloon the
+      // reconnect payload.
+      final int limit = chatList.isEmpty
+          ? messagesPerPage
+          : chatList.length.clamp(messagesPerPage, 300).toInt();
+      final response = await service.getPatientChat(conversationId, limit: limit);
       if (response != null) {
         final List data = response['data'];
         final fetchedChats = data.map((e) => ChatModel.fromJson(e)).toList();
-        fetchedChats.sort((a, b) {
-          if (a.createdAt == null || b.createdAt == null) return 0;
-          return b.createdAt!.compareTo(a.createdAt!);
-        });
+        fetchedChats.sort((a, b) => b.createdAt.compareTo(a.createdAt));
         chatList.value = fetchedChats;
+        hasMoreMessages = fetchedChats.length >= limit;
       }
     } catch (e) {
       debugPrint('Reconnect message resync error: $e');
@@ -266,11 +278,15 @@ class ChatController extends GetxController {
     try {
       showChatLoading.value = true;
       currentConversationId = id;
+      hasMoreMessages = true;
+      _isLoadingOlder = false;
 
       // Join the conversation room for real-time updates
       _socketService.joinConversation(id);
 
-      final response = await service.getPatientChat(id);
+      // First page only - the newest `messagesPerPage` messages. Older
+      // history is pulled in on demand by loadOlderMessages().
+      final response = await service.getPatientChat(id, limit: messagesPerPage);
 
       if (response != null) {
         // Mark messages as read
@@ -280,15 +296,11 @@ class ChatController extends GetxController {
         _silentRefreshConversations();
 
         final List data = response['data'];
-        final fetchedChats = data.map((e) => ChatModel.fromJson(e)).toList();
-
-        // Ensure messages are sorted newest first
-        fetchedChats.sort((a, b) {
-          if (a.createdAt == null || b.createdAt == null) return 0;
-          return b.createdAt!.compareTo(a.createdAt!);
-        });
+        final fetchedChats = data.map((e) => ChatModel.fromJson(e)).toList()
+          ..sort((a, b) => b.createdAt.compareTo(a.createdAt)); // newest first
 
         chatList.value = fetchedChats;
+        hasMoreMessages = fetchedChats.length >= messagesPerPage;
 
         // Get receiver info
         final Map<String, dynamic>? patientJson = data.firstWhereOrNull(
@@ -304,6 +316,40 @@ class ChatController extends GetxController {
       debugPrint("--------------------->$e");
     } finally {
       showChatLoading.value = false;
+    }
+  }
+
+  /// Loads the next older page of message history (triggered when the
+  /// dietician scrolls to the top of the reversed message list). Appends to
+  /// the end of `chatList` (which is newest-first), de-duping on id to absorb
+  /// any cursor-boundary overlap.
+  Future<void> loadOlderMessages() async {
+    if (_isLoadingOlder || !hasMoreMessages || chatList.isEmpty) return;
+    final conversationId = currentConversationId;
+    if (conversationId == null) return;
+
+    _isLoadingOlder = true;
+    try {
+      final before = chatList.last.createdAt.toUtc().toIso8601String();
+      final response = await service.getPatientChat(
+        conversationId,
+        before: before,
+        limit: messagesPerPage,
+      );
+      if (response != null) {
+        final List data = response['data'];
+        final fetched = data.map((e) => ChatModel.fromJson(e)).toList()
+          ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        final fresh = fetched
+            .where((m) => !chatList.any((e) => e.id == m.id))
+            .toList();
+        chatList.addAll(fresh);
+        hasMoreMessages = fetched.length >= messagesPerPage;
+      }
+    } catch (e) {
+      debugPrint('loadOlderMessages error: $e');
+    } finally {
+      _isLoadingOlder = false;
     }
   }
 

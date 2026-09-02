@@ -62,6 +62,17 @@ class _ChatScreenState extends State<ChatScreen> {
 
     // Setup text field listener for typing indicator
     messageController.addListener(_onTextChanged);
+    // Pull in older message history when the reversed list nears the top.
+    scrollController.addListener(_onScrollForHistory);
+  }
+
+  void _onScrollForHistory() {
+    if (!scrollController.hasClients) return;
+    // reverse: true -> maxScrollExtent is the top (oldest messages).
+    if (scrollController.position.pixels >=
+        scrollController.position.maxScrollExtent - 200) {
+      controller.loadOlderMessages();
+    }
   }
 
   @override
@@ -71,6 +82,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _speechToText.stop();
     messageController.removeListener(_onTextChanged);
     messageController.dispose();
+    scrollController.removeListener(_onScrollForHistory);
     scrollController.dispose();
     controller.leaveChat();
     super.dispose();
