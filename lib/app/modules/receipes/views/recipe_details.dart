@@ -315,6 +315,7 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
         ],
       ),
     );
+    nameController.dispose();
     if (newName == null || newName.isEmpty || !mounted) return;
 
     setState(() => _isSavingAsNewRecipe = true);

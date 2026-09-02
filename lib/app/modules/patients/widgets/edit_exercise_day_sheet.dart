@@ -173,6 +173,9 @@ class _EditExerciseDayGroupSheetState extends State<EditExerciseDayGroupSheet> {
         ],
       ),
     );
+    durationController.dispose();
+    setsController.dispose();
+    repsController.dispose();
   }
 
   Future<void> _save() async {

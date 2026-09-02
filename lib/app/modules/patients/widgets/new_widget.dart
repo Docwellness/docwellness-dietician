@@ -27,6 +27,12 @@ class _NewWidgetState extends State<NewWidget> {
   }
 
   @override
+  void dispose() {
+    searchController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Column(
       children: [

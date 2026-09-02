@@ -27,6 +27,12 @@ class _PastWidgetState extends State<PastWidget> {
   }
 
   @override
+  void dispose() {
+    searchController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Column(
       children: [

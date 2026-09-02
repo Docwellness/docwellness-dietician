@@ -170,6 +170,19 @@ class _AddExerciseViewState extends State<AddExerciseView> {
   }
 
   @override
+  void dispose() {
+    nameController.dispose();
+    metController.dispose();
+    secondsPerRepController.dispose();
+    descriptionController.dispose();
+    instructionsController.dispose();
+    equipmentController.dispose();
+    muscleGroupsController.dispose();
+    videoUrlController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,

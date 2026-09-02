@@ -137,6 +137,7 @@ class _ExerciseDetailsContentState extends State<_ExerciseDetailsContent> {
         ],
       ),
     );
+    urlController.dispose();
 
     if (newUrl == null || newUrl == _exercise.videoUrl) return;
 

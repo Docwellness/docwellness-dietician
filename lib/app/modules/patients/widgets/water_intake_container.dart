@@ -29,6 +29,12 @@ class _WaterIntakeContainerState extends State<WaterIntakeContainer>
   }
 
   @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   void didUpdateWidget(covariant WaterIntakeContainer oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.totalAmount != widget.totalAmount ||

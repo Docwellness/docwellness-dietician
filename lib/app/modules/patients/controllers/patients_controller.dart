@@ -68,10 +68,10 @@ class PatientsController extends GetxController {
   RxBool isConsultationSending = false.obs;
 
   final ImagePicker picker = ImagePicker();
-  TextEditingController totalAmount = TextEditingController();
-  TextEditingController pendingAmount = TextEditingController();
-  TextEditingController totalApaymentDesmount = TextEditingController();
-  TextEditingController paymentDes = TextEditingController();
+  final TextEditingController totalAmount = TextEditingController();
+  final TextEditingController pendingAmount = TextEditingController();
+  final TextEditingController totalApaymentDesmount = TextEditingController();
+  final TextEditingController paymentDes = TextEditingController();
 
   Map<String, dynamic> selectedCalorieStrategy = {};
   Map<String, dynamic> selectedMacroStrategy = {};
@@ -127,7 +127,7 @@ class PatientsController extends GetxController {
   RxString paymentCouponCode = ''.obs;
   RxDouble paymentDiscountPercentage = 0.0.obs;
   RxDouble paymentOriginalAmount = 0.0.obs;
-  TextEditingController rejectionNoteController = TextEditingController();
+  final TextEditingController rejectionNoteController = TextEditingController();
 
   RxDouble totalCalories = 0.0.obs;
   RxDouble totalProtein = 0.0.obs;
@@ -268,16 +268,15 @@ class PatientsController extends GetxController {
   /// questions
   RxString report = ''.obs;
 
-  TextEditingController currentEatingStyleOtherInfo = TextEditingController();
-  TextEditingController allergiesIntolerancesOtherInfo =
-      TextEditingController();
-  TextEditingController foodsToAvoid = TextEditingController();
-  TextEditingController waterIntake = TextEditingController();
-  TextEditingController alcoholOrSmokingFrequency = TextEditingController();
-  TextEditingController sleepStressSleepDuration = TextEditingController();
-  TextEditingController medicationSupplementsDetails = TextEditingController();
-  TextEditingController supplementsOther = TextEditingController();
-  TextEditingController finalNotesConcerns = TextEditingController();
+  final TextEditingController currentEatingStyleOtherInfo = TextEditingController();
+  final TextEditingController allergiesIntolerancesOtherInfo = TextEditingController();
+  final TextEditingController foodsToAvoid = TextEditingController();
+  final TextEditingController waterIntake = TextEditingController();
+  final TextEditingController alcoholOrSmokingFrequency = TextEditingController();
+  final TextEditingController sleepStressSleepDuration = TextEditingController();
+  final TextEditingController medicationSupplementsDetails = TextEditingController();
+  final TextEditingController supplementsOther = TextEditingController();
+  final TextEditingController finalNotesConcerns = TextEditingController();
 
   RxList<DietOption> options = <DietOption>[
     DietOption(name: "Vegetarian", selected: false),
@@ -692,6 +691,28 @@ class PatientsController extends GetxController {
   @override
   void onClose() {
     stopConsultationDraftAutosave();
+    for (final c in [
+      totalAmount,
+      pendingAmount,
+      totalApaymentDesmount,
+      paymentDes,
+      rejectionNoteController,
+      currentEatingStyleOtherInfo,
+      allergiesIntolerancesOtherInfo,
+      foodsToAvoid,
+      waterIntake,
+      alcoholOrSmokingFrequency,
+      sleepStressSleepDuration,
+      medicationSupplementsDetails,
+      supplementsOther,
+      finalNotesConcerns,
+    ]) {
+      c.dispose();
+    }
+    for (final c in _customTextControllers.values) {
+      c.dispose();
+    }
+    _customTextControllers.clear();
     super.onClose();
   }
 
@@ -3108,15 +3129,11 @@ class PatientsController extends GetxController {
         paymentProofId.value = data['id']?.toString() ?? "";
         paymentProofStatus.value = data['status']?.toString() ?? "";
 
-        totalAmount = TextEditingController(
-          text: data['amountReceived']?.toString() ?? "",
-        );
-
-        pendingAmount = TextEditingController(
-          text: data['amountPending']?.toString() ?? "",
-        );
-
-        paymentDes = TextEditingController(text: data['description'] ?? "");
+        // Set .text, never replace - a reassignment here leaked the previous
+        // controller and detached any already-mounted TextField from it.
+        totalAmount.text = data['amountReceived']?.toString() ?? "";
+        pendingAmount.text = data['amountPending']?.toString() ?? "";
+        paymentDes.text = data['description'] ?? "";
 
         // Coupon info
         paymentCouponCode.value = data['couponCode']?.toString() ?? '';
