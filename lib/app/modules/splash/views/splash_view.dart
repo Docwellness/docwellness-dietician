@@ -1,4 +1,5 @@
 import 'package:docwellnesdoc/app/routes/app_pages.dart';
+import 'package:docwellnesdoc/app/services/notification_service.dart';
 import 'package:docwellnesdoc/core/session/session_service.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -29,6 +30,13 @@ class _SplashViewState extends State<SplashView> {
       final hasSession = (SessionService.to.token?.isNotEmpty ?? false) &&
           (SessionService.to.userId?.isNotEmpty ?? false);
       Get.offNamed(hasSession ? Routes.HOME : Routes.AUTH);
+      if (hasSession) {
+        // A push tapped from a killed state parked its deep link while we
+        // were on this screen - replay it once Home has actually mounted.
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) => NotificationService().consumePendingLaunchLink(),
+        );
+      }
     });
   }
 

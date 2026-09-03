@@ -163,7 +163,10 @@ class NotificationController extends GetxController {
   /// Navigate based on notification type
   void onTapNotification(NotificationItem item) {
     markAsRead(item.id);
-    if (item.type == 'chat' &&
+    // 'progress' = a patient logged a meal; referenceId is their chat
+    // conversation (referenceModel 'Chat' on the backend), so it opens the
+    // same place as a chat notification.
+    if ((item.type == 'chat' || item.type == 'progress') &&
         item.referenceId != null &&
         item.referenceId!.isNotEmpty) {
       if (!Get.isRegistered<ChatController>()) {
