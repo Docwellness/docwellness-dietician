@@ -12,9 +12,10 @@ import 'package:docwellnesdoc/groq_dev_credentials.dart';
 /// build-mode branching itself so it's simple to reason about/test).
 class ConsultationMockFillService {
   static const _endpoint = 'https://api.groq.com/openai/v1/chat/completions';
-  // Fast + good instruction-following for a small structured-JSON task;
-  // no need for a heavier model just to invent plausible mock answers.
-  static const _model = 'llama-3.3-70b-versatile';
+  // Good instruction-following for a small structured-JSON task. Was
+  // 'llama-3.3-70b-versatile', which Groq retired (404 model_not_found) -
+  // this is a currently-served model with json_object response support.
+  static const _model = 'openai/gpt-oss-120b';
 
   // Given an identical field list + gender every time (same form, same
   // patient), the model tends to converge on the same "most likely" mock
@@ -137,7 +138,7 @@ commentary, no markdown - just the JSON object.
           {'role': 'user', 'content': prompt},
         ],
         'response_format': {'type': 'json_object'},
-        'temperature': 1.2,
+        'temperature': 1.0,
         'top_p': 0.95,
       },
     );
