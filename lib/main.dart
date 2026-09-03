@@ -189,6 +189,15 @@ Future<void> restoreSession() async {
     );
     if (me.statusCode == 200 && me.data is Map && me.data['success'] == true) {
       userId = me.data['data']['_id'];
+    } else if (me.statusCode == 403 &&
+        me.data is Map &&
+        me.data['code'] == 'account_disabled') {
+      // Account deactivated backend-side (authMiddleware) - a definitive
+      // "you can't use the app", unlike the transient failures the catch
+      // below tolerates. Clear the session so SplashView routes to AUTH.
+      debugPrint('restoreSession: account deactivated - logging out');
+      await session.clear();
+      return;
     }
   } catch (e) {
     // 401/network/anything - don't touch userId; the getter already returns
