@@ -77,24 +77,33 @@ class PlanItemFinalizeStepView extends StatelessWidget {
                     fontSize: 20,
                     color: WizardPalette.plum,
                   ),
-                  const SizedBox(height: 4),
-                  CustomText(
-                    text: controller.isAlreadyFinalized
-                        ? 'Exactly what your patient sees - refine portions, or regenerate for a fresh AI plan.'
-                        : 'Exactly what will be prescribed - review each day before confirming.',
-                    fontWeight: FontWeight.w400,
-                    fontSize: 13,
-                    color: WizardPalette.muted,
-                  ),
-                  const SizedBox(height: 14),
-                  if (controller.targetCalories != null) _CalorieChecklist(controller: controller),
+                  // The finalized "Diet Plan" preview is kept clean - just
+                  // the day selector, a day nutrition card, then the meal
+                  // timeline. The pre-finalize "Review & Finalize" flow
+                  // still shows its guidance line + the per-day +/-5%
+                  // calorie checklist that gates activation.
+                  if (!controller.isAlreadyFinalized) ...[
+                    const SizedBox(height: 4),
+                    const CustomText(
+                      text: 'Exactly what will be prescribed - review each day before confirming.',
+                      fontWeight: FontWeight.w400,
+                      fontSize: 13,
+                      color: WizardPalette.muted,
+                    ),
+                    const SizedBox(height: 14),
+                    if (controller.targetCalories != null) _CalorieChecklist(controller: controller),
+                  ],
                   if (selectableDayGroups.length > 1) ...[
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 12),
                     DayGroupSelector(
                       options: selectableDayGroups,
                       selected: controller.selectedDayGroup.value,
                       onSelect: (dg) => controller.selectedDayGroup.value = dg,
                     ),
+                  ],
+                  if (day != null && day.hasItems) ...[
+                    const SizedBox(height: 12),
+                    _DayNutritionCard(day: day),
                   ],
                   const SizedBox(height: 16),
                   if (day != null) _DayTimeline(day: day, controller: controller),
@@ -197,6 +206,59 @@ class _CalorieChecklist extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+/// Total calories + macros for the currently-selected day-group. Sums the
+/// same per-recipe nutrition the cards below show (see
+/// WizardDayGroupV2._macroTotal), so it lines up with what the patient sees
+/// on their own Home "Your progress" card.
+class _DayNutritionCard extends StatelessWidget {
+  final WizardDayGroupV2 day;
+
+  const _DayNutritionCard({required this.day});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: WizardPalette.surface,
+        borderRadius: BorderRadius.circular(WizardPalette.cardRadius),
+        border: Border.all(color: WizardPalette.line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              CustomText(
+                text: '${day.totalCalories.round()}',
+                fontWeight: FontWeight.w700,
+                fontSize: 22,
+                color: WizardPalette.plum,
+              ),
+              const SizedBox(width: 4),
+              const CustomText(
+                text: 'cal / day',
+                fontWeight: FontWeight.w400,
+                fontSize: 12,
+                color: WizardPalette.muted,
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          MacroChipRow(
+            protein: day.totalProtein,
+            fiber: day.totalFiber,
+            carbs: day.totalCarbs,
+            fat: day.totalFats,
+          ),
+        ],
+      ),
     );
   }
 }

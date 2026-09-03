@@ -452,6 +452,22 @@ class WizardDayGroupV2 {
   double get totalCalories =>
       meals.expand((meal) => meal.items).fold(0.0, (sum, item) => sum + (item.calories ?? 0));
 
+  /// Day totals for each macro, summed the same way `_RecipeCard` reads a
+  /// single item's macros (calculatedNutrition, falling back to the
+  /// version's own nutritionPerServing) - so the day nutrition card's
+  /// numbers equal the sum of the per-recipe chips shown right below it,
+  /// and match the patient Home screen's planned macros (which come from
+  /// the same RecipeVersion nutrition via recipeVersionOverrides).
+  double _macroTotal(String key) => meals.expand((meal) => meal.items).fold(0.0, (sum, item) {
+        final n = item.calculatedNutrition ?? item.recipeVersion?.nutritionPerServing;
+        return sum + ((n?[key] as num?)?.toDouble() ?? 0);
+      });
+
+  double get totalProtein => _macroTotal('protein');
+  double get totalCarbs => _macroTotal('carbs');
+  double get totalFats => _macroTotal('fats');
+  double get totalFiber => _macroTotal('fiber');
+
   /// True only when at least one item has been generated for this day - a
   /// day with nothing yet has nothing to validate (same "excluded rather
   /// than counted as a failure" rule as the backend).
