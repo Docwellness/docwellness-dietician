@@ -152,9 +152,19 @@ class _WizardHeader extends StatelessWidget {
                         _confirmRegenerate(context, wizard);
                       }
                     },
-                    itemBuilder: (_) => const [
-                      PopupMenuItem(value: 'refine', child: Text('Refine Plan')),
-                      PopupMenuItem(value: 'regenerate', child: Text('Regenerate Plan')),
+                    // "Refine Plan" jumps to step 3, which is only a
+                    // distinct Refine Portions step in the v4.0 new-plan
+                    // order (isNewPlanFlow) - the days-array regeneration
+                    // order's step 3 is Timeline, so offering it there would
+                    // silently land the dietician on the wrong step. Days-
+                    // array's reopened review (e.g. a currently-ongoing,
+                    // already-finalized week tapped from the patient
+                    // profile) only offers Regenerate Plan, which correctly
+                    // maps to step 1 (Context) either way.
+                    itemBuilder: (_) => [
+                      if (wizard.isNewPlanFlow)
+                        const PopupMenuItem(value: 'refine', child: Text('Refine Plan')),
+                      const PopupMenuItem(value: 'regenerate', child: Text('Regenerate Plan')),
                     ],
                   ),
               ],

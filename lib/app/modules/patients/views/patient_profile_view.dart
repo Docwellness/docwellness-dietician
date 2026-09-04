@@ -265,6 +265,10 @@ class _PatientProfileViewState extends State<PatientProfileView> {
     PendingCycle? pc, {
     int? forWeek,
     List<int>? weeksToGenerate,
+    // True when reopening an already-FINALIZED pending week (see
+    // _pendingWeekCard) - same read-only review treatment as the running
+    // cycle's finalized-week cards (_openWeightDialogForWeek's viewOnly).
+    bool viewOnly = false,
   }) async {
     final status = controller.patientProfileModel.value?.status;
     final name =
@@ -282,17 +286,26 @@ class _PatientProfileViewState extends State<PatientProfileView> {
 
     int step;
     bool resumeInPlace;
+    bool reopenedPlanView;
     if (isDraftResume) {
       step = _resumeStepForWorkflow(pc?.workflowStatus);
       resumeInPlace = true;
+      reopenedPlanView = false;
     } else if (isRegen || (forWeek != null && knowsPlan)) {
       // Regenerating a later week, or reopening an already-built one - same
       // step split the running cycle's cards use (_openWeightDialogForWeek).
-      step = isPlanItem ? 5 : 2;
+      // Read-only review (drops the back arrow / offers Regenerate instead
+      // of walking calorie selection again) for a plan-item week (always)
+      // or an already-finalized days-array one (viewOnly); a still-
+      // generating/eligible days-array week keeps the normal Targets entry.
+      final showReview = isPlanItem || viewOnly;
+      step = showReview ? 5 : 2;
       resumeInPlace = isPlanItem;
+      reopenedPlanView = showReview;
     } else {
       step = 1;
       resumeInPlace = false;
+      reopenedPlanView = false;
     }
 
     final wizardController = WizardController(
@@ -306,6 +319,7 @@ class _PatientProfileViewState extends State<PatientProfileView> {
       initialDataModel: knowsPlan ? pc?.dataModel : null,
       resumeInPlace: resumeInPlace,
       initialStep: step,
+      reopenedPlanView: reopenedPlanView,
     );
     await Get.to(() => const WizardView(), binding: WizardBinding(wizardController));
     await controller.getPatientProfile(widget.patientId);
@@ -360,6 +374,7 @@ class _PatientProfileViewState extends State<PatientProfileView> {
         forWeek: week,
         weeksToGenerate:
             isEligible ? _weeksToGenerateFor(week, tier) : null,
+        viewOnly: isFinalized,
       );
     }
 
@@ -762,21 +777,35 @@ class _PatientProfileViewState extends State<PatientProfileView> {
 
   /// Opens a week card from the Weekly Diet Plans row.
   ///
-  /// - A v4.0 plan-item plan: open the wizard at its read-only Review &
-  ///   Finalize step for that week, so tapping a week shows the plan that
-  ///   was built (recipes, portions, macros) instead of the days-array
-  ///   regeneration flow, which doesn't apply to it.
-  /// - A days-array plan: the existing Week 2/3/4 (re)generation wizard.
+  /// - A v4.0 plan-item plan: always opens the wizard at its read-only
+  ///   Review & Finalize step for that week, so tapping a week shows the
+  ///   plan that was built (recipes, portions, macros) instead of the
+  ///   days-array regeneration flow, which doesn't apply to it.
+  /// - A days-array plan that's already FINALIZED (e.g. the currently-
+  ///   ongoing week - see [viewOnly]): same read-only review, on the
+  ///   Finalize step's own already-finalized state
+  ///   (FinalizeStepView/_CleverAdjustmentsView), not the Targets step - a
+  ///   finalized week is something to review and, if needed, deliberately
+  ///   regenerate, not something to walk back through calorie selection
+  ///   for by default.
+  /// - A days-array plan that isn't finalized yet (generated-not-finalized,
+  ///   or eligible-to-generate): the existing Week 2/3/4 (re)generation
+  ///   wizard, starting at Targets.
   Future<void> _openWeightDialogForWeek(
     BuildContext context,
     int weekNum,
     Status status,
     Basic basic, {
     List<int>? weeksToGenerate,
+    bool viewOnly = false,
   }) async {
     if (!context.mounted) return;
 
     final isPlanItem = status.activeDietPlanDataModel == 'plan-item';
+    // Read-only review for either: a plan-item plan (always), or a
+    // days-array week that's already finalized (viewOnly, passed by the
+    // finalized-week card below).
+    final showReview = isPlanItem || viewOnly;
     final wizardController = WizardController(
       patientId: widget.patientId,
       patientName: (basic.fullName ?? '').split(' ').first,
@@ -785,13 +814,16 @@ class _PatientProfileViewState extends State<PatientProfileView> {
       initialDietPlanId: status.activeDietPlanId,
       initialWeek: weekNum,
       weeksToGenerate: weeksToGenerate,
-      // plan-item: keep the 5-step order and jump straight to Finalize
-      // (Review) for this week - it's the view of the built plan.
-      // days-array: skip straight to Targets for a fresh calorie pick.
+      // Only plan-item reorders into the v4.0 new-plan step sequence -
+      // a days-array reopened review still needs the original
+      // Context/Targets/Timeline/Generate/Finalize order so it lands on
+      // the right Finalize widget (FinalizeStepView, not
+      // PlanItemFinalizeStepView) and so a "Regenerate Plan" from there
+      // (step 1) means Context, not Targets.
       resumeInPlace: isPlanItem,
       initialDataModel: isPlanItem ? 'plan-item' : null,
-      initialStep: isPlanItem ? 5 : 2,
-      reopenedPlanView: isPlanItem,
+      initialStep: showReview ? 5 : 2,
+      reopenedPlanView: showReview,
     );
     await Get.to(
       () => const WizardView(),
@@ -2247,6 +2279,9 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                             weekNum,
                             status,
                             basic,
+                            // Already finalized - review it, don't relaunch
+                            // calorie/target selection.
+                            viewOnly: true,
                           ),
                           child: Container(
                             width: 120,
