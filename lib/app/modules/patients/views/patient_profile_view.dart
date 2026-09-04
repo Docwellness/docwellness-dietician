@@ -110,6 +110,139 @@ class _PatientProfileViewState extends State<PatientProfileView> {
   Color _mealIconColor(String? membershipPlan) =>
       membershipBadgeStyle(membershipPlan).text;
 
+  /// Whether the renewal's next cycle has actually been built (its initial
+  /// weeks finalized / plan promoted past Draft) - the point at which the
+  /// "Create Diet Plan" button gives way to the payment action.
+  bool _renewalCycleBuilt(Status status) {
+    final pc = controller.patientProfileModel.value?.pendingCycle;
+    return pc != null &&
+        (pc.finalizedWeekNumbers.isNotEmpty ||
+            pc.status == 'Finalized' ||
+            pc.status == 'Active');
+  }
+
+  /// The renewal's payment action, shown right under the Weekly Diet Plans
+  /// row (not buried below Goal Journey) once the next cycle is built:
+  /// "Send Payment Request" while Unpaid, a status card once it's out for
+  /// payment - tapping the card opens the proof-review sheet.
+  Widget _renewalPaymentAction(BuildContext context, Status status) {
+    final rs = status.requestStatus;
+    final pendingPlanId =
+        controller.patientProfileModel.value?.pendingCycle?.dietPlanId ?? '';
+
+    if (rs == 'Unpaid' || rs == 'PartiallyPaid') {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+        child: CustomButton(
+          onTap: () async {
+            final requestId = status.requestId ?? '';
+            if (requestId.isEmpty) {
+              showAppToast(Get.overlayContext!,
+                  message: 'No request found', type: AppToastType.error);
+              return;
+            }
+            await controller.sendPaymentRequest(widget.patientId, requestId);
+            await controller.getPatientProfile(widget.patientId);
+          },
+          text: rs == 'PartiallyPaid'
+              ? 'Send Payment Request (Balance Due)'
+              : 'Send Payment Request',
+          isOutline: false,
+          fontSize: 14,
+        ),
+      );
+    }
+
+    if (rs == 'PaymentRequested' || rs == 'PaymentSubmitted') {
+      final submitted = rs == 'PaymentSubmitted';
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+        child: GestureDetector(
+          onTap: !submitted
+              ? null
+              : () async {
+                  controller.isProofLoading.value = true;
+                  await showModalBottomSheet(
+                    context: context,
+                    backgroundColor: Colors.white,
+                    useSafeArea: true,
+                    isScrollControlled: true,
+                    shape: const RoundedRectangleBorder(
+                      borderRadius:
+                          BorderRadius.vertical(top: Radius.circular(20)),
+                    ),
+                    builder: (context) => DraggableScrollableSheet(
+                      initialChildSize: 1,
+                      maxChildSize: 1,
+                      minChildSize: 0.5,
+                      expand: false,
+                      builder: (context, scrollController) => PaymentStatusSheet(
+                        scrollController: scrollController,
+                        patientId: widget.patientId,
+                        dietPlanId: pendingPlanId,
+                        isRenewal: false,
+                      ),
+                    ),
+                  );
+                  await controller.getPaymentProof(widget.patientId);
+                },
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              color: const Color(0xffFEF6FB),
+              border: cardBorder,
+              boxShadow: cardShadow,
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  submitted
+                      ? Icons.mark_email_unread_rounded
+                      : Icons.hourglass_top_rounded,
+                  color: const Color(0xff851653),
+                  size: 20,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      CustomText(
+                        text: submitted
+                            ? 'Payment Update Received'
+                            : 'Payment Request Sent',
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                        color: const Color(0xff384250),
+                      ),
+                      const SizedBox(height: 2),
+                      CustomText(
+                        text: submitted
+                            ? 'Review the payment proof and activate the new cycle.'
+                            : 'Waiting for the patient to send their payment proof.',
+                        fontWeight: FontWeight.w400,
+                        fontSize: 12,
+                        color: const Color(0xff6C737F),
+                        height: 1.3,
+                      ),
+                    ],
+                  ),
+                ),
+                if (submitted)
+                  const Icon(Icons.chevron_right_rounded,
+                      color: Color(0xff851653)),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Paid - nothing to do here; the weeks row above shows the built cycle.
+    return const SizedBox.shrink();
+  }
+
   /// Opens the wizard for the pending renewal cycle - resumes an in-progress
   /// Draft, else starts a fresh build (a null dietPlanId + an existing live
   /// Active plan makes the backend start the next cycle).
@@ -1900,11 +2033,12 @@ class _PatientProfileViewState extends State<PatientProfileView> {
           if (_dietPlanReady(status))
             Builder(builder: (context) {
               final profileModel = controller.patientProfileModel.value;
-              // Once a renewal cycle is being built, its weeks (Week 5-8)
-              // continue the same row after the current cycle's 4 - one
-              // continuous, horizontally-scrolling list, no separate section.
-              final hasPending = status.renewalPending &&
-                  profileModel?.pendingCycle != null;
+              // Once a renewal cycle exists, its weeks (Week 5-8) continue
+              // the same row after the current cycle's 4 - one continuous
+              // horizontally-scrolling list. Stays visible after the new
+              // cycle is activated too, until the running cycle ends and
+              // the backend hands over (pendingCycle then clears).
+              final hasPending = profileModel?.pendingCycle != null;
               final totalWeeks = hasPending ? 8 : 4;
 
               // Scroll the row so the in-progress week is on screen on open
@@ -2265,18 +2399,27 @@ class _PatientProfileViewState extends State<PatientProfileView> {
             );
             }),
 
-          // Renewal in progress - the button to build / resume the next
-          // cycle. Its weeks live in the row above now (Week 5-8), so this
-          // is just the entry point.
-          if (status.renewalPending)
-            RenewalCycleSection(
-              status: status,
-              pendingCycle: controller.patientProfileModel.value?.pendingCycle,
-              patientId: widget.patientId,
-              patientName:
-                  controller.patientProfileModel.value?.basic?.fullName ?? '',
-              onWizardClosed: () => controller.getPatientProfile(widget.patientId),
-            ),
+          // Renewal: while the next cycle still needs building, this is the
+          // "Create / Resume Diet Plan" button (its weeks live in the row
+          // above). Once it's built, that button gives way to the renewal's
+          // payment action right here instead of buried below Goal Journey.
+          if (status.renewalPending ||
+              controller.patientProfileModel.value?.pendingCycle != null)
+            Builder(builder: (context) {
+              final pc = controller.patientProfileModel.value?.pendingCycle;
+              if (!_renewalCycleBuilt(status)) {
+                return RenewalCycleSection(
+                  status: status,
+                  pendingCycle: pc,
+                  patientId: widget.patientId,
+                  patientName:
+                      controller.patientProfileModel.value?.basic?.fullName ?? '',
+                  onWizardClosed: () =>
+                      controller.getPatientProfile(widget.patientId),
+                );
+              }
+              return _renewalPaymentAction(context, status);
+            }),
 
           // Goal Journey Timeline card - same gate as the Weekly Diet Plans
           // section above (needs a real, finished plan to have a goal to show).
@@ -2287,19 +2430,15 @@ class _PatientProfileViewState extends State<PatientProfileView> {
             ),
 
           // Send Payment Request button — shown when diet plan exists but
-          // payment not yet requested, or when the patient was activated
-          // with an outstanding balance still owed (PartiallyPaid). During a
-          // renewal the running cycle's weeks are all finalized already, so
-          // gate on the *pending* cycle having built content instead - don't
-          // ask for renewal payment before the next plan exists.
+          // payment not yet requested, or when activated with a balance
+          // still owed (PartiallyPaid). Suppressed during a renewal - that
+          // case shows its own payment action inline above
+          // (_renewalPaymentAction), keyed off the pending cycle.
           if ((status.requestStatus == 'Unpaid' ||
                   status.requestStatus == 'PartiallyPaid') &&
               status.activeDietPlanId != null &&
-              (status.renewalPending
-                  ? (controller.patientProfileModel.value?.pendingCycle
-                              ?.finalizedWeekNumbers.isNotEmpty ??
-                          false)
-                  : controller.hasFinalizedWeeks))
+              controller.patientProfileModel.value?.pendingCycle == null &&
+              controller.hasFinalizedWeeks)
             Padding(
               padding: const EdgeInsets.only(left: 16, right: 16, top: 18),
               child: CustomButton(
@@ -2327,8 +2466,9 @@ class _PatientProfileViewState extends State<PatientProfileView> {
               ),
             ),
 
-          if (status.requestStatus == 'PaymentSubmitted' ||
-              status.requestStatus == 'PaymentRequested')
+          if ((status.requestStatus == 'PaymentSubmitted' ||
+                  status.requestStatus == 'PaymentRequested') &&
+              controller.patientProfileModel.value?.pendingCycle == null)
             Padding(
               padding: const EdgeInsets.only(left: 16, right: 16, top: 18),
               child: GestureDetector(
