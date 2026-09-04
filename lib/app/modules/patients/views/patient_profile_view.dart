@@ -19,6 +19,7 @@ import 'package:docwellnesdoc/app/modules/patients/widgets/calorie_intake_contai
 import 'package:docwellnesdoc/app/modules/patients/widgets/date_range_selector_button.dart';
 import 'package:docwellnesdoc/app/modules/patients/widgets/line_chart.dart';
 import 'package:docwellnesdoc/app/modules/patients/widgets/renewal_cycle_section.dart';
+import 'package:docwellnesdoc/app/modules/patients/widgets/payment_history_row.dart';
 import 'package:docwellnesdoc/app/modules/diet_plan_wizard/bindings/wizard_binding.dart';
 import 'package:docwellnesdoc/app/modules/diet_plan_wizard/controllers/wizard_controller.dart';
 import 'package:docwellnesdoc/app/modules/diet_plan_wizard/views/wizard_view.dart';
@@ -160,9 +161,17 @@ class _PatientProfileViewState extends State<PatientProfileView> {
         child: GestureDetector(
           onTap: !submitted
               ? null
-              : () async {
+              : () {
+                  // Deliberately NOT awaited - the sheet opens immediately
+                  // showing its loading spinner (PaymentStatusSheet reads
+                  // controller.isProofLoading), and getPaymentProof below
+                  // runs concurrently to populate the data it then renders
+                  // reactively. Awaiting the sheet here would block
+                  // getPaymentProof until the sheet is closed, leaving it
+                  // spinning forever - same pattern as the first-cycle
+                  // payment card below.
                   controller.isProofLoading.value = true;
-                  await showModalBottomSheet(
+                  showModalBottomSheet(
                     context: context,
                     backgroundColor: Colors.white,
                     useSafeArea: true,
@@ -184,7 +193,7 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                       ),
                     ),
                   );
-                  await controller.getPaymentProof(widget.patientId);
+                  controller.getPaymentProof(widget.patientId);
                 },
           child: Container(
             padding: const EdgeInsets.all(14),
@@ -1715,7 +1724,7 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                               right: 16,
                               bottom: 20,
                             ),
-                            child: _paymentInfoBody(status),
+                            child: _paymentInfoOrHistory(status),
                           ),
                         ),
                       ),
@@ -4086,12 +4095,53 @@ class _PatientProfileViewState extends State<PatientProfileView> {
   // states) purely from requestStatus/paymentSummary already on Status -
   // both are already resolved server-side (see backend activateDietPlan),
   // so this is just presentation, not a new decision.
-  Widget _paymentInfoBody(Status status) {
-    final summary = status.paymentSummary;
+  Widget _paymentInfoBody(Status status) => _paymentInfoBodyFor(
+        status.membershipPlan,
+        status.paymentSummary,
+        _resolvedPaymentState(status),
+      );
+
+  /// The Payment Information section's expanded content: the plain single-
+  /// cycle body for a patient who's never renewed, or - once they have - a
+  /// dated, collapsed-by-default row per cycle (newest/current first) so a
+  /// prior cycle's payment isn't lost the moment a renewal overwrites the
+  /// shared DietPlanRequest's own fields.
+  Widget _paymentInfoOrHistory(Status status) {
+    final history = controller.patientProfileModel.value?.paymentHistory ?? [];
+    if (history.length <= 1) return _paymentInfoBody(status);
+
+    return Column(
+      children: [
+        for (final entry in history)
+          PaymentHistoryRow(
+            entry: entry,
+            // Both start collapsed - a dated, tap-to-expand summary either
+            // way, current cycle included.
+            statusChip: _paymentStatusChip(
+              entry.isCurrent ? _resolvedPaymentState(status) : 'Paid',
+            ),
+            body: _paymentInfoBodyFor(
+              entry.membershipPlan,
+              entry.paymentSummary,
+              entry.isCurrent ? _resolvedPaymentState(status) : 'Paid',
+            ),
+          ),
+      ],
+    );
+  }
+
+  /// Same body as above, generalized to any cycle's plan/summary/state -
+  /// reused per-row by the payment history list (_paymentHistoryRows) once
+  /// a patient has renewed at least once.
+  Widget _paymentInfoBodyFor(
+    String? membershipPlan,
+    PaymentSummary? summary,
+    String resolvedState,
+  ) {
     final rows = <Widget>[];
 
-    if (status.membershipPlan != null && status.membershipPlan!.isNotEmpty) {
-      rows.add(_paymentInfoRow('Plan', membershipBadgeStyle(status.membershipPlan).label));
+    if (membershipPlan != null && membershipPlan.isNotEmpty) {
+      rows.add(_paymentInfoRow('Plan', membershipBadgeStyle(membershipPlan).label));
     }
 
     if (summary != null) {
@@ -4170,7 +4220,7 @@ class _PatientProfileViewState extends State<PatientProfileView> {
     }
 
     String note;
-    switch (_resolvedPaymentState(status)) {
+    switch (resolvedState) {
       case 'PaymentRequested':
         note =
             'Payment request sent. Waiting for the patient to submit proof of payment.';

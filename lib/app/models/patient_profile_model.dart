@@ -23,6 +23,11 @@ class PatientProfileModel {
   // signals drive the "Week 5-8" cards + Create/Resume button under the
   // Weekly Diet Plans section.
   PendingCycle? pendingCycle;
+  // One entry per renewal cycle this patient has ever had, newest first -
+  // the Payment Information section renders these as collapsed, dated rows
+  // once there's more than one (a patient who never renewed just has the
+  // single current-cycle entry, same info status.paymentSummary already has).
+  List<PaymentHistoryEntry> paymentHistory = [];
 
   PatientProfileModel({
     this.id,
@@ -34,8 +39,10 @@ class PatientProfileModel {
     this.activePlanStrategy,
     List<WeekScheduleEntry>? weekSchedule,
     this.pendingCycle,
+    List<PaymentHistoryEntry>? paymentHistory,
   }) : generatedWeekNumbers = generatedWeekNumbers ?? [],
-       weekSchedule = weekSchedule ?? [];
+       weekSchedule = weekSchedule ?? [],
+       paymentHistory = paymentHistory ?? [];
 
   PatientProfileModel.fromJson(Map<String, dynamic> json) {
     id = json['id'];
@@ -68,6 +75,12 @@ class PatientProfileModel {
     pendingCycle = json['pendingCycle'] != null
         ? PendingCycle.fromJson(json['pendingCycle'])
         : null;
+
+    paymentHistory = json['paymentHistory'] != null
+        ? List<PaymentHistoryEntry>.from(
+            json['paymentHistory'].map((x) => PaymentHistoryEntry.fromJson(x)),
+          )
+        : [];
   }
 
   /// Converts an internal 1-4 week number into the display number a renewed
@@ -425,6 +438,39 @@ class PaymentSummary {
         : null;
     balanceClearedAt = json['balanceClearedAt'] != null
         ? DateTime.tryParse(json['balanceClearedAt'].toString())
+        : null;
+  }
+}
+
+/// One renewal cycle's payment record (see PatientProfileModel.paymentHistory).
+class PaymentHistoryEntry {
+  String? dietPlanId;
+  int cycleNumber;
+  String? membershipPlan;
+  String? membershipTier;
+  DateTime? date;
+  bool isCurrent;
+  PaymentSummary? paymentSummary;
+
+  PaymentHistoryEntry({
+    this.dietPlanId,
+    this.cycleNumber = 1,
+    this.membershipPlan,
+    this.membershipTier,
+    this.date,
+    this.isCurrent = false,
+    this.paymentSummary,
+  });
+
+  PaymentHistoryEntry.fromJson(Map<String, dynamic> json)
+      : cycleNumber = json['cycleNumber'] ?? 1,
+        isCurrent = json['isCurrent'] == true {
+    dietPlanId = json['dietPlanId']?.toString();
+    membershipPlan = json['membershipPlan'];
+    membershipTier = json['membershipTier'];
+    date = json['date'] != null ? DateTime.tryParse(json['date'].toString()) : null;
+    paymentSummary = json['paymentSummary'] != null
+        ? PaymentSummary.fromJson(json['paymentSummary'])
         : null;
   }
 }
