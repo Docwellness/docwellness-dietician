@@ -9,6 +9,23 @@ class WizardDayGroup {
 
   WizardDayGroup({required this.dayGroup, required this.meals});
 
+  /// Mirrors WizardDayGroupV2's same-named getters below, so the Finalize
+  /// step's "Diet Plan" preview (day nutrition card + recipe cards) reads
+  /// identically whether the plan is 'days-array' or 'plan-item'.
+  double get totalCalories =>
+      meals.expand((meal) => meal.items).fold(0.0, (sum, item) => sum + (item.calories ?? 0));
+
+  double _macroTotal(String key) => meals.expand((meal) => meal.items).fold(0.0, (sum, item) {
+        return sum + ((item.calculatedNutrition?[key] as num?)?.toDouble() ?? 0);
+      });
+
+  double get totalProtein => _macroTotal('protein');
+  double get totalCarbs => _macroTotal('carbs');
+  double get totalFats => _macroTotal('fats');
+  double get totalFiber => _macroTotal('fiber');
+
+  bool get hasItems => meals.any((meal) => meal.items.isNotEmpty);
+
   factory WizardDayGroup.fromJson(Map<String, dynamic> json) {
     return WizardDayGroup(
       dayGroup: json['dayGroup'] ?? '',

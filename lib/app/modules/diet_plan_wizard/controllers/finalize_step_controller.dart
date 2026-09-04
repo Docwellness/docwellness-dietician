@@ -1,5 +1,6 @@
 import 'package:docwellnesdoc/app/modules/diet_plan_wizard/models/wizard_week_models.dart';
 import 'package:docwellnesdoc/app/modules/diet_plan_wizard/services/diet_plan_wizard_service.dart';
+import 'package:docwellnesdoc/app/utils/functions/day_group_label.dart';
 import 'package:get/get.dart';
 
 import 'wizard_controller.dart';
@@ -35,6 +36,25 @@ class FinalizeStepController extends GetxController {
   final RxList<WizardDayGroup> weekDays = <WizardDayGroup>[].obs;
   final RxList<WizardCalorieException> calorieExceptions = <WizardCalorieException>[].obs;
   final RxDouble tolerancePercent = 10.0.obs;
+
+  /// Which day-group the "Diet Plan" preview is showing - same one-day-at-a-
+  /// time selector pattern as PlanItemFinalizeStepController, so the two
+  /// Finalize views (days-array here, plan-item there) read identically.
+  /// Empty until the first load picks the first day-group with items.
+  final RxString selectedDayGroup = ''.obs;
+
+  /// Day-groups that have generated meals, as (canonical value, display
+  /// label) pairs for DayGroupSelector.
+  List<MapEntry<String, String>> get selectableDayGroups =>
+      weekDays.where((d) => d.hasItems).map((d) => MapEntry(d.dayGroup, dayGroupLabel(d.dayGroup))).toList();
+
+  /// The day-group the timeline is currently showing, or null before load.
+  WizardDayGroup? get selectedDay {
+    for (final day in weekDays) {
+      if (day.dayGroup == selectedDayGroup.value) return day;
+    }
+    return null;
+  }
 
   String get patientId => wizard.patientId;
   String get dietPlanId => wizard.dietPlanId.value ?? '';
@@ -141,6 +161,12 @@ class FinalizeStepController extends GetxController {
           .map((d) => WizardDayGroup.fromJson(d))
           .toList(),
     );
+    // Keep the current selection if it still has items, else fall back to
+    // the first day-group that does - same as PlanItemFinalizeStepController.
+    final withItems = weekDays.where((d) => d.hasItems).toList();
+    if (withItems.isNotEmpty && !withItems.any((d) => d.dayGroup == selectedDayGroup.value)) {
+      selectedDayGroup.value = withItems.first.dayGroup;
+    }
   }
 
   Future<void> loadExceptions() async {
