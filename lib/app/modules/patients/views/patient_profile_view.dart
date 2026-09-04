@@ -69,6 +69,14 @@ class _PatientProfileViewState extends State<PatientProfileView> {
   static const int _refreshIntervalSeconds = 10; // Refresh every 10 seconds
   bool _isDeleting = false;
 
+  // Horizontal scroll for the Weekly Diet Plans row - so the currently
+  // in-progress week is brought into view on open instead of always
+  // starting at Week 1 (matters most once a renewal has added Week 5-8).
+  final ScrollController _weeklyPlansScroll = ScrollController();
+  String? _weeklyPlansScrolledForKey;
+  // One week card + its right padding.
+  static const double _weekCardExtent = 120 + 12;
+
   @override
   void initState() {
     // Collapsible open/closed flags live on the shared PatientsController
@@ -91,7 +99,147 @@ class _PatientProfileViewState extends State<PatientProfileView> {
   @override
   void dispose() {
     _stopAutoRefresh();
+    _weeklyPlansScroll.dispose();
     super.dispose();
+  }
+
+  /// Icon tint for a week card's spoon/knife, coloured by the membership
+  /// tier that week's cycle was sold as - so the row itself shows which
+  /// plan each cycle is (silver / gold / platinum). Reuses the badge
+  /// palette so it matches the tier chip elsewhere on the screen.
+  Color _mealIconColor(String? membershipPlan) =>
+      membershipBadgeStyle(membershipPlan).text;
+
+  /// Opens the wizard for the pending renewal cycle - resumes an in-progress
+  /// Draft, else starts a fresh build (a null dietPlanId + an existing live
+  /// Active plan makes the backend start the next cycle).
+  Future<void> _openRenewalWizard(PendingCycle? pc) async {
+    final resuming = pc != null && pc.status == 'Draft' && pc.dietPlanId != null;
+    final status = controller.patientProfileModel.value?.status;
+    final name =
+        (controller.patientProfileModel.value?.basic?.fullName ?? '').split(' ').first;
+    final wizardController = WizardController(
+      patientId: widget.patientId,
+      patientName: name,
+      firstConsultationId: status?.firstConsultationId ?? '',
+      requestId: status?.requestId ?? '',
+      initialDietPlanId: resuming ? pc.dietPlanId : null,
+      initialDataModel: resuming ? pc.dataModel : null,
+      resumeInPlace: resuming,
+      initialStep: resuming ? _resumeStepForWorkflow(pc.workflowStatus) : 1,
+    );
+    await Get.to(() => const WizardView(), binding: WizardBinding(wizardController));
+    await controller.getPatientProfile(widget.patientId);
+  }
+
+  /// A week card for the pending renewal cycle (weeks past the current
+  /// cycle's 4). Simpler than the running cycle's cards - the tier-gated
+  /// lock/eligibility rules are for regenerating an active cycle, not
+  /// building a new one; any card here opens the wizard.
+  Widget _pendingWeekCard(int internalWeekZeroBased, Status status) {
+    final pc = controller.patientProfileModel.value?.pendingCycle;
+    final week = internalWeekZeroBased + 1; // 1..4 within the pending cycle
+    final displayWeek = pc?.displayWeek(week) ?? week;
+    final isFinalized = pc?.finalizedWeekNumbers.contains(week) ?? false;
+    final isGenerated =
+        (pc?.generatedWeekNumbers.contains(week) ?? false) && !isFinalized;
+    final hasContent = isFinalized || isGenerated;
+    final sched = pc?.scheduleFor(week);
+    final range = (sched?.startDate != null && sched?.endDate != null)
+        ? '${_formatShortDate(sched!.startDate!)} - ${_formatShortDate(sched.endDate!)}'
+        : null;
+
+    return Padding(
+      padding: const EdgeInsets.only(right: 12),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => _openRenewalWizard(pc),
+        child: Container(
+          width: 120,
+          height: 130,
+          decoration: BoxDecoration(
+            color: hasContent ? const Color(0xffFEF6FB) : const Color(0xffF3F4F6),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: hasContent
+                  ? const Color(0xff851653)
+                  : const Color(0xffE5E7EB),
+              width: hasContent ? 1.5 : 1,
+            ),
+            boxShadow: cardShadow,
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: const BoxDecoration(
+                  color: Color(0xffFCE7F6),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  hasContent ? Icons.restaurant_menu : Icons.add_rounded,
+                  color: hasContent
+                      ? _mealIconColor(status.pendingMembershipPlan)
+                      : const Color(0xff9DA4AE),
+                  size: 22,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Week $displayWeek',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xff1F2A37),
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                isFinalized
+                    ? 'Finalized'
+                    : isGenerated
+                        ? 'Pick meals'
+                        : 'Not started',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: hasContent
+                      ? const Color(0xff851653)
+                      : const Color(0xff9DA4AE),
+                ),
+              ),
+              if (range != null) ...[
+                const SizedBox(height: 2),
+                Text(
+                  range,
+                  style: const TextStyle(fontSize: 8, color: Color(0xff9DA4AE)),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Brings the in-progress week ([activeCardIndex], 0-based across all
+  /// cycles) into view once per plan, a card or so from the left edge.
+  void _scrollWeeklyPlansToActive(int activeCardIndex, String planKey) {
+    if (_weeklyPlansScrolledForKey == planKey) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_weeklyPlansScroll.hasClients) return;
+      _weeklyPlansScrolledForKey = planKey;
+      final target = ((activeCardIndex - 1) * _weekCardExtent)
+          .clamp(0.0, _weeklyPlansScroll.position.maxScrollExtent);
+      if (target > 0) {
+        _weeklyPlansScroll.animateTo(
+          target,
+          duration: const Duration(milliseconds: 350),
+          curve: Curves.easeOut,
+        );
+      }
+    });
   }
 
   /// Earliest date any chart's date-range picker allows - the patient's
@@ -1670,15 +1818,54 @@ class _PatientProfileViewState extends State<PatientProfileView> {
               ),
             ),
           if (_dietPlanReady(status))
-            Padding(
+            Builder(builder: (context) {
+              final profileModel = controller.patientProfileModel.value;
+              // Once a renewal cycle is being built, its weeks (Week 5-8)
+              // continue the same row after the current cycle's 4 - one
+              // continuous, horizontally-scrolling list, no separate section.
+              final hasPending = status.renewalPending &&
+                  profileModel?.pendingCycle != null;
+              final totalWeeks = hasPending ? 8 : 4;
+
+              // Scroll the row so the in-progress week is on screen on open
+              // (not always Week 1). "In progress" = the latest finalized
+              // week whose scheduled start has actually arrived.
+              final finalizedWeeks = controller.weeklyDietPlans
+                  .where((w) => (w.totalCalories ?? 0) > 0)
+                  .map((w) => w.week!)
+                  .toSet();
+              final latestFinalized = finalizedWeeks.isEmpty
+                  ? 0
+                  : finalizedWeeks.reduce((a, b) => a > b ? a : b);
+              final latestFinalizedSched = (profileModel?.weekSchedule ?? [])
+                  .where((w) => w.week == latestFinalized)
+                  .toList();
+              final started = latestFinalizedSched.isEmpty ||
+                  latestFinalizedSched.first.startDate == null ||
+                  !latestFinalizedSched.first.startDate!.isAfter(DateTime.now());
+              final activeCardIndex =
+                  (started && latestFinalized > 0) ? latestFinalized - 1 : 0;
+              _scrollWeeklyPlansToActive(
+                activeCardIndex,
+                '${status.activeDietPlanId ?? ''}'
+                    '_${profileModel?.pendingCycle?.dietPlanId ?? ''}',
+              );
+
+              return Padding(
               padding: const EdgeInsets.only(top: 10, left: 16, bottom: 8),
               child: SizedBox(
                 height: 130,
                 child: ListView.builder(
-                  itemCount: 4, // always show all 4 week slots
+                  controller: _weeklyPlansScroll,
+                  itemCount: totalWeeks,
                   shrinkWrap: true,
                   scrollDirection: Axis.horizontal,
                   itemBuilder: (context, index) {
+                    // Weeks past the current cycle's 4 belong to the pending
+                    // renewal cycle - a simpler card (no tier-gated locks).
+                    if (index >= 4) {
+                      return _pendingWeekCard(index - 4, status);
+                    }
                     final weekNum = index + 1; // 1‑based
 
                     // Look up backend data for this week (null-safe without collection pkg)
@@ -1860,9 +2047,9 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                                     color: Color(0xffFCE7F6),
                                     shape: BoxShape.circle,
                                   ),
-                                  child: const Icon(
+                                  child: Icon(
                                     Icons.restaurant_menu,
-                                    color: Color(0xff851653),
+                                    color: _mealIconColor(status.membershipPlan),
                                     size: 22,
                                   ),
                                 ),
@@ -1954,7 +2141,9 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                                   isEligible
                                       ? Icons.add_rounded
                                       : Icons.restaurant_menu,
-                                  color: const Color(0xff851653),
+                                  color: isEligible
+                                      ? const Color(0xff851653)
+                                      : _mealIconColor(status.membershipPlan),
                                   size: 22,
                                 ),
                               ),
@@ -1993,11 +2182,12 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                   },
                 ),
               ),
-            ),
+            );
+            }),
 
-          // Renewal in progress - the NEXT cycle to build (Week 5-8 cards +
-          // Create/Resume button), shown right under the current cycle's
-          // Weekly Diet Plans so both are visible at once.
+          // Renewal in progress - the button to build / resume the next
+          // cycle. Its weeks live in the row above now (Week 5-8), so this
+          // is just the entry point.
           if (status.renewalPending)
             RenewalCycleSection(
               status: status,
