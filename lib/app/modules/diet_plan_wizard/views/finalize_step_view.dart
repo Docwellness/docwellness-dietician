@@ -204,12 +204,23 @@ class _CleverAdjustmentsView extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const CustomText(
-                text: 'This week is finalized. The plan goes live once the patient\'s payment is confirmed.',
-                fontWeight: FontWeight.w400,
-                fontSize: 12,
-                color: _mutedColor,
-              ),
+              Obx(() {
+                final status = controller.wizard.patientsController.patientProfileModel.value?.status;
+                // "Goes live once payment is confirmed" is only true for a
+                // just-finalized plan still waiting on activation - reopening
+                // an already-Active (payment already confirmed) week to
+                // review it kept showing that same stale line regardless.
+                final isLive = status?.activeDietPlanStatus == 'Active' &&
+                    status?.activeDietPlanId == controller.dietPlanId;
+                return CustomText(
+                  text: isLive
+                      ? 'This week is finalized and live - the patient can already see and log it.'
+                      : 'This week is finalized. The plan goes live once the patient\'s payment is confirmed.',
+                  fontWeight: FontWeight.w400,
+                  fontSize: 12,
+                  color: _mutedColor,
+                );
+              }),
               const SizedBox(height: 10),
               CustomButton(
                 onTap: () => Get.back(),
