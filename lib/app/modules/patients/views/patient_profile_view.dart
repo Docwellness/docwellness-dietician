@@ -113,47 +113,127 @@ class _PatientProfileViewState extends State<PatientProfileView> {
   /// Opens the wizard for the pending renewal cycle - resumes an in-progress
   /// Draft, else starts a fresh build (a null dietPlanId + an existing live
   /// Active plan makes the backend start the next cycle).
-  Future<void> _openRenewalWizard(PendingCycle? pc) async {
-    final resuming = pc != null && pc.status == 'Draft' && pc.dietPlanId != null;
+  /// Opens the wizard for the pending renewal cycle:
+  ///  - no args: resume an in-progress Draft, else start the build fresh
+  ///    (the backend starts the next cycle when the patient has a live plan);
+  ///  - [forWeek] + [weeksToGenerate]: (re)generate specific later weeks of
+  ///    an already-generated pending plan, the same tier-gated flow the
+  ///    running cycle's cards use (Golden's 3-4 pair, Platinum one at a time).
+  Future<void> _openRenewalWizard(
+    PendingCycle? pc, {
+    int? forWeek,
+    List<int>? weeksToGenerate,
+  }) async {
     final status = controller.patientProfileModel.value?.status;
     final name =
         (controller.patientProfileModel.value?.basic?.fullName ?? '').split(' ').first;
+    final isRegen = weeksToGenerate != null && weeksToGenerate.isNotEmpty;
+    final isPlanItem = pc?.dataModel == 'plan-item';
+    final isDraftResume = !isRegen &&
+        forWeek == null &&
+        pc?.status == 'Draft' &&
+        pc?.dietPlanId != null;
+    // Whether the wizard should target the existing pending plan (vs. a
+    // null id, which tells the backend to start the next cycle from scratch).
+    final knowsPlan =
+        pc?.dietPlanId != null && (isRegen || forWeek != null || isDraftResume);
+
+    int step;
+    bool resumeInPlace;
+    if (isDraftResume) {
+      step = _resumeStepForWorkflow(pc?.workflowStatus);
+      resumeInPlace = true;
+    } else if (isRegen || (forWeek != null && knowsPlan)) {
+      // Regenerating a later week, or reopening an already-built one - same
+      // step split the running cycle's cards use (_openWeightDialogForWeek).
+      step = isPlanItem ? 5 : 2;
+      resumeInPlace = isPlanItem;
+    } else {
+      step = 1;
+      resumeInPlace = false;
+    }
+
     final wizardController = WizardController(
       patientId: widget.patientId,
       patientName: name,
       firstConsultationId: status?.firstConsultationId ?? '',
       requestId: status?.requestId ?? '',
-      initialDietPlanId: resuming ? pc.dietPlanId : null,
-      initialDataModel: resuming ? pc.dataModel : null,
-      resumeInPlace: resuming,
-      initialStep: resuming ? _resumeStepForWorkflow(pc.workflowStatus) : 1,
+      initialDietPlanId: knowsPlan ? pc?.dietPlanId : null,
+      initialWeek: forWeek ?? 1,
+      weeksToGenerate: weeksToGenerate,
+      initialDataModel: knowsPlan ? pc?.dataModel : null,
+      resumeInPlace: resumeInPlace,
+      initialStep: step,
     );
     await Get.to(() => const WizardView(), binding: WizardBinding(wizardController));
     await controller.getPatientProfile(widget.patientId);
   }
 
   /// A week card for the pending renewal cycle (weeks past the current
-  /// cycle's 4). Simpler than the running cycle's cards - the tier-gated
-  /// lock/eligibility rules are for regenerating an active cycle, not
-  /// building a new one; any card here opens the wizard.
+  /// cycle's 4). Uses the SAME tier-gated cadence as the running cycle's
+  /// cards (_weekCardState), just driven by the pending cycle's own tier /
+  /// generated / finalized / schedule data instead of the active one's:
+  ///   Silver  - all 4 generated up front (nothing to unlock here)
+  ///   Golden  - weeks 1-2 first; 3-4 unlock together once Week 2 is
+  ///             finalized and it's within 2 days of Week 2 ending
+  ///   Platinum- one week at a time, each unlocking off the prior week
   Widget _pendingWeekCard(int internalWeekZeroBased, Status status) {
     final pc = controller.patientProfileModel.value?.pendingCycle;
     final week = internalWeekZeroBased + 1; // 1..4 within the pending cycle
     final displayWeek = pc?.displayWeek(week) ?? week;
-    final isFinalized = pc?.finalizedWeekNumbers.contains(week) ?? false;
-    final isGenerated =
-        (pc?.generatedWeekNumbers.contains(week) ?? false) && !isFinalized;
-    final hasContent = isFinalized || isGenerated;
+    final tier = status.pendingMembershipTier;
+    final generated = pc?.generatedWeekNumbers ?? const [];
+    final finalizedSet = (pc?.finalizedWeekNumbers ?? const []).toSet();
+    final weekSchedule = pc?.weekSchedule ?? const [];
+    final isFinalized = finalizedSet.contains(week);
     final sched = pc?.scheduleFor(week);
     final range = (sched?.startDate != null && sched?.endDate != null)
         ? '${_formatShortDate(sched!.startDate!)} - ${_formatShortDate(sched.endDate!)}'
         : null;
 
+    final cardState = _weekCardState(
+      week,
+      tier,
+      generated,
+      finalizedSet,
+      weekSchedule,
+      dataModel: pc?.dataModel,
+    );
+    final isGenerated = !isFinalized && cardState == _WeekCardState.generated;
+    final isEligible = !isFinalized && cardState == _WeekCardState.eligible;
+    final isLocked = !isFinalized && cardState == _WeekCardState.locked;
+    final hasContent = isFinalized || isGenerated;
+
+    void onTap() {
+      if (isLocked) {
+        showAppToast(
+          Get.overlayContext!,
+          message: _lockedExplanation(week, tier, finalizedSet, weekSchedule),
+          type: AppToastType.warning,
+        );
+        return;
+      }
+      _openRenewalWizard(
+        pc,
+        forWeek: week,
+        weeksToGenerate:
+            isEligible ? _weeksToGenerateFor(week, tier) : null,
+      );
+    }
+
+    final subtitle = isFinalized
+        ? 'Finalized'
+        : isGenerated
+            ? 'Pick meals'
+            : isEligible
+                ? 'Generate plan'
+                : 'Locked';
+
     return Padding(
       padding: const EdgeInsets.only(right: 12),
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: () => _openRenewalWizard(pc),
+        onTap: onTap,
         child: Container(
           width: 120,
           height: 130,
@@ -179,7 +259,11 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
-                  hasContent ? Icons.restaurant_menu : Icons.add_rounded,
+                  isLocked
+                      ? Icons.lock_outline
+                      : hasContent
+                          ? Icons.restaurant_menu
+                          : Icons.add_rounded,
                   color: hasContent
                       ? _mealIconColor(status.pendingMembershipPlan)
                       : const Color(0xff9DA4AE),
@@ -197,11 +281,7 @@ class _PatientProfileViewState extends State<PatientProfileView> {
               ),
               const SizedBox(height: 2),
               Text(
-                isFinalized
-                    ? 'Finalized'
-                    : isGenerated
-                        ? 'Pick meals'
-                        : 'Not started',
+                subtitle,
                 style: TextStyle(
                   fontSize: 10,
                   color: hasContent

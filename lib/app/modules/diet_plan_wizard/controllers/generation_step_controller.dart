@@ -239,7 +239,15 @@ class GenerationStepController extends GetxController {
   /// rejection for 'silver'), Golden gets weeks 1-2, Platinum (or an
   /// unrecognized/missing tier) gets week 1 only.
   List<int> _initialWeeksForTier() {
-    final tier = wizard.patientsController.patientProfileModel.value?.status?.membershipTier?.toLowerCase();
+    final status = wizard.patientsController.patientProfileModel.value?.status;
+    // During a renewal this wizard is building the NEXT cycle, so gate on
+    // the tier the patient just picked for it (pendingMembershipTier) - not
+    // status.membershipTier, which stays on the running cycle's tier until
+    // the new one is activated.
+    final tier = (status?.renewalPending == true
+            ? status?.pendingMembershipTier
+            : status?.membershipTier)
+        ?.toLowerCase();
     if (tier == 'silver') return [1, 2, 3, 4];
     if (tier == 'golden') return [1, 2];
     return [1];
