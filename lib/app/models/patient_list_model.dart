@@ -12,6 +12,9 @@ class OngoingPatientModel {
   bool isActive;
   String? status;
   String? membershipPlan;
+  // Live plan running + a renewal already requested that the dietician
+  // still has to build - drives the "New plan requested" pill on the row.
+  bool renewalPending;
 
   OngoingPatientModel({
     this.patientId,
@@ -26,6 +29,7 @@ class OngoingPatientModel {
     this.isActive = true,
     this.status,
     this.membershipPlan,
+    this.renewalPending = false,
   });
 
   factory OngoingPatientModel.fromJson(Map<String, dynamic> json) {
@@ -42,6 +46,7 @@ class OngoingPatientModel {
       isActive: json['isActive'] != false,
       status: json['status']?.toString(),
       membershipPlan: json['membershipPlan']?.toString(),
+      renewalPending: json['renewalPending'] == true,
     );
   }
 }

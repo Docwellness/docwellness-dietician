@@ -17,6 +17,7 @@ class PatientWidget extends StatelessWidget {
   final bool isActive;
   final String? status;
   final String? membershipPlan;
+  final bool renewalPending;
 
   const PatientWidget({
     super.key,
@@ -31,6 +32,7 @@ class PatientWidget extends StatelessWidget {
     this.isActive = true,
     this.status,
     this.membershipPlan,
+    this.renewalPending = false,
   });
 
   // Same semantic palette as the dashboard's patient-request badge
@@ -255,6 +257,26 @@ class PatientWidget extends StatelessWidget {
                                     child: const CustomText(
                                       text: "Deactivated",
                                       color: Colors.white,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                if (renewalPending)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 5,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xffFDF2FA),
+                                      borderRadius: BorderRadius.circular(11),
+                                      border: Border.all(
+                                        color: const Color(0xffFAA7E0),
+                                      ),
+                                    ),
+                                    child: const CustomText(
+                                      text: "New plan requested",
+                                      color: Color(0xff851653),
                                       fontSize: 10,
                                       fontWeight: FontWeight.w600,
                                     ),

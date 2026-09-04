@@ -18,6 +18,11 @@ class PatientProfileModel {
   // regardless of cycle; combine with status.cycleNumber via displayWeek()
   // to show "Week 5" etc. for a renewed patient's second cycle onward.
   List<WeekScheduleEntry> weekSchedule = [];
+  // The next cycle being built while the current one is still running
+  // (status.renewalPending). Null outside a renewal. Its own week-state
+  // signals drive the "Week 5-8" cards + Create/Resume button under the
+  // Weekly Diet Plans section.
+  PendingCycle? pendingCycle;
 
   PatientProfileModel({
     this.id,
@@ -28,6 +33,7 @@ class PatientProfileModel {
     List<int>? generatedWeekNumbers,
     this.activePlanStrategy,
     List<WeekScheduleEntry>? weekSchedule,
+    this.pendingCycle,
   }) : generatedWeekNumbers = generatedWeekNumbers ?? [],
        weekSchedule = weekSchedule ?? [];
 
@@ -58,6 +64,10 @@ class PatientProfileModel {
             json['weekSchedule'].map((x) => WeekScheduleEntry.fromJson(x)),
           )
         : [];
+
+    pendingCycle = json['pendingCycle'] != null
+        ? PendingCycle.fromJson(json['pendingCycle'])
+        : null;
   }
 
   /// Converts an internal 1-4 week number into the display number a renewed
@@ -88,6 +98,65 @@ class WeekScheduleEntry {
     endDate = json['endDate'] != null
         ? DateTime.tryParse(json['endDate'].toString())
         : null;
+  }
+}
+
+/// The renewal cycle a dietician is building while the patient's current
+/// cycle is still live (see backend patientController's `pendingCycle`).
+class PendingCycle {
+  String? dietPlanId;
+  String? status; // Draft / Finalized / Active
+  String? workflowStatus; // targets_set / menu_generated / ...
+  String? dataModel; // plan-item / days-array
+  int cycleNumber;
+  List<WeekScheduleEntry> weekSchedule;
+  List<int> generatedWeekNumbers;
+  List<int> finalizedWeekNumbers;
+  ActivePlanStrategy? activePlanStrategy;
+
+  PendingCycle({
+    this.dietPlanId,
+    this.status,
+    this.workflowStatus,
+    this.dataModel,
+    this.cycleNumber = 1,
+    this.weekSchedule = const [],
+    this.generatedWeekNumbers = const [],
+    this.finalizedWeekNumbers = const [],
+    this.activePlanStrategy,
+  });
+
+  PendingCycle.fromJson(Map<String, dynamic> json)
+      : cycleNumber = json['cycleNumber'] ?? 1,
+        weekSchedule = json['weekSchedule'] != null
+            ? List<WeekScheduleEntry>.from(
+                json['weekSchedule'].map((x) => WeekScheduleEntry.fromJson(x)),
+              )
+            : const [],
+        generatedWeekNumbers = json['generatedWeekNumbers'] != null
+            ? List<int>.from(json['generatedWeekNumbers'])
+            : const [],
+        finalizedWeekNumbers = json['finalizedWeekNumbers'] != null
+            ? List<int>.from(json['finalizedWeekNumbers'])
+            : const [] {
+    dietPlanId = json['dietPlanId']?.toString();
+    status = json['status'];
+    workflowStatus = json['workflowStatus'];
+    dataModel = json['dataModel'];
+    activePlanStrategy = json['activePlanStrategy'] != null
+        ? ActivePlanStrategy.fromJson(json['activePlanStrategy'])
+        : null;
+  }
+
+  /// Internal week 1-4 -> the display number for this cycle (Week 5-8 for
+  /// cycle 2, etc.).
+  int displayWeek(int internalWeek) => (cycleNumber - 1) * 4 + internalWeek;
+
+  WeekScheduleEntry? scheduleFor(int internalWeek) {
+    for (final entry in weekSchedule) {
+      if (entry.week == internalWeek) return entry;
+    }
+    return null;
   }
 }
 
@@ -248,10 +317,20 @@ class Status {
   int? cycleNumber;
   String? requestId;
   String? requestStatus;
+  // The tier the *currently active* cycle was sold as (NOT a pending
+  // renewal's pick) - drives the profile badge + avatar ring.
   String? membershipPlan;
   // Normalized 'silver' | 'golden' | 'platinum' | null - drives which
   // weekly-plan generation cadence applies (see patients_controller.dart).
   String? membershipTier;
+  // A renewal has been requested and its plan is being built while the
+  // current cycle stays live. Badge/ring/weekly-plan swap wait for the
+  // dietician to activate the new cycle.
+  bool renewalPending = false;
+  // The tier the patient picked for the pending renewal (shown as a hint,
+  // never as the active badge). Null unless renewalPending.
+  String? pendingMembershipPlan;
+  String? pendingMembershipTier;
   bool? canSendPaymentRequest;
   bool? hasPaymentUpdate;
   bool? isActive;
@@ -271,6 +350,9 @@ class Status {
     this.requestStatus,
     this.membershipPlan,
     this.membershipTier,
+    this.renewalPending = false,
+    this.pendingMembershipPlan,
+    this.pendingMembershipTier,
     this.canSendPaymentRequest,
     this.hasPaymentUpdate,
     this.isActive,
@@ -291,6 +373,9 @@ class Status {
     requestStatus = json['requestStatus'];
     membershipPlan = json['membershipPlan'];
     membershipTier = json['membershipTier'];
+    renewalPending = json['renewalPending'] == true;
+    pendingMembershipPlan = json['pendingMembershipPlan'];
+    pendingMembershipTier = json['pendingMembershipTier'];
     canSendPaymentRequest = json['canSendPaymentRequest'];
     hasPaymentUpdate = json['hasPaymentUpdate'];
     isActive = json['isActive'];

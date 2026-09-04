@@ -14,6 +14,9 @@ class NotificationItem {
   final bool isRead;
   final String? referenceId;
   final DateTime createdAt;
+  // Extras from Notification.data - e.g. a 'membership_renewal' notification
+  // carries { patientId } so the tap can open that patient's profile.
+  final String? patientId;
 
   NotificationItem({
     required this.id,
@@ -23,9 +26,11 @@ class NotificationItem {
     required this.isRead,
     this.referenceId,
     required this.createdAt,
+    this.patientId,
   });
 
   factory NotificationItem.fromJson(Map<String, dynamic> json) {
+    final data = json['data'];
     return NotificationItem(
       id: json['_id'] ?? '',
       title: json['title'] ?? '',
@@ -34,6 +39,7 @@ class NotificationItem {
       isRead: json['isRead'] ?? false,
       referenceId: json['referenceId'],
       createdAt: DateTime.tryParse(json['createdAt'] ?? '') ?? DateTime.now(),
+      patientId: data is Map ? data['patientId']?.toString() : null,
     );
   }
 }
@@ -66,6 +72,7 @@ class NotificationController extends GetxController {
   void _listenForNewNotifications() {
     final socket = Get.find<SocketService>();
     _notifSub = socket.onNotification.listen((data) {
+      final socketData = data['data'];
       final item = NotificationItem(
         id: data['id']?.toString() ?? '',
         title: data['title'] ?? '',
@@ -74,6 +81,8 @@ class NotificationController extends GetxController {
         isRead: false,
         referenceId: data['referenceId']?.toString(),
         createdAt: DateTime.tryParse(data['createdAt'] ?? '') ?? DateTime.now(),
+        patientId:
+            socketData is Map ? socketData['patientId']?.toString() : null,
       );
       notifications.insert(0, item);
       unreadCount.value++;
@@ -123,6 +132,7 @@ class NotificationController extends GetxController {
           isRead: true,
           referenceId: notifications[idx].referenceId,
           createdAt: notifications[idx].createdAt,
+          patientId: notifications[idx].patientId,
         );
         if (unreadCount.value > 0) unreadCount.value--;
       }
@@ -142,6 +152,7 @@ class NotificationController extends GetxController {
               isRead: true,
               referenceId: n.referenceId,
               createdAt: n.createdAt,
+              patientId: n.patientId,
             ),
           )
           .toList();
@@ -173,6 +184,14 @@ class NotificationController extends GetxController {
         Get.put(ChatController());
       }
       Get.to(() => ChatScreen(conversationId: item.referenceId!));
+      return;
+    }
+    // A patient requested a plan renewal - open their profile so the
+    // dietician can build the next cycle.
+    if (item.type == 'membership_renewal' &&
+        item.patientId != null &&
+        item.patientId!.isNotEmpty) {
+      Get.toNamed('/patient-profile/${item.patientId}');
     }
   }
 }

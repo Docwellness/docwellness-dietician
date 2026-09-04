@@ -18,6 +18,7 @@ import 'package:docwellnesdoc/app/modules/patients/widgets/bmi_card.dart';
 import 'package:docwellnesdoc/app/modules/patients/widgets/calorie_intake_container.dart';
 import 'package:docwellnesdoc/app/modules/patients/widgets/date_range_selector_button.dart';
 import 'package:docwellnesdoc/app/modules/patients/widgets/line_chart.dart';
+import 'package:docwellnesdoc/app/modules/patients/widgets/renewal_cycle_section.dart';
 import 'package:docwellnesdoc/app/modules/diet_plan_wizard/bindings/wizard_binding.dart';
 import 'package:docwellnesdoc/app/modules/diet_plan_wizard/controllers/wizard_controller.dart';
 import 'package:docwellnesdoc/app/modules/diet_plan_wizard/views/wizard_view.dart';
@@ -813,6 +814,44 @@ class _PatientProfileViewState extends State<PatientProfileView> {
               ],
             ),
           ),
+          // Renewal requested - flagged near the top so the dietician sees
+          // it before scrolling. The membership badge / avatar ring above
+          // deliberately still show the *current* cycle's tier; the new
+          // one is built lower under Weekly Diet Plans (RenewalCycleSection).
+          if (status?.renewalPending == true)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 2),
+              child: Container(
+                width: double.infinity,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xffFDF2FA),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xffFAA7E0)),
+                  boxShadow: cardShadow,
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.autorenew_rounded,
+                        color: Color(0xff851653), size: 18),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: CustomText(
+                        text:
+                            'This patient requested a plan renewal. Build their '
+                            'next cycle under "Weekly Diet Plans" below - the '
+                            'current plan keeps running until you activate it.',
+                        fontWeight: FontWeight.w400,
+                        fontSize: 12.5,
+                        color: Color(0xff851653),
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Container(
@@ -1577,6 +1616,45 @@ class _PatientProfileViewState extends State<PatientProfileView> {
               ),
             );
           }),
+          // Explicit entry point to start the exercise plan. Tapping an
+          // empty day-group card already opens the same sheet, but it's not
+          // obvious those grey cards are actionable - so while the plan is
+          // still empty, show a real button. Hides once any exercise exists
+          // (the cards are clearly editable then).
+          if (_exercisePlanVisible(status))
+            Obx(() {
+              final daily =
+                  controller.exercisePlan.value?['dailyExercises'] as List? ??
+                      const [];
+              if (daily.isNotEmpty) return const SizedBox.shrink();
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(16, 2, 16, 4),
+                child: CustomButton(
+                  onTap: () async {
+                    await showModalBottomSheet(
+                      context: context,
+                      backgroundColor: Colors.white,
+                      isScrollControlled: true,
+                      shape: const RoundedRectangleBorder(
+                        borderRadius:
+                            BorderRadius.vertical(top: Radius.circular(20)),
+                      ),
+                      builder: (ctx) => EditExerciseDayGroupSheet(
+                        patientId: widget.patientId,
+                        dayGroup: _exerciseDayGroups.first,
+                        dayGroupLabel:
+                            _exerciseDayGroupLabel(_exerciseDayGroups.first),
+                        initialEntries:
+                            controller.exercisesForDayGroup(_exerciseDayGroups.first),
+                      ),
+                    );
+                  },
+                  text: 'Create Exercise Plan',
+                  isOutline: true,
+                  fontSize: 14,
+                ),
+              );
+            }),
           // ── Weekly Diet Plan section ──────────────────────────────
           // Only once the wizard is actually finished (_dietPlanReady) -
           // an abandoned Draft would otherwise show a wall of "Locked"
@@ -1917,6 +1995,19 @@ class _PatientProfileViewState extends State<PatientProfileView> {
               ),
             ),
 
+          // Renewal in progress - the NEXT cycle to build (Week 5-8 cards +
+          // Create/Resume button), shown right under the current cycle's
+          // Weekly Diet Plans so both are visible at once.
+          if (status.renewalPending)
+            RenewalCycleSection(
+              status: status,
+              pendingCycle: controller.patientProfileModel.value?.pendingCycle,
+              patientId: widget.patientId,
+              patientName:
+                  controller.patientProfileModel.value?.basic?.fullName ?? '',
+              onWizardClosed: () => controller.getPatientProfile(widget.patientId),
+            ),
+
           // Goal Journey Timeline card - same gate as the Weekly Diet Plans
           // section above (needs a real, finished plan to have a goal to show).
           if (_dietPlanReady(status))
@@ -1927,11 +2018,18 @@ class _PatientProfileViewState extends State<PatientProfileView> {
 
           // Send Payment Request button — shown when diet plan exists but
           // payment not yet requested, or when the patient was activated
-          // with an outstanding balance still owed (PartiallyPaid).
+          // with an outstanding balance still owed (PartiallyPaid). During a
+          // renewal the running cycle's weeks are all finalized already, so
+          // gate on the *pending* cycle having built content instead - don't
+          // ask for renewal payment before the next plan exists.
           if ((status.requestStatus == 'Unpaid' ||
                   status.requestStatus == 'PartiallyPaid') &&
               status.activeDietPlanId != null &&
-              controller.hasFinalizedWeeks)
+              (status.renewalPending
+                  ? (controller.patientProfileModel.value?.pendingCycle
+                              ?.finalizedWeekNumbers.isNotEmpty ??
+                          false)
+                  : controller.hasFinalizedWeeks))
             Padding(
               padding: const EdgeInsets.only(left: 16, right: 16, top: 18),
               child: CustomButton(
@@ -1988,7 +2086,14 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                                 return PaymentStatusSheet(
                                   scrollController: scrollController,
                                   patientId: widget.patientId,
-                                  dietPlanId: status.activeDietPlanId ?? '',
+                                  // Target the pending renewal cycle's plan
+                                  // when there is one - status.activeDietPlanId
+                                  // still points at the running cycle.
+                                  dietPlanId: (status.renewalPending
+                                          ? controller.patientProfileModel.value
+                                              ?.pendingCycle?.dietPlanId
+                                          : status.activeDietPlanId) ??
+                                      '',
                                   // Always false now: every renewal produces
                                   // a real new DietPlan/cycleNumber (see
                                   // createAndGenerateDietPlan), so there's no

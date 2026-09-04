@@ -228,6 +228,16 @@ class NotificationService {
           Get.toNamed(Routes.NOTIFICATIONS);
         }
         break;
+      case 'patient-profile':
+        // A patient requested a plan renewal - open their profile to build
+        // the next cycle.
+        final patientId = data['patientId'] as String?;
+        if (patientId != null && patientId.isNotEmpty) {
+          Get.toNamed('/patient-profile/$patientId');
+        } else {
+          Get.toNamed(Routes.NOTIFICATIONS);
+        }
+        break;
       default:
         // Anything else (payment / consultation / diet nudges, future
         // types) - at least land on the notifications list rather than

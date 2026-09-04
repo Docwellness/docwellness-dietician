@@ -175,6 +175,7 @@ class _OngoingWidgetState extends State<OngoingWidget> {
                     isActive: patient.isActive,
                     status: patient.status,
                     membershipPlan: patient.membershipPlan,
+                    renewalPending: patient.renewalPending,
                   );
                 },
               ),
