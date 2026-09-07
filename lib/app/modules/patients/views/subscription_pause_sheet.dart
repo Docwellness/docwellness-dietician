@@ -48,10 +48,21 @@ class _SubscriptionPauseSheetState extends State<SubscriptionPauseSheet> {
   @override
   void initState() {
     super.initState();
+    _syncFromPause();
+  }
+
+  /// Match the local date fields to the server's current pause state:
+  /// prefilled to the window while one exists, cleared to blank once it's
+  /// cancelled - so the sheet flips cleanly between "Manage" and the empty
+  /// "Pause subscription" form after any action.
+  void _syncFromPause() {
     final p = _pause;
     if (p?.hasActivePause == true) {
       _startDate = p!.startDate;
       _resumeDate = p.resumeDate;
+    } else {
+      _startDate = null;
+      _resumeDate = null;
     }
   }
 
@@ -73,23 +84,25 @@ class _SubscriptionPauseSheetState extends State<SubscriptionPauseSheet> {
     );
   }
 
-  Future<void> _run(Future<String?> Function() action) async {
+  Future<void> _run(
+    Future<String?> Function() action, {
+    String successMessage = 'Subscription pause updated',
+  }) async {
     setState(() => _busy = true);
     final error = await action();
     if (!mounted) return;
-    setState(() => _busy = false);
-    if (error == null) {
-      Get.back();
-      showAppToast(
-        Get.overlayContext ?? context,
-        message: 'Subscription pause updated',
-        type: AppToastType.success,
-      );
-    } else {
-      // Sheet is still on screen -> its own context has a live Overlay
-      // (Get.overlayContext is unreliable mid-navigation).
-      showAppToast(context, message: error, type: AppToastType.error);
-    }
+    // The controller has already refetched the profile - re-point the local
+    // fields at the new server state and let build()'s Obx swap Manage <->
+    // schedule. The sheet stays open so the dietician sees the result.
+    setState(() {
+      _busy = false;
+      _syncFromPause();
+    });
+    showAppToast(
+      context,
+      message: error ?? successMessage,
+      type: error == null ? AppToastType.success : AppToastType.error,
+    );
   }
 
   @override
@@ -191,12 +204,15 @@ class _SubscriptionPauseSheetState extends State<SubscriptionPauseSheet> {
       ],
       const SizedBox(height: 24),
       CustomButton(
-        onTap: () => _run(() => controller.submitSubscriptionPause(
-              widget.patientId,
-              op: 'pause',
-              startDate: _startDate,
-              resumeDate: _resumeDate,
-            )),
+        onTap: () => _run(
+          () => controller.submitSubscriptionPause(
+            widget.patientId,
+            op: 'pause',
+            startDate: _startDate,
+            resumeDate: _resumeDate,
+          ),
+          successMessage: 'Subscription paused',
+        ),
         text: 'Pause subscription',
         isOutline: false,
         buttonColor: _accent,
@@ -286,10 +302,13 @@ class _SubscriptionPauseSheetState extends State<SubscriptionPauseSheet> {
       ),
       const SizedBox(height: 10),
       CustomButton(
-        onTap: () => _run(() => controller.submitSubscriptionPause(
-              widget.patientId,
-              op: 'cancel',
-            )),
+        onTap: () => _run(
+          () => controller.submitSubscriptionPause(
+            widget.patientId,
+            op: 'cancel',
+          ),
+          successMessage: 'Pause cancelled - the plan continues as normal',
+        ),
         text: 'Cancel pause',
         isOutline: true,
         outlineButtonColor: const Color(0xffB42318),
