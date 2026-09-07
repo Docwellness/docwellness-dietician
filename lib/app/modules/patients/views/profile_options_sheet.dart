@@ -1,4 +1,6 @@
+import 'package:docwellnesdoc/app/modules/patients/controllers/patients_controller.dart';
 import 'package:docwellnesdoc/app/modules/patients/views/delete_patient_data_sheet.dart';
+import 'package:docwellnesdoc/app/modules/patients/views/subscription_pause_sheet.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -14,7 +16,9 @@ class ProfileOptionsSheet extends StatefulWidget {
 }
 
 class _SelectDietSheetState extends State<ProfileOptionsSheet> {
-  void _openDeleteDataSheet() {
+  final PatientsController _controller = Get.find<PatientsController>();
+
+  void _openSheet(Widget Function(ScrollController) builder, {double size = 0.9}) {
     Get.back(); // close this "Patient Settings" sheet
     showModalBottomSheet(
       context: Get.context!,
@@ -23,20 +27,57 @@ class _SelectDietSheetState extends State<ProfileOptionsSheet> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (_) {
-        return DraggableScrollableSheet(
-          initialChildSize: 0.9,
-          minChildSize: 0.5,
-          maxChildSize: 0.95,
-          expand: false,
-          builder: (_, scrollController) {
-            return DeletePatientDataSheet(
-              patientId: widget.patientId,
-              scrollController: scrollController,
-            );
-          },
-        );
-      },
+      builder: (_) => DraggableScrollableSheet(
+        initialChildSize: size,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        expand: false,
+        builder: (_, scrollController) => builder(scrollController),
+      ),
+    );
+  }
+
+  void _openDeleteDataSheet() => _openSheet(
+        (sc) => DeletePatientDataSheet(
+          patientId: widget.patientId,
+          scrollController: sc,
+        ),
+      );
+
+  void _openPauseSheet() => _openSheet(
+        (sc) => SubscriptionPauseSheet(
+          patientId: widget.patientId,
+          scrollController: sc,
+        ),
+        size: 0.75,
+      );
+
+  Widget _row({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    Color color = const Color(0xff384250),
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(
+            children: [
+              Icon(icon, color: color),
+              const SizedBox(width: 12),
+              CustomText(
+                text: label,
+                fontWeight: FontWeight.w500,
+                fontSize: 18,
+                color: color,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -76,26 +117,25 @@ class _SelectDietSheetState extends State<ProfileOptionsSheet> {
         const SizedBox(height: 5),
         const Divider(color: Color(0xff9DA4AE)),
         const SizedBox(height: 10),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: InkWell(
-            onTap: _openDeleteDataSheet,
-            child: const Padding(
-              padding: EdgeInsets.symmetric(vertical: 8),
-              child: Row(
-                children: [
-                  Icon(Icons.delete_sweep_outlined, color: Color(0xffB42318)),
-                  SizedBox(width: 12),
-                  CustomText(
-                    text: 'Delete specific data…',
-                    fontWeight: FontWeight.w500,
-                    fontSize: 18,
-                    color: Color(0xffB42318),
-                  ),
-                ],
-              ),
-            ),
-          ),
+        Obx(() {
+          // rebuild when the profile (and its pause state) refreshes
+          _controller.patientProfileModel.value;
+          final paused = _controller.subscriptionPause?.hasActivePause == true;
+          return _row(
+            icon: paused
+                ? Icons.play_circle_outline
+                : Icons.pause_circle_outline,
+            label: paused ? 'Manage subscription pause' : 'Pause subscription',
+            onTap: _openPauseSheet,
+            color: const Color(0xff851653),
+          );
+        }),
+        const SizedBox(height: 4),
+        _row(
+          icon: Icons.delete_sweep_outlined,
+          label: 'Delete specific data…',
+          onTap: _openDeleteDataSheet,
+          color: const Color(0xffB42318),
         ),
         const Spacer(),
       ],

@@ -1206,6 +1206,55 @@ class PatientsController extends GetxController {
     return false;
   }
 
+  // ===== Subscription pause / resume =====
+
+  /// Current pause state for the open profile (null until loaded / no plan).
+  SubscriptionPause? get subscriptionPause =>
+      patientProfileModel.value?.subscriptionPause;
+
+  /// Schedule (op 'pause'), edit ('update') or cancel ('cancel') a
+  /// subscription pause, then refresh the profile so the UI reflects the new
+  /// state. Returns true on success; on failure shows the backend's message.
+  Future<bool> submitSubscriptionPause(
+    String patientId, {
+    required String op, // 'pause' | 'update' | 'cancel'
+    DateTime? startDate,
+    DateTime? resumeDate,
+  }) async {
+    dynamic data;
+    switch (op) {
+      case 'pause':
+        data = await service.pauseSubscription(
+          patientId,
+          startDate: startDate!,
+          resumeDate: resumeDate!,
+        );
+        break;
+      case 'update':
+        data = await service.updateSubscriptionPause(
+          patientId,
+          startDate: startDate,
+          resumeDate: resumeDate!,
+        );
+        break;
+      case 'cancel':
+        data = await service.cancelSubscriptionPause(patientId);
+        break;
+    }
+
+    if (data != null && data['success'] == true) {
+      await getPatientProfile(patientId);
+      fetchOngoingPatients();
+      return true;
+    }
+    showAppToast(
+      Get.overlayContext!,
+      message: data?['message'] ?? 'Could not update the subscription pause',
+      type: AppToastType.error,
+    );
+    return false;
+  }
+
   /// Fetch calorie, weight, and BMI tracking data in parallel - each chart
   /// keeps its own date range, so this hits the shared tracking-data
   /// endpoint once per chart with that chart's selected range.

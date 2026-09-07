@@ -104,6 +104,55 @@ class PatientService {
     }
   }
 
+  /// Schedule a subscription pause window for the patient's active plan.
+  Future<dynamic> pauseSubscription(
+    String patientId, {
+    required DateTime startDate,
+    required DateTime resumeDate,
+  }) =>
+      _subscriptionPause(patientId, 'POST', {
+        'startDate': _ymd(startDate),
+        'resumeDate': _ymd(resumeDate),
+      });
+
+  /// Change the resume date (and optionally start date) of the scheduled /
+  /// running pause.
+  Future<dynamic> updateSubscriptionPause(
+    String patientId, {
+    DateTime? startDate,
+    required DateTime resumeDate,
+  }) =>
+      _subscriptionPause(patientId, 'PATCH', {
+        if (startDate != null) 'startDate': _ymd(startDate),
+        'resumeDate': _ymd(resumeDate),
+      });
+
+  /// Cancel the scheduled / running pause (undoes its date shift).
+  Future<dynamic> cancelSubscriptionPause(String patientId) =>
+      _subscriptionPause(patientId, 'DELETE', null);
+
+  static String _ymd(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  Future<dynamic> _subscriptionPause(
+    String patientId,
+    String method,
+    Map<String, dynamic>? data,
+  ) async {
+    try {
+      final response = await service.request(
+        endPoint: '/patients/$patientId/subscription/pause',
+        method: method,
+        headers: {'Authorization': "Bearer $token"},
+        data: data,
+      );
+      return response?.data;
+    } catch (e) {
+      debugPrint('subscriptionPause($method) error: $e');
+      return null;
+    }
+  }
+
   Future<dynamic> generateDietPlan(
     Map<String, dynamic> data,
     String patientId,

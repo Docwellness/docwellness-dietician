@@ -28,6 +28,9 @@ class PatientProfileModel {
   // once there's more than one (a patient who never renewed just has the
   // single current-cycle entry, same info status.paymentSummary already has).
   List<PaymentHistoryEntry> paymentHistory = [];
+  // Subscription pause state for the active cycle (see backend
+  // utils/subscriptionPause.js) - drives the Pause / Resume control.
+  SubscriptionPause? subscriptionPause;
 
   PatientProfileModel({
     this.id,
@@ -40,6 +43,7 @@ class PatientProfileModel {
     List<WeekScheduleEntry>? weekSchedule,
     this.pendingCycle,
     List<PaymentHistoryEntry>? paymentHistory,
+    this.subscriptionPause,
   }) : generatedWeekNumbers = generatedWeekNumbers ?? [],
        weekSchedule = weekSchedule ?? [],
        paymentHistory = paymentHistory ?? [];
@@ -81,6 +85,10 @@ class PatientProfileModel {
             json['paymentHistory'].map((x) => PaymentHistoryEntry.fromJson(x)),
           )
         : [];
+
+    subscriptionPause = json['subscriptionPause'] != null
+        ? SubscriptionPause.fromJson(json['subscriptionPause'])
+        : null;
   }
 
   /// Converts an internal 1-4 week number into the display number a renewed
@@ -94,6 +102,34 @@ class PatientProfileModel {
     }
     return null;
   }
+}
+
+/// Subscription pause summary from getPatientProfile's `subscriptionPause`.
+/// [active] is the currently-running or scheduled window (the only one the
+/// dietician can edit / cancel); null when there's no pause pending.
+class SubscriptionPause {
+  final bool isPausedNow;
+  final DateTime? startDate;
+  final DateTime? resumeDate;
+
+  SubscriptionPause({
+    this.isPausedNow = false,
+    this.startDate,
+    this.resumeDate,
+  });
+
+  factory SubscriptionPause.fromJson(Map<String, dynamic> json) {
+    final active = json['active'] as Map<String, dynamic>?;
+    DateTime? parse(dynamic v) =>
+        v == null ? null : DateTime.tryParse(v.toString());
+    return SubscriptionPause(
+      isPausedNow: json['isPausedNow'] == true,
+      startDate: parse(active?['startDate']),
+      resumeDate: parse(active?['resumeDate']),
+    );
+  }
+
+  bool get hasActivePause => resumeDate != null;
 }
 
 class WeekScheduleEntry {
