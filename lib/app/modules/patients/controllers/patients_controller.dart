@@ -1057,14 +1057,8 @@ class PatientsController extends GetxController {
       if (isClosed) return;
 
       if (response != null) {
-        // ignore: avoid_print
-        debugPrint('SUBPAUSE raw=${response['data']?['subscriptionPause']}');
         patientProfileModel.value = PatientProfileModel.fromJson(
           response['data'],
-        );
-        debugPrint(
-          'SUBPAUSE parsed isPausedNow=${patientProfileModel.value?.subscriptionPause?.isPausedNow} '
-          'resume=${patientProfileModel.value?.subscriptionPause?.resumeDate}',
         );
         weeklyDietPlans.value =
             (response['data']['weeklyDietPlans'] as List? ?? [])
@@ -1219,9 +1213,11 @@ class PatientsController extends GetxController {
       patientProfileModel.value?.subscriptionPause;
 
   /// Schedule (op 'pause'), edit ('update') or cancel ('cancel') a
-  /// subscription pause, then refresh the profile. Returns null on success;
-  /// a human message on failure (the caller shows it - the sheet is still
-  /// on screen, so it has a live Overlay, unlike Get.overlayContext here).
+  /// subscription pause. Always refetches the profile afterwards (even on
+  /// failure - a partial server-side apply must still be reflected) so the
+  /// sheet's Obx switches to the right mode. Returns null on success; a
+  /// human message on failure (the caller shows it via the sheet's own
+  /// context - Get.overlayContext is unreliable mid-navigation).
   Future<String?> submitSubscriptionPause(
     String patientId, {
     required String op, // 'pause' | 'update' | 'cancel'
@@ -1249,11 +1245,10 @@ class PatientsController extends GetxController {
         break;
     }
 
-    if (data != null && data['success'] == true) {
-      await getPatientProfile(patientId);
-      fetchOngoingPatients();
-      return null;
-    }
+    await getPatientProfile(patientId, silent: true);
+    fetchOngoingPatients();
+
+    if (data != null && data['success'] == true) return null;
     return (data?['message'] as String?) ??
         'Could not update the subscription pause';
   }
