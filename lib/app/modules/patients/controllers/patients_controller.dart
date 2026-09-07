@@ -50,6 +50,14 @@ class PatientsController extends GetxController {
   RxBool newError = false.obs;
   RxBool pastError = false.obs;
 
+  /// While true, [silentRefreshPatientProfile] is a no-op. Set around a
+  /// destructive flow (patient delete / selective data delete) so the
+  /// profile screen's 10s auto-refresh can't mutate the widget tree while a
+  /// native biometric step-up prompt is on screen - the same hazard
+  /// patient_profile_view.dart's _stopAutoRefresh guards against for the
+  /// full-delete dialog.
+  bool suspendSilentRefresh = false;
+
   // Pagination state per tab (cross-app performance optimization, task 1.8).
   // The list used to load one page and filter/search it client-side, so a
   // dietician could never see - or search for - a patient past the first
@@ -1212,6 +1220,57 @@ class PatientsController extends GetxController {
     return false;
   }
 
+  /// Deletes the selected [categories] of a patient's data (or, with
+  /// [deleteAccount] true, the whole account - same effect as
+  /// [deletePatient]). Gated behind the same biometric step-up as
+  /// [deletePatient]; the caller (DeletePatientDataSheet) has already made
+  /// the dietician re-type the patient's email. Returns true on success so
+  /// the caller can toast / navigate away.
+  Future<bool> deletePatientData(
+    String patientId, {
+    required String email,
+    required List<String> categories,
+    required bool deleteAccount,
+  }) async {
+    final stepUpOk = await DeviceSecurityService.requireStepUp(
+      "Confirm your identity to delete this patient's data",
+    );
+    if (!stepUpOk) {
+      showAppToast(
+        Get.overlayContext!,
+        message: 'Identity verification required to delete patient data',
+        type: AppToastType.error,
+      );
+      return false;
+    }
+
+    final data = await service.deletePatientData(
+      patientId,
+      confirmEmail: email,
+      categories: categories,
+      deleteAccount: deleteAccount,
+    );
+
+    if (data != null && data['success'] == true) {
+      // Refresh every tab so a (possibly) removed patient / changed state
+      // shows everywhere, regardless of which tab they're in.
+      fetchOngoingPatients();
+      fetchNewPatients();
+      fetchPastPatients();
+      // Account still exists - refresh the open profile so the wiped
+      // sections re-render empty.
+      if (!deleteAccount) await getPatientProfile(patientId);
+      return true;
+    }
+
+    showAppToast(
+      Get.overlayContext!,
+      message: data?['message'] ?? 'Failed to delete patient data',
+      type: AppToastType.error,
+    );
+    return false;
+  }
+
   /// Fetch calorie, weight, and BMI tracking data in parallel - each chart
   /// keeps its own date range, so this hits the shared tracking-data
   /// endpoint once per chart with that chart's selected range.
@@ -1499,6 +1558,7 @@ class PatientsController extends GetxController {
 
   /// Silent refresh patient profile without loading indicator
   Future<void> silentRefreshPatientProfile(String patientId) async {
+    if (suspendSilentRefresh) return;
     try {
       final response = await service.getPatientProfile(patientId);
 

@@ -1,4 +1,5 @@
 import 'package:docwellnesdoc/app/modules/patients/controllers/patients_controller.dart';
+import 'package:docwellnesdoc/app/modules/patients/views/delete_patient_data_sheet.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_button.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
 import 'package:flutter/material.dart';
@@ -148,6 +149,54 @@ class _SelectDietSheetState extends State<ProfileOptionsSheet> {
                 colorBlendMode: BlendMode.srcIn,
               ),
             ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        const Divider(color: Color(0xff9DA4AE)),
+        const SizedBox(height: 10),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: InkWell(
+            onTap: () {
+              Get.back(); // close this "Patient Settings" sheet
+              showModalBottomSheet(
+                context: Get.context!,
+                backgroundColor: Colors.white,
+                isScrollControlled: true,
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                ),
+                builder: (_) {
+                  return DraggableScrollableSheet(
+                    initialChildSize: 0.9,
+                    minChildSize: 0.5,
+                    maxChildSize: 0.95,
+                    expand: false,
+                    builder: (_, scrollController) {
+                      return DeletePatientDataSheet(
+                        patientId: widget.patientId,
+                        scrollController: scrollController,
+                      );
+                    },
+                  );
+                },
+              );
+            },
+            child: const Padding(
+              padding: EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  Icon(Icons.delete_sweep_outlined, color: Color(0xffB42318)),
+                  SizedBox(width: 12),
+                  CustomText(
+                    text: 'Delete specific data…',
+                    fontWeight: FontWeight.w500,
+                    fontSize: 18,
+                    color: Color(0xffB42318),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
         Spacer(),

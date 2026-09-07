@@ -115,6 +115,36 @@ class PatientService {
     }
   }
 
+  /// Deletes selected categories of a patient's data (see the backend's
+  /// utils/patientDataDeletion.js PATIENT_DATA_CATEGORIES). With
+  /// [deleteAccount] true the whole account is removed instead, same as
+  /// [deletePatient]. `confirmEmail` must match the patient's email - the
+  /// backend re-verifies it. Returns the raw response body (even on
+  /// failure) so the caller can surface the backend's message.
+  Future<dynamic> deletePatientData(
+    String patientId, {
+    required String confirmEmail,
+    required List<String> categories,
+    required bool deleteAccount,
+  }) async {
+    try {
+      final response = await service.request(
+        endPoint: '/patients/$patientId/data',
+        method: 'DELETE',
+        headers: {'Authorization': "Bearer $token"},
+        data: {
+          'confirmEmail': confirmEmail,
+          'categories': categories,
+          'deleteAccount': deleteAccount,
+        },
+      );
+      return response?.data;
+    } catch (e) {
+      debugPrint('deletePatientData error: $e');
+      return null;
+    }
+  }
+
   Future<dynamic> generateDietPlan(
     Map<String, dynamic> data,
     String patientId,
