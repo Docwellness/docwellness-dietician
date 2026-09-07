@@ -73,18 +73,22 @@ class _SubscriptionPauseSheetState extends State<SubscriptionPauseSheet> {
     );
   }
 
-  Future<void> _run(Future<bool> Function() action) async {
+  Future<void> _run(Future<String?> Function() action) async {
     setState(() => _busy = true);
-    final ok = await action();
+    final error = await action();
     if (!mounted) return;
     setState(() => _busy = false);
-    if (ok) {
+    if (error == null) {
       Get.back();
       showAppToast(
-        Get.overlayContext!,
+        Get.overlayContext ?? context,
         message: 'Subscription pause updated',
         type: AppToastType.success,
       );
+    } else {
+      // Sheet is still on screen -> its own context has a live Overlay
+      // (Get.overlayContext is unreliable mid-navigation).
+      showAppToast(context, message: error, type: AppToastType.error);
     }
   }
 

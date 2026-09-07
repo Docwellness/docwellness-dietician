@@ -118,8 +118,9 @@ class SubscriptionPause {
     this.resumeDate,
   });
 
-  factory SubscriptionPause.fromJson(Map<String, dynamic> json) {
-    final active = json['active'] as Map<String, dynamic>?;
+  factory SubscriptionPause.fromJson(Map<dynamic, dynamic> json) {
+    final rawActive = json['active'];
+    final active = rawActive is Map ? rawActive : null;
     DateTime? parse(dynamic v) =>
         v == null ? null : DateTime.tryParse(v.toString());
     return SubscriptionPause(
