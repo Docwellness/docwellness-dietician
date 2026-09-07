@@ -247,8 +247,6 @@ class PatientsController extends GetxController {
   /// If a week is in this set and its selection list is empty, totals show 0.
   final RxSet<int> _userInteractedWeeks = <int>{}.obs;
 
-  RxBool isProfileDeactivated = false.obs;
-
   // ===== Tracking Data (Charts) =====
   // Each chart (Calorie Intake, Weight Trend, BMI) keeps its own
   // independently-selected date range and fetches independently - same
@@ -1066,9 +1064,6 @@ class PatientsController extends GetxController {
             (response['data']['weeklyDietPlans'] as List? ?? [])
                 .map((e) => WeeklyDietPlan.fromJson(e as Map<String, dynamic>))
                 .toList();
-        // Sync deactivation toggle with backend
-        isProfileDeactivated.value =
-            patientProfileModel.value?.status?.isActive == false;
       } else if (!silent && patientProfileModel.value == null) {
         profileError.value = true;
       }
@@ -1157,75 +1152,15 @@ class PatientsController extends GetxController {
     return true;
   }
 
-  Future<void> togglePatientActive(String patientId) async {
-    final newIsActive = isProfileDeactivated
-        .value; // toggling: deactivated means isActive=true now
-    isProfileDeactivated.value = !isProfileDeactivated.value;
-    final response = await service.togglePatientActive(patientId, newIsActive);
-    if (response != null) {
-      // Refresh profile to get updated status
-      await getPatientProfile(patientId);
-      // Refresh patient lists so the change shows everywhere
-      fetchOngoingPatients();
-    } else {
-      // Revert on failure
-      isProfileDeactivated.value = !isProfileDeactivated.value;
-      showAppToast(
-        Get.overlayContext!,
-        message: 'Failed to update patient status',
-        type: AppToastType.error,
-      );
-    }
-  }
-
-  /// Permanently deletes a patient (irreversible - see the confirmation
-  /// dialog in patient_profile_view.dart, which requires re-typing the
-  /// patient's email before this is ever called). Returns true/false
-  /// so the caller can navigate away and show a snackbar; on failure the
-  /// backend's specific message (e.g. an email mismatch, caught even
-  /// though the dialog already checks it client-side) is shown instead of
-  /// a generic error.
-  ///
-  /// Phase 9, P9-D7: gated behind a biometric/device-credential step-up on
-  /// top of the existing email-retype confirmation - this is the app's
-  /// most destructive single action (permanent PHI deletion), so a second,
-  /// device-level factor sits in front of it.
-  Future<bool> deletePatient(String patientId, String confirmEmail) async {
-    final stepUpOk = await DeviceSecurityService.requireStepUp(
-      'Confirm your identity to permanently delete this patient',
-    );
-    if (!stepUpOk) {
-      showAppToast(
-        Get.overlayContext!,
-        message: 'Identity verification required to delete a patient',
-        type: AppToastType.error,
-      );
-      return false;
-    }
-
-    final data = await service.deletePatient(patientId, confirmEmail);
-    if (data != null && data['success'] == true) {
-      // Refresh every tab so the deleted patient disappears everywhere,
-      // regardless of which tab they were in (ongoing/new/past).
-      fetchOngoingPatients();
-      fetchNewPatients();
-      fetchPastPatients();
-      return true;
-    }
-    showAppToast(
-      Get.overlayContext!,
-      message: data?['message'] ?? 'Failed to delete patient',
-      type: AppToastType.error,
-    );
-    return false;
-  }
 
   /// Deletes the selected [categories] of a patient's data (or, with
-  /// [deleteAccount] true, the whole account - same effect as
-  /// [deletePatient]). Gated behind the same biometric step-up as
-  /// [deletePatient]; the caller (DeletePatientDataSheet) has already made
-  /// the dietician re-type the patient's email. Returns true on success so
-  /// the caller can toast / navigate away.
+  /// [deleteAccount] true, the whole account + Supabase identity). The
+  /// caller (DeletePatientDataSheet) has already made the dietician re-type
+  /// the patient's email; this adds a biometric/device-credential step-up
+  /// (Phase 9, P9-D7) in front of the request - permanent PHI deletion is
+  /// the app's most destructive action, so a second device-level factor
+  /// sits before it. Returns true on success so the caller can toast /
+  /// navigate away.
   Future<bool> deletePatientData(
     String patientId, {
     required String email,
