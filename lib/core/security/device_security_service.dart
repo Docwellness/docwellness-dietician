@@ -42,11 +42,12 @@ class DeviceSecurityService {
   static final LocalAuthentication _localAuth = LocalAuthentication();
 
   /// Biometric step-up gate for a sensitive, irreversible action (e.g.
-  /// deleting a patient - see PatientsController.deletePatient). Falls back
-  /// to device PIN/pattern (biometricOnly: false) rather than hard-blocking
-  /// a dietician on a device with no biometrics enrolled; returns true only
-  /// on an explicit successful authentication, false on cancel, failure, or
-  /// an unsupported/unavailable device (fails closed, not open).
+  /// deleting a patient's data - see PatientsController.deletePatientData).
+  /// Falls back to device PIN/pattern (biometricOnly: false) rather than
+  /// hard-blocking a dietician on a device with no biometrics enrolled;
+  /// returns true only on an explicit successful authentication, false on
+  /// cancel, failure, or an unsupported/unavailable device (fails closed,
+  /// not open).
   static Future<bool> requireStepUp(String reason) async {
     try {
       final canCheck = await _localAuth.canCheckBiometrics || await _localAuth.isDeviceSupported();

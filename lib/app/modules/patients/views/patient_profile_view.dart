@@ -68,7 +68,6 @@ class _PatientProfileViewState extends State<PatientProfileView> {
   final PatientsController controller = Get.put(PatientsController());
   Timer? _autoRefreshTimer;
   static const int _refreshIntervalSeconds = 10; // Refresh every 10 seconds
-  bool _isDeleting = false;
 
   // Horizontal scroll for the Weekly Diet Plans row - so the currently
   // in-progress week is brought into view on open instead of always
@@ -593,20 +592,6 @@ class _PatientProfileViewState extends State<PatientProfileView> {
               icon: Icon(Icons.more_vert_sharp, color: Colors.black),
             );
           }),
-          IconButton(
-            onPressed: _isDeleting ? null : () => _showDeleteConfirmationDialog(context),
-            icon: _isDeleting
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Color(0xffB42318),
-                    ),
-                  )
-                : const Icon(Icons.delete_outline, color: Color(0xffB42318)),
-            tooltip: 'Delete patient',
-          ),
         ],
       ),
       body: Obx(() {
@@ -639,140 +624,6 @@ class _PatientProfileViewState extends State<PatientProfileView> {
         return _buildProfileContent();
       }),
     );
-  }
-
-  /// Permanently deletes this patient (all their data + Supabase auth
-  /// identity - see patientController.js's deletePatient). Irreversible, so
-  /// the dietician must type the patient's exact email to enable the
-  /// Delete button - a typo-proof safeguard against an accidental tap, on
-  /// top of the backend's own re-check of the same email.
-  Future<void> _showDeleteConfirmationDialog(BuildContext context) async {
-    final email = controller.patientProfileModel.value?.basic?.email;
-    if (email == null || email.isEmpty) return;
-
-    final textController = TextEditingController();
-    final matches = ValueNotifier<bool>(false);
-    textController.addListener(() {
-      matches.value = textController.text.trim().toLowerCase() == email.toLowerCase();
-    });
-
-    // The auto-refresh timer silently updates patientProfileModel (and the
-    // Obx'd widgets watching it) every 10s. Left running while this dialog
-    // - and, on confirm, the native biometric prompt below - are on screen,
-    // it can mutate the tree underneath mid-transition, which is what was
-    // crashing the framework ("_dependents.isEmpty") on Cancel/Delete.
-    _stopAutoRefresh();
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: CustomText(
-            text: 'Delete patient?',
-            fontWeight: FontWeight.w600,
-            fontSize: 18,
-            color: const Color(0xff1F2A37),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              CustomText(
-                text:
-                    'This permanently deletes "$email" and ALL their data - diet plans, logs, chat history, payments. This cannot be undone.',
-                fontWeight: FontWeight.w400,
-                fontSize: 14,
-                color: const Color(0xff4D5761),
-              ),
-              const SizedBox(height: 16),
-              CustomText(
-                text: 'Type "$email" to confirm:',
-                fontWeight: FontWeight.w500,
-                fontSize: 14,
-                color: const Color(0xff1F2A37),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: textController,
-                autofocus: true,
-                decoration: InputDecoration(
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  hintText: email,
-                  isDense: true,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('Cancel'),
-            ),
-            ValueListenableBuilder<bool>(
-              valueListenable: matches,
-              builder: (context, isMatch, _) {
-                return TextButton(
-                  onPressed: isMatch
-                      ? () => Navigator.of(dialogContext).pop(true)
-                      : null,
-                  child: Text(
-                    'Delete',
-                    style: TextStyle(
-                      color: isMatch ? const Color(0xffB42318) : null,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                );
-              },
-            ),
-          ],
-        );
-      },
-    );
-
-    matches.dispose();
-    textController.dispose();
-
-    if (confirmed != true || !context.mounted) {
-      // Cancelled (or already navigated away) - just resume refreshing.
-      if (context.mounted) _startAutoRefresh();
-      return;
-    }
-
-    // Give the dialog's own pop/exit transition a moment to finish before
-    // the native biometric prompt (below, via deletePatient) backgrounds the
-    // Flutter view - triggering that prompt mid-transition is what was
-    // corrupting the element tree and crashing the app.
-    await Future.delayed(const Duration(milliseconds: 300));
-    if (!context.mounted) return;
-
-    setState(() => _isDeleting = true);
-    final success = await controller.deletePatient(widget.patientId, email);
-    if (!context.mounted) return;
-    setState(() => _isDeleting = false);
-
-    if (success) {
-      showAppToast(
-        Get.overlayContext!,
-        message: '"$email" has been permanently deleted.',
-        type: AppToastType.success,
-      );
-      if (Navigator.of(context).canPop()) {
-        Get.back();
-      } else {
-        Get.offAllNamed(Routes.PATIENTS);
-      }
-    } else {
-      // Deletion failed (or was blocked, e.g. by the biometric step-up) -
-      // the dietician is staying on this page, so resume auto-refresh.
-      _startAutoRefresh();
-    }
   }
 
   /// Opens a week card from the Weekly Diet Plans row.

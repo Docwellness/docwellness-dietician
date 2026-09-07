@@ -202,8 +202,7 @@ class _DeletePatientDataSheetState extends State<DeletePatientDataSheet> {
     Get.back(); // dismiss this sheet
     if (deleteAccount) {
       // Leave the deleted patient's now-stale profile - back to wherever the
-      // dietician came from (usually the patient list). Mirrors the
-      // trash-icon flow's _showDeleteConfirmationDialog.
+      // dietician came from (usually the patient list).
       if (Navigator.of(Get.context!).canPop()) {
         Get.back();
       } else {

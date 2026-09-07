@@ -73,54 +73,13 @@ class PatientService {
     }
     return null;
   }
-       
-  Future<dynamic> togglePatientActive(String patientId, bool isActive) async {
-    try {
-      final response = await service.request(
-        endPoint: '/patients/$patientId/deactivate',
-        method: 'PUT',
-        headers: {'Authorization': "Bearer $token"},
-        data: {'isActive': isActive},
-      );
-
-      if (response != null &&
-          response.statusCode == 200 &&
-          response.data['success'] == true) {
-        return response.data;
-      }
-    } catch (e) {
-      debugPrint('togglePatientActive error: $e');
-    }
-    return null;
-  }
-
-  /// Permanently deletes a patient and all their data. `confirmEmail`
-  /// must exactly match the patient's email - the backend
-  /// (patientController.js's deletePatient) re-verifies this and rejects
-  /// the request otherwise. Returns the raw response body (even on
-  /// failure) so the caller can surface the backend's specific error
-  /// message (e.g. an email mismatch) instead of a generic failure toast.
-  Future<dynamic> deletePatient(String patientId, String confirmEmail) async {
-    try {
-      final response = await service.request(
-        endPoint: '/patients/$patientId',
-        method: 'DELETE',
-        headers: {'Authorization': "Bearer $token"},
-        data: {'confirmEmail': confirmEmail},
-      );
-      return response?.data;
-    } catch (e) {
-      debugPrint('deletePatient error: $e');
-      return null;
-    }
-  }
 
   /// Deletes selected categories of a patient's data (see the backend's
   /// utils/patientDataDeletion.js PATIENT_DATA_CATEGORIES). With
-  /// [deleteAccount] true the whole account is removed instead, same as
-  /// [deletePatient]. `confirmEmail` must match the patient's email - the
-  /// backend re-verifies it. Returns the raw response body (even on
-  /// failure) so the caller can surface the backend's message.
+  /// [deleteAccount] true the whole account + Supabase identity is removed
+  /// instead. `confirmEmail` must match the patient's email - the backend
+  /// re-verifies it. Returns the raw response body (even on failure) so the
+  /// caller can surface the backend's message.
   Future<dynamic> deletePatientData(
     String patientId, {
     required String confirmEmail,
