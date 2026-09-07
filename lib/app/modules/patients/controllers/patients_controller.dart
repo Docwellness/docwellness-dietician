@@ -1057,8 +1057,14 @@ class PatientsController extends GetxController {
       if (isClosed) return;
 
       if (response != null) {
+        // ignore: avoid_print
+        debugPrint('SUBPAUSE raw=${response['data']?['subscriptionPause']}');
         patientProfileModel.value = PatientProfileModel.fromJson(
           response['data'],
+        );
+        debugPrint(
+          'SUBPAUSE parsed isPausedNow=${patientProfileModel.value?.subscriptionPause?.isPausedNow} '
+          'resume=${patientProfileModel.value?.subscriptionPause?.resumeDate}',
         );
         weeklyDietPlans.value =
             (response['data']['weeklyDietPlans'] as List? ?? [])
@@ -1213,9 +1219,10 @@ class PatientsController extends GetxController {
       patientProfileModel.value?.subscriptionPause;
 
   /// Schedule (op 'pause'), edit ('update') or cancel ('cancel') a
-  /// subscription pause, then refresh the profile so the UI reflects the new
-  /// state. Returns true on success; on failure shows the backend's message.
-  Future<bool> submitSubscriptionPause(
+  /// subscription pause, then refresh the profile. Returns null on success;
+  /// a human message on failure (the caller shows it - the sheet is still
+  /// on screen, so it has a live Overlay, unlike Get.overlayContext here).
+  Future<String?> submitSubscriptionPause(
     String patientId, {
     required String op, // 'pause' | 'update' | 'cancel'
     DateTime? startDate,
@@ -1245,14 +1252,10 @@ class PatientsController extends GetxController {
     if (data != null && data['success'] == true) {
       await getPatientProfile(patientId);
       fetchOngoingPatients();
-      return true;
+      return null;
     }
-    showAppToast(
-      Get.overlayContext!,
-      message: data?['message'] ?? 'Could not update the subscription pause',
-      type: AppToastType.error,
-    );
-    return false;
+    return (data?['message'] as String?) ??
+        'Could not update the subscription pause';
   }
 
   /// Fetch calorie, weight, and BMI tracking data in parallel - each chart
