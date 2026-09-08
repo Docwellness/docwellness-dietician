@@ -13,6 +13,13 @@ class AddNotesView extends StatefulWidget {
 
 class _AddNotesViewState extends State<AddNotesView> {
   DateTime? selectedDate;
+  final TextEditingController _descriptionController = TextEditingController();
+
+  @override
+  void dispose() {
+    _descriptionController.dispose();
+    super.dispose();
+  }
 
   Future<void> pickDate() async {
     final DateTime? date = await showDatePicker(
@@ -100,7 +107,7 @@ class _AddNotesViewState extends State<AddNotesView> {
         child: Column(
           children: [
             CustomField(
-              controller: TextEditingController(),
+              controller: _descriptionController,
               lable: 'Description',
               hintText: 'Add few more words for describing food',
               changeBorderColor: false,
