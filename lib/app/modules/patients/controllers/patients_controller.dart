@@ -1248,8 +1248,13 @@ class PatientsController extends GetxController {
     await getPatientProfile(patientId, silent: true);
     fetchOngoingPatients();
 
-    if (data != null && data['success'] == true) return null;
-    return (data?['message'] as String?) ??
+    // `data` is normally the decoded JSON body, but a 5xx from the backend
+    // can hand back an HTML error page (dio decodes it to a String) - so
+    // subscripting it with 'success'/'message' would throw
+    // "type 'String' is not a subtype of type 'int'". Only trust a Map.
+    final body = data is Map ? data : null;
+    if (body != null && body['success'] == true) return null;
+    return (body?['message'] as String?) ??
         'Could not update the subscription pause';
   }
 
