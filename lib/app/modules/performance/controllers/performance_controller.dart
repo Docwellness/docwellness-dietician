@@ -1,4 +1,6 @@
 import 'dart:developer';
+import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -53,6 +55,15 @@ class PerformanceController extends GetxController {
   RxBool isQuoteEditMode = false.obs;
   RxString editingQuoteId = ''.obs;
   final TextEditingController quoteTextController = TextEditingController();
+  final TextEditingController quoteTextHiController = TextEditingController();
+  final TextEditingController quoteTextMrController = TextEditingController();
+  final TextEditingController quoteAuthorController = TextEditingController();
+  final RxString quoteCategory = 'Wellness'.obs;
+  static const quoteCategories = ['Nutrition', 'Wellness', 'Mindfulness'];
+  // Aspect the Home carousel card uses - crops are locked to it.
+  static const quoteImageAspect = 2.3;
+  // Raw pick waiting to be cropped; pickedQuoteImage holds the cropped result.
+  final Rx<XFile?> quoteRawImage = Rx<XFile?>(null);
 
   // Coupon state
   RxBool isCouponSaving = false.obs;
@@ -92,6 +103,9 @@ class PerformanceController extends GetxController {
     videoTitleController.dispose();
     videoTextController.dispose();
     quoteTextController.dispose();
+    quoteTextHiController.dispose();
+    quoteTextMrController.dispose();
+    quoteAuthorController.dispose();
     couponNameController.dispose();
     couponCodeController.dispose();
     couponPercentageController.dispose();
@@ -423,8 +437,25 @@ class PerformanceController extends GetxController {
   Future pickQuoteImage() async {
     final XFile? img = await picker.pickImage(source: ImageSource.gallery);
     if (img != null) {
-      pickedQuoteImage.value = img;
+      // Show the crop step; the cropped result lands in pickedQuoteImage.
+      pickedQuoteImage.value = null;
+      quoteRawImage.value = img;
     }
+  }
+
+  /// Called by the crop UI with the cropped bytes.
+  Future<void> applyQuoteCrop(Uint8List bytes) async {
+    final f = File(
+      '${Directory.systemTemp.path}/quote_${DateTime.now().millisecondsSinceEpoch}.jpg',
+    );
+    await f.writeAsBytes(bytes);
+    pickedQuoteImage.value = XFile(f.path);
+    quoteRawImage.value = null;
+  }
+
+  void clearQuoteImage() {
+    quoteRawImage.value = null;
+    pickedQuoteImage.value = null;
   }
 
   Future pickVideoBannerImage() async {
@@ -472,10 +503,15 @@ class PerformanceController extends GetxController {
   /// Reset the quote form for a fresh add
   void resetQuoteForm() {
     pickedQuoteImage.value = null;
+    quoteRawImage.value = null;
     isQuotesSelected.value = false;
     isQuoteEditMode.value = false;
     editingQuoteId.value = '';
     quoteTextController.clear();
+    quoteTextHiController.clear();
+    quoteTextMrController.clear();
+    quoteAuthorController.clear();
+    quoteCategory.value = 'Wellness';
   }
 
   /// Pre-fill form for editing an existing quote
@@ -485,15 +521,21 @@ class PerformanceController extends GetxController {
     editingQuoteId.value = quote['_id'] as String? ?? '';
     isQuotesSelected.value = quote['isActive'] == true;
     quoteTextController.text = quote['text'] as String? ?? '';
-    // Don't prefill image — user must pick new or keep existing
+    quoteTextHiController.text = quote['textHi'] as String? ?? '';
+    quoteTextMrController.text = quote['textMr'] as String? ?? '';
+    quoteAuthorController.text = (quote['author'] as String? ?? '').trim();
+    final cat = quote['category'] as String? ?? 'Wellness';
+    quoteCategory.value = quoteCategories.contains(cat) ? cat : 'Wellness';
+    // Don't prefill image — dietician keeps the existing one or picks anew.
   }
 
   /// Add a new quote
   Future<void> addQuote() async {
-    if (pickedQuoteImage.value == null) {
+    final hasText = quoteTextController.text.trim().isNotEmpty;
+    if (pickedQuoteImage.value == null && !hasText) {
       showAppToast(
         Get.overlayContext!,
-        message: 'Please select an image',
+        message: 'Add a quote — text or an image',
         type: AppToastType.error,
       );
       return;
@@ -502,9 +544,13 @@ class PerformanceController extends GetxController {
     isQuoteSaving.value = true;
     try {
       final result = await _quoteService.addQuote(
-        imagePath: pickedQuoteImage.value!.path,
+        imagePath: pickedQuoteImage.value?.path,
         isActive: isQuotesSelected.value,
         text: quoteTextController.text.trim(),
+        textHi: quoteTextHiController.text.trim(),
+        textMr: quoteTextMrController.text.trim(),
+        author: quoteAuthorController.text.trim(),
+        category: quoteCategory.value,
       );
 
       if (result != null) {
@@ -548,6 +594,10 @@ class PerformanceController extends GetxController {
         imagePath: pickedQuoteImage.value?.path,
         isActive: isQuotesSelected.value,
         text: quoteTextController.text.trim(),
+        textHi: quoteTextHiController.text.trim(),
+        textMr: quoteTextMrController.text.trim(),
+        author: quoteAuthorController.text.trim(),
+        category: quoteCategory.value,
       );
 
       if (result != null) {

@@ -25,18 +25,29 @@ class QuoteService {
     }
   }
 
-  /// Add a new quote with image uploaded to Cloudinary
+  /// Add a new quote (text and/or image). Image is optional.
   Future<Map<String, dynamic>?> addQuote({
-    required String imagePath,
+    String? imagePath,
     required bool isActive,
     String text = '',
+    String textHi = '',
+    String textMr = '',
+    String author = '',
+    String category = 'Wellness',
   }) async {
     try {
-      final formData = FormData.fromMap({
-        'image': await MultipartFile.fromFile(imagePath),
+      final map = <String, dynamic>{
         'isActive': isActive.toString(),
         'text': text,
-      });
+        'textHi': textHi,
+        'textMr': textMr,
+        'category': category,
+      };
+      if (author.isNotEmpty) map['author'] = author;
+      if (imagePath != null) {
+        map['image'] = await MultipartFile.fromFile(imagePath);
+      }
+      final formData = FormData.fromMap(map);
 
       final res = await _api.request(
         endPoint: '/quotes',
@@ -63,11 +74,19 @@ class QuoteService {
     String? imagePath,
     bool? isActive,
     String? text,
+    String? textHi,
+    String? textMr,
+    String? author,
+    String? category,
   }) async {
     try {
       final map = <String, dynamic>{};
       if (isActive != null) map['isActive'] = isActive.toString();
       if (text != null) map['text'] = text;
+      if (textHi != null) map['textHi'] = textHi;
+      if (textMr != null) map['textMr'] = textMr;
+      if (author != null) map['author'] = author;
+      if (category != null) map['category'] = category;
       if (imagePath != null) {
         map['image'] = await MultipartFile.fromFile(imagePath);
       }

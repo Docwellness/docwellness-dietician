@@ -1092,6 +1092,10 @@ class PerformanceView extends GetView<PerformanceController> {
                         ...controller.quotesList.map((quote) {
                           final quoteId = quote['_id'] as String? ?? '';
                           final imageUrl = quote['imageUrl'] as String? ?? '';
+                          final quoteText =
+                              (quote['text'] as String? ?? '').trim();
+                          final quoteCategory =
+                              quote['category'] as String? ?? 'Wellness';
                           final isActive = quote['isActive'] == true;
                           return Padding(
                             padding: const EdgeInsets.only(right: 8),
@@ -1228,45 +1232,77 @@ class PerformanceView extends GetView<PerformanceController> {
                                   Container(
                                     height: 137,
                                     width: 132,
+                                    clipBehavior: Clip.antiAlias,
                                     decoration: BoxDecoration(
-                                      color: Color(0xffFDF2FA),
+                                      color: const Color(0xffFDF2FA),
                                       borderRadius: BorderRadius.circular(16),
                                     ),
-                                    child: Center(
-                                      child: ClipRRect(
-                                        borderRadius: BorderRadius.circular(8),
-                                        child: imageUrl.isNotEmpty
-                                            ? CachedNetworkImage(
-                                                imageUrl: imageUrl,
-                                                height: 120,
-                                                width: 116.97,
-                                                fit: BoxFit.cover,
-                                                placeholder: (_, __) => Center(
-                                                  child:
-                                                      CircularProgressIndicator(
-                                                        color: Color(
-                                                          0xff851653,
-                                                        ),
-                                                      ),
-                                                ),
-                                                errorWidget: (_, __, ___) =>
-                                                    Center(
-                                                      child: Icon(
-                                                        Icons.broken_image,
-                                                        size: 32,
-                                                        color: Color(
-                                                          0xff9DA4AE,
-                                                        ),
-                                                      ),
-                                                    ),
-                                              )
-                                            : Icon(
-                                                Icons.format_quote_outlined,
-                                                size: 32,
-                                                color: Color(0xff9DA4AE),
+                                    child: imageUrl.isNotEmpty
+                                        ? CachedNetworkImage(
+                                            imageUrl: imageUrl,
+                                            height: 137,
+                                            width: 132,
+                                            fit: BoxFit.cover,
+                                            placeholder: (_, __) => const Center(
+                                              child: CircularProgressIndicator(
+                                                color: Color(0xff851653),
                                               ),
-                                      ),
-                                    ),
+                                            ),
+                                            errorWidget: (_, __, ___) =>
+                                                const Center(
+                                                  child: Icon(
+                                                    Icons.broken_image,
+                                                    size: 32,
+                                                    color: Color(0xff9DA4AE),
+                                                  ),
+                                                ),
+                                          )
+                                        : Padding(
+                                            padding: const EdgeInsets.fromLTRB(
+                                              10,
+                                              22,
+                                              10,
+                                              10,
+                                            ),
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                const Icon(
+                                                  Icons.format_quote,
+                                                  size: 18,
+                                                  color: Color(0x66851653),
+                                                ),
+                                                const SizedBox(height: 2),
+                                                Expanded(
+                                                  child: Text(
+                                                    quoteText.isEmpty
+                                                        ? 'Empty quote'
+                                                        : quoteText,
+                                                    maxLines: 4,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style: const TextStyle(
+                                                      fontSize: 11,
+                                                      height: 1.35,
+                                                      fontWeight:
+                                                          FontWeight.w500,
+                                                      color: Color(0xff5A2A44),
+                                                    ),
+                                                  ),
+                                                ),
+                                                Text(
+                                                  quoteCategory.toUpperCase(),
+                                                  style: const TextStyle(
+                                                    fontSize: 8,
+                                                    fontWeight: FontWeight.w700,
+                                                    letterSpacing: 0.5,
+                                                    color: Color(0xff9F1561),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
                                   ),
                                   // Active/Inactive badge
                                   Positioned(
