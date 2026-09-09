@@ -6,7 +6,15 @@ class YoutubePlayerScreen extends StatefulWidget {
   final String videoId;
   final String? title;
 
-  const YoutubePlayerScreen({super.key, required this.videoId, this.title});
+  /// Render 9:16 (portrait, no letterbox) for a Short.
+  final bool isShort;
+
+  const YoutubePlayerScreen({
+    super.key,
+    required this.videoId,
+    this.title,
+    this.isShort = false,
+  });
 
   @override
   State<YoutubePlayerScreen> createState() => _YoutubePlayerScreenState();
@@ -49,6 +57,7 @@ class _YoutubePlayerScreenState extends State<YoutubePlayerScreen> {
       },
       player: YoutubePlayer(
         controller: _controller,
+        aspectRatio: widget.isShort ? 9 / 16 : 16 / 9,
         showVideoProgressIndicator: true,
         progressIndicatorColor: const Color(0xff851653),
         progressColors: const ProgressBarColors(

@@ -306,18 +306,25 @@ class UploadVideo extends StatelessWidget {
       );
     }
 
-    // If YouTube source and thumbnail URL available, show it
+    // If YouTube source and thumbnail URL available, show it. The frame is
+    // portrait for Shorts, so contain it (no crop) on the tinted card.
     if (controller.selectedSource.value == 'YouTube' &&
         controller.youtubeThumbnailUrl.value.isNotEmpty) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(16),
         child: Stack(
+          alignment: Alignment.center,
           children: [
+            Container(
+              width: double.infinity,
+              height: 196,
+              color: const Color(0xffFEF6FB),
+            ),
             Image.network(
               controller.youtubeThumbnailUrl.value,
               width: double.infinity,
               height: 196,
-              fit: BoxFit.cover,
+              fit: BoxFit.contain,
               loadingBuilder: (context, child, progress) {
                 if (progress == null) return child;
                 return Container(
@@ -367,11 +374,15 @@ class UploadVideo extends StatelessWidget {
               child: Center(
                 child: GestureDetector(
                   onTap: () {
-                    final videoId = controller.extractYoutubeVideoId(
-                      controller.youtubeUrl.value,
-                    );
+                    final url = controller.youtubeUrl.value;
+                    final videoId = controller.extractYoutubeVideoId(url);
                     if (videoId != null) {
-                      Get.to(() => YoutubePlayerScreen(videoId: videoId));
+                      Get.to(
+                        () => YoutubePlayerScreen(
+                          videoId: videoId,
+                          isShort: url.contains('/shorts/'),
+                        ),
+                      );
                     }
                   },
                   child: Container(

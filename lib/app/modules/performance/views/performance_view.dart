@@ -518,14 +518,17 @@ class PerformanceView extends GetView<PerformanceController> {
                               onTap: () {
                                 final source = video['source'] as String? ?? '';
                                 if (source == 'YouTube') {
+                                  final ytUrl =
+                                      (video['youtubeUrl'] as String?) ?? '';
                                   final ytId = controller.extractYoutubeVideoId(
-                                    video['youtubeUrl'] ?? '',
+                                    ytUrl,
                                   );
                                   if (ytId != null) {
                                     Get.to(
                                       () => YoutubePlayerScreen(
                                         videoId: ytId,
                                         title: title,
+                                        isShort: ytUrl.contains('/shorts/'),
                                       ),
                                     );
                                   }
@@ -1517,6 +1520,14 @@ class PerformanceView extends GetView<PerformanceController> {
     // YouTube thumbnailUrl is a full URL
     final thumbUrl = video['thumbnailUrl'] as String? ?? '';
     if (thumbUrl.isNotEmpty && thumbUrl.startsWith('http')) return thumbUrl;
+
+    // Derive from the YouTube id - original-aspect (9:16 for Shorts) frame,
+    // matching the user app. Covers rows saved before thumbnailUrl existed.
+    final ytUrl = video['youtubeUrl'] as String? ?? '';
+    if (ytUrl.isNotEmpty) {
+      final id = controller.extractYoutubeVideoId(ytUrl);
+      if (id != null) return 'https://i.ytimg.com/vi/$id/oardefault.jpg';
+    }
 
     // bannerImage is a server path like /uploads/xxx.jpg
     final banner = video['bannerImage'] as String? ?? '';

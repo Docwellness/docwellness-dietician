@@ -411,8 +411,10 @@ class PerformanceController extends GetxController {
     youtubeUrl.value = url;
     final videoId = extractYoutubeVideoId(url);
     if (videoId != null) {
+      // Original-aspect-ratio frame (9:16 for Shorts) - no 4:3 letterboxing
+      // like hqdefault.jpg. Matches the user app's "Videos for you" rail.
       youtubeThumbnailUrl.value =
-          'https://img.youtube.com/vi/$videoId/hqdefault.jpg';
+          'https://i.ytimg.com/vi/$videoId/oardefault.jpg';
     } else {
       youtubeThumbnailUrl.value = '';
     }
