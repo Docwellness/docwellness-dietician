@@ -114,35 +114,47 @@ class _NewWidgetState extends State<NewWidget> {
 
         // LIST VIEW SHOWING PATIENTS
         Expanded(
-          child: Obx(() {
-            if (controller.isNewLoading.value) {
-              return const Center(
-                child: CircularProgressIndicator(color: Color(0xff851653)),
-              );
-            }
+          child: RefreshIndicator(
+            color: const Color(0xff851653),
+            onRefresh: () => controller.fetchNewPatients(),
+            child: Obx(() {
+              if (controller.isNewLoading.value) {
+                return const Center(
+                  child: CircularProgressIndicator(color: Color(0xff851653)),
+                );
+              }
 
-            if (controller.newError.value) {
-              return PatientListErrorState(
-                onRetry: controller.fetchNewPatients,
-              );
-            }
+              if (controller.newError.value) {
+                return ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  children: [
+                    const SizedBox(height: 80),
+                    PatientListErrorState(onRetry: controller.fetchNewPatients),
+                  ],
+                );
+              }
 
-            final patients = controller.filteredNewPatients;
+              final patients = controller.filteredNewPatients;
 
-            if (patients.isEmpty) {
-              return const Center(
-                child: Text(
-                  'No new clients found',
-                  style: TextStyle(color: Color(0xff6C737F), fontSize: 16),
-                ),
-              );
-            }
+              if (patients.isEmpty) {
+                return ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  children: const [
+                    SizedBox(height: 120),
+                    Center(
+                      child: Text(
+                        'No new clients found',
+                        style: TextStyle(color: Color(0xff6C737F), fontSize: 16),
+                      ),
+                    ),
+                  ],
+                );
+              }
 
-            return RefreshIndicator(
-              onRefresh: () => controller.fetchNewPatients(),
-              child: ListView.separated(
+              return ListView.separated(
                 controller: _scrollController,
                 padding: EdgeInsets.zero,
+                physics: const AlwaysScrollableScrollPhysics(),
                 itemCount: patients.length + 1,
                 separatorBuilder: (_, __) => const SizedBox(height: 12),
                 itemBuilder: (context, index) {
@@ -176,9 +188,9 @@ class _NewWidgetState extends State<NewWidget> {
                     membershipPlan: patient.membershipPlan,
                   );
                 },
-              ),
-            );
-          }),
+              );
+            }),
+          ),
         ),
       ],
     );

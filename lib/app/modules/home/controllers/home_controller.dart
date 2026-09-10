@@ -1,8 +1,10 @@
 import 'dart:async';
 
+import 'package:docwellnesdoc/app/models/patient_list_model.dart';
 import 'package:docwellnesdoc/app/models/patient_request_model.dart';
 import 'package:docwellnesdoc/app/modules/chat/controllers/chat_controller.dart';
 import 'package:docwellnesdoc/app/modules/home/services/home_service.dart';
+import 'package:docwellnesdoc/app/modules/patients/services/patient_service.dart';
 import 'package:docwellnesdoc/app/services/connectivity_service.dart';
 import 'package:docwellnesdoc/app/modules/notifications/services/notification_service.dart';
 import 'package:docwellnesdoc/app/modules/patients/controllers/patients_controller.dart';
@@ -20,35 +22,33 @@ class HomeController extends GetxController with WidgetsBindingObserver {
   final RecipeService _recipeService = RecipeService();
   final NotificationService _notifService = NotificationService();
   final CouponService _couponService = CouponService();
+  final PatientService _patientService = PatientService();
   RxInt selectedIndex = 0.obs;
   RxBool showHomeLoading = false.obs;
 
   RxList<PatientRequestModel> allRequestedPatientList =
       <PatientRequestModel>[].obs;
 
+  // "New client requests" section - the exact same population as the
+  // Patients tab's "New" segment (GET /patients?tab=new: requested a diet,
+  // none built yet), newest first. Was derived from /diet-plan-requests,
+  // which returns *every* request regardless of whether a diet exists.
+  final RxList<NewPatientModel> newClients = <NewPatientModel>[].obs;
+  final RxBool isLoadingNewClients = false.obs;
+
   // Recipe categories for home display
   RxList<RecipeCategory> recipeCategories = <RecipeCategory>[].obs;
   RxBool isLoadingCategories = false.obs;
 
-  // Dashboard request buckets, memoized. These getters were previously
-  // recomputed (a full .where().toList()) on every read - and home_view's
-  // ListView.builder reads the new-client list ~9x per rebuild. Now they're
-  // derived once, whenever allRequestedPatientList changes, by an ever()
-  // worker (see onInit -> _recomputeRequestBuckets).
-  final RxList<PatientRequestModel> _newClientRequests =
-      <PatientRequestModel>[].obs;
+  // Pending-payments bucket, memoized - derived once whenever
+  // allRequestedPatientList changes by an ever() worker (see onInit ->
+  // _recomputeRequestBuckets), rather than recomputed on every read.
   final RxList<PatientRequestModel> _pendingPaymentRequests =
       <PatientRequestModel>[].obs;
-
-  /// Home "New client requests": clients who asked for a diet and have none
-  /// assigned yet (newest first - allRequestedPatientList is already sorted
-  /// by createdAt desc). Matches what the Patients tab's "New" list shows.
-  List<PatientRequestModel> get newClientRequests => _newClientRequests;
 
   List<PatientRequestModel> get pendingPaymentRequests => _pendingPaymentRequests;
 
   void _recomputeRequestBuckets(List<PatientRequestModel> all) {
-    _newClientRequests.assignAll(all.where((e) => e.needsDietPlan));
     _pendingPaymentRequests.assignAll(
       all.where(
         (e) =>
@@ -202,6 +202,7 @@ class HomeController extends GetxController with WidgetsBindingObserver {
     showHomeLoading.value = true;
     await Future.wait([
       getAllPatientRequest(),
+      fetchNewClients(),
       fetchRecipeCategories(),
       fetchDashboardStats(),
       fetchNotificationCount(),
@@ -215,11 +216,35 @@ class HomeController extends GetxController with WidgetsBindingObserver {
   Future<void> refreshHomeData() async {
     await Future.wait([
       getAllPatientRequest(),
+      fetchNewClients(),
       fetchRecipeCategories(),
       fetchDashboardStats(),
       fetchNotificationCount(),
       fetchCouponCount(),
     ]);
+  }
+
+  /// New-client requests shown on Home = the Patients "New" segment
+  /// (GET /patients?tab=new), capped to a short preview. Server already
+  /// filters (no diet built / not started) and orders newest-first.
+  Future<void> fetchNewClients() async {
+    isLoadingNewClients.value = true;
+    try {
+      final response = await _patientService.getPatientsByTab(
+        tab: 'new',
+        page: 1,
+        limit: 5,
+      );
+      final list = response?['data'];
+      if (list is List) {
+        newClients.value =
+            list.map((e) => NewPatientModel.fromJson(e)).toList();
+      }
+    } catch (e) {
+      debugPrint('fetchNewClients error: $e');
+    } finally {
+      isLoadingNewClients.value = false;
+    }
   }
 
   Future<void> fetchRecipeCategories() async {
@@ -247,6 +272,7 @@ class HomeController extends GetxController with WidgetsBindingObserver {
       fetchNotificationCount();
       fetchDashboardStats();
       getAllPatientRequest();
+      fetchNewClients();
       _startForegroundPoll();
     } else {
       _stopForegroundPoll();

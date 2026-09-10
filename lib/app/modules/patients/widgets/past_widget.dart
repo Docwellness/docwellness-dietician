@@ -114,35 +114,47 @@ class _PastWidgetState extends State<PastWidget> {
 
         // LIST VIEW SHOWING PATIENTS
         Expanded(
-          child: Obx(() {
-            if (controller.isPastLoading.value) {
-              return const Center(
-                child: CircularProgressIndicator(color: Color(0xff851653)),
-              );
-            }
+          child: RefreshIndicator(
+            color: const Color(0xff851653),
+            onRefresh: () => controller.fetchPastPatients(),
+            child: Obx(() {
+              if (controller.isPastLoading.value) {
+                return const Center(
+                  child: CircularProgressIndicator(color: Color(0xff851653)),
+                );
+              }
 
-            if (controller.pastError.value) {
-              return PatientListErrorState(
-                onRetry: controller.fetchPastPatients,
-              );
-            }
+              if (controller.pastError.value) {
+                return ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  children: [
+                    const SizedBox(height: 80),
+                    PatientListErrorState(onRetry: controller.fetchPastPatients),
+                  ],
+                );
+              }
 
-            final patients = controller.filteredPastPatients;
+              final patients = controller.filteredPastPatients;
 
-            if (patients.isEmpty) {
-              return const Center(
-                child: Text(
-                  'No past patients found',
-                  style: TextStyle(color: Color(0xff6C737F), fontSize: 16),
-                ),
-              );
-            }
+              if (patients.isEmpty) {
+                return ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  children: const [
+                    SizedBox(height: 120),
+                    Center(
+                      child: Text(
+                        'No past clients found',
+                        style: TextStyle(color: Color(0xff6C737F), fontSize: 16),
+                      ),
+                    ),
+                  ],
+                );
+              }
 
-            return RefreshIndicator(
-              onRefresh: () => controller.fetchPastPatients(),
-              child: ListView.separated(
+              return ListView.separated(
                 controller: _scrollController,
                 padding: EdgeInsets.zero,
+                physics: const AlwaysScrollableScrollPhysics(),
                 itemCount: patients.length + 1,
                 separatorBuilder: (_, __) => const SizedBox(height: 12),
                 itemBuilder: (context, index) {
@@ -174,9 +186,9 @@ class _PastWidgetState extends State<PastWidget> {
                     completedOn: patient.completedOn,
                   );
                 },
-              ),
-            );
-          }),
+              );
+            }),
+          ),
         ),
       ],
     );

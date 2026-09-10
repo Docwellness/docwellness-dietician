@@ -114,35 +114,49 @@ class _OngoingWidgetState extends State<OngoingWidget> {
 
         // LIST VIEW SHOWING PATIENTS
         Expanded(
-          child: Obx(() {
-            if (controller.isOngoingLoading.value) {
-              return const Center(
-                child: CircularProgressIndicator(color: Color(0xff851653)),
-              );
-            }
+          child: RefreshIndicator(
+            color: const Color(0xff851653),
+            onRefresh: () => controller.fetchOngoingPatients(),
+            child: Obx(() {
+              if (controller.isOngoingLoading.value) {
+                return const Center(
+                  child: CircularProgressIndicator(color: Color(0xff851653)),
+                );
+              }
 
-            if (controller.ongoingError.value) {
-              return PatientListErrorState(
-                onRetry: controller.fetchOngoingPatients,
-              );
-            }
+              if (controller.ongoingError.value) {
+                return ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  children: [
+                    const SizedBox(height: 80),
+                    PatientListErrorState(
+                      onRetry: controller.fetchOngoingPatients,
+                    ),
+                  ],
+                );
+              }
 
-            final patients = controller.filteredOngoingPatients;
+              final patients = controller.filteredOngoingPatients;
 
-            if (patients.isEmpty) {
-              return const Center(
-                child: Text(
-                  'No ongoing patients found',
-                  style: TextStyle(color: Color(0xff6C737F), fontSize: 16),
-                ),
-              );
-            }
+              if (patients.isEmpty) {
+                return ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  children: const [
+                    SizedBox(height: 120),
+                    Center(
+                      child: Text(
+                        'No ongoing clients found',
+                        style: TextStyle(color: Color(0xff6C737F), fontSize: 16),
+                      ),
+                    ),
+                  ],
+                );
+              }
 
-            return RefreshIndicator(
-              onRefresh: () => controller.fetchOngoingPatients(),
-              child: ListView.separated(
+              return ListView.separated(
                 controller: _scrollController,
                 padding: EdgeInsets.zero,
+                physics: const AlwaysScrollableScrollPhysics(),
                 itemCount: patients.length + 1,
                 separatorBuilder: (_, __) => const SizedBox(height: 12),
                 itemBuilder: (context, index) {
@@ -178,9 +192,9 @@ class _OngoingWidgetState extends State<OngoingWidget> {
                     renewalPending: patient.renewalPending,
                   );
                 },
-              ),
-            );
-          }),
+              );
+            }),
+          ),
         ),
       ],
     );

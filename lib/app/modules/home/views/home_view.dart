@@ -3,7 +3,7 @@ import 'dart:math';
 import 'package:docwellnesdoc/app/modules/home/views/action_details_view.dart';
 import 'package:docwellnesdoc/app/modules/home/views/doctor_profile_view.dart';
 import 'package:docwellnesdoc/app/modules/patients/controllers/patients_controller.dart';
-import 'package:docwellnesdoc/app/modules/home/widgets/patient_request_container.dart';
+import 'package:docwellnesdoc/app/modules/patients/widgets/new_patients_container.dart';
 import 'package:docwellnesdoc/app/modules/receipes/views/add_receipes.dart';
 import 'package:docwellnesdoc/app/modules/receipes/views/view_added_receipes.dart';
 import 'package:docwellnesdoc/app/modules/receipes/widgets/receipe_container.dart';
@@ -247,36 +247,38 @@ class HomeView extends GetView<HomeController> {
             SizedBox(height: 26),
 
             Obx(() {
-              final requests = controller.newClientRequests;
-              if (requests.isEmpty) {
-                return const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 12),
+              final clients = controller.newClients;
+              if (clients.isEmpty) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
                   child: CustomText(
-                    text: 'No new client requests',
+                    text: controller.isLoadingNewClients.value
+                        ? 'Loading…'
+                        : 'No new client requests',
                     fontWeight: FontWeight.w400,
                     fontSize: 14,
-                    color: Color(0xff6C737F),
+                    color: const Color(0xff6C737F),
                   ),
                 );
               }
-              return ListView.builder(
-                itemCount: min(4, requests.length),
+              return ListView.separated(
+                itemCount: min(5, clients.length),
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
+                separatorBuilder: (_, __) => const SizedBox(height: 12),
                 itemBuilder: (context, index) {
-                  final data = requests[index];
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: PatientRequestContainer(
-                      goal: data.primaryGoal ?? "",
-                      title: data.patientName ?? "",
-                      onTap: () {
-                        Get.toNamed('/patient-profile/${data.patientId ?? ''}');
-                      },
-                      status: data.status ?? 'Unpaid',
-                      avatarUrl: data.avatarUrl,
-                      membershipPlan: data.membershipPlan,
-                    ),
+                  final c = clients[index];
+                  return NewPatientsContainer(
+                    patientId: c.patientId,
+                    fullName: c.fullName ?? 'Unknown',
+                    avatarUrl: c.avatarUrl,
+                    weight: c.weight,
+                    bmi: c.bmi,
+                    bmr: c.bmr,
+                    tdee: c.tdee,
+                    statusLabel: c.statusLabel,
+                    statusCategory: c.statusCategory,
+                    membershipPlan: c.membershipPlan,
                   );
                 },
               );
