@@ -352,7 +352,7 @@ class HomeView extends GetView<HomeController> {
                 );
               }
               return SizedBox(
-                height: 185,
+                height: 192,
                 width: double.infinity,
                 child: ListView.builder(
                   shrinkWrap: true,

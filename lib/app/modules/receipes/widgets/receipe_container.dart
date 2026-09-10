@@ -12,6 +12,11 @@ class ReceipeContainer extends StatelessWidget {
   // pass the cell's actual width so the image fills it instead of floating
   // at a fixed size that only coincidentally matches one screen width.
   final double imageWidth;
+  // Compact per-ingredient portion strings from the backend, e.g.
+  // ["Puffed Rice 40g", "Peanuts 15g"]. When non-empty the widget shows
+  // up to 2 ingredients with portions below the title instead of just
+  // the "N ingredients" count. Falls back to subTitle when empty.
+  final List<String> ingredientSummary;
 
   const ReceipeContainer({
     super.key,
@@ -20,6 +25,7 @@ class ReceipeContainer extends StatelessWidget {
     required this.subTitle,
     required this.onTap,
     this.imageWidth = 121.33,
+    this.ingredientSummary = const [],
   });
 
   bool get _isNetworkImage =>
@@ -30,7 +36,7 @@ class ReceipeContainer extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: SizedBox(
-        height: 184,
+        height: 192,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -90,16 +96,28 @@ class ReceipeContainer extends StatelessWidget {
                 maxLines: 2,
               ),
             ),
-            Flexible(
-              child: CustomText(
-                text: subTitle,
-                color: Color(0xff49454F),
-                fontWeight: FontWeight.w400,
-                fontSize: 13,
-                overflow: TextOverflow.ellipsis,
-                maxLines: 1,
+            if (ingredientSummary.isNotEmpty)
+              Flexible(
+                child: CustomText(
+                  text: ingredientSummary.take(2).join(' • '),
+                  color: Color(0xff49454F),
+                  fontWeight: FontWeight.w400,
+                  fontSize: 12,
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
+              )
+            else
+              Flexible(
+                child: CustomText(
+                  text: subTitle,
+                  color: Color(0xff49454F),
+                  fontWeight: FontWeight.w400,
+                  fontSize: 13,
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
               ),
-            ),
           ],
         ),
       ),

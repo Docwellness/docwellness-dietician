@@ -751,6 +751,10 @@ class RecipeListItem {
   final String servingTime;
   final int servings;
   final int ingredientsCount;
+  // Compact per-ingredient portion strings for the recipe grid cards,
+  // e.g. ["Puffed Rice 40g", "Peanuts 15g"]. Empty when the backend
+  // doesn't supply the field (backward-compatible fallback).
+  final List<String> ingredientSummary;
   final int? calories;
   final String description;
   final DateTime? createdAt;
@@ -775,6 +779,7 @@ class RecipeListItem {
     required this.servingTime,
     required this.servings,
     required this.ingredientsCount,
+    this.ingredientSummary = const [],
     this.calories,
     required this.description,
     this.createdAt,
@@ -796,6 +801,9 @@ class RecipeListItem {
       servingTime: json['servingTime'] ?? '',
       servings: json['servings'] ?? 1,
       ingredientsCount: json['ingredientsCount'] ?? 0,
+      ingredientSummary: json['ingredientSummary'] is List
+          ? List<String>.from(json['ingredientSummary'])
+          : const [],
       // nutrition.calories is stored as a Mongoose Number and can come back
       // as a double (e.g. 8.6) - assigning that directly to this int? field
       // throws a runtime TypeError ("double is not a subtype of int"),

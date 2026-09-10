@@ -115,7 +115,7 @@ class _RecipeListByFilterViewState extends State<RecipeListByFilterView> {
                   controller.recipes.length +
                   (controller.hasMoreRecipes.value ? 1 : 0),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                mainAxisExtent: 192,
+                mainAxisExtent: 200,
                 mainAxisSpacing: 8,
                 crossAxisSpacing: 8,
                 crossAxisCount: 3,
@@ -140,6 +140,7 @@ class _RecipeListByFilterViewState extends State<RecipeListByFilterView> {
                       imageUrl: recipe.image ?? '',
                       title: recipe.name,
                       subTitle: '${recipe.ingredientsCount} ingredients',
+                      ingredientSummary: recipe.ingredientSummary,
                       imageWidth: constraints.maxWidth,
                       onTap: () async {
                         final fullRecipe = await controller.fetchRecipeById(

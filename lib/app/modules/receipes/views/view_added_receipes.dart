@@ -196,6 +196,15 @@ class _ViewAddedReceipesState extends State<ViewAddedReceipes> {
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                     ),
+                                    if (recipe.ingredientSummary.isNotEmpty)
+                                      CustomText(
+                                        text: recipe.ingredientSummary.take(3).join(' • '),
+                                        fontWeight: FontWeight.w400,
+                                        fontSize: 12,
+                                        color: Color(0xff98A2B3),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
                                     SizedBox(height: 4),
                                     Container(
                                       padding: EdgeInsets.symmetric(
