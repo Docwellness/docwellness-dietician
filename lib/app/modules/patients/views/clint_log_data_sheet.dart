@@ -14,6 +14,39 @@ class ClintLogDataSheet extends StatefulWidget {
 
   const ClintLogDataSheet({super.key, required this.patientId});
 
+  /// Single entry point for opening the "Client Logged Data" review surface -
+  /// used by the "Show Logged Data" button on the patient profile, the Home
+  /// dashboard's "Review Logged Data" action tile, and a tapped
+  /// meal-log ('progress') notification. Ensures `PatientsController` exists
+  /// (the sheet does `Get.find` on it and `fetchClientLogData()` in
+  /// initState) so it works even when opened from outside the Patients tab.
+  static Future<void> open(BuildContext context, String patientId) {
+    if (patientId.isEmpty) return Future.value();
+    if (!Get.isRegistered<PatientsController>()) {
+      Get.put(PatientsController());
+    }
+    return showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      useSafeArea: true,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return DraggableScrollableSheet(
+          initialChildSize: 1,
+          maxChildSize: 1,
+          minChildSize: 0.5,
+          expand: false,
+          builder: (context, scrollController) {
+            return ClintLogDataSheet(patientId: patientId);
+          },
+        );
+      },
+    );
+  }
+
   @override
   State<ClintLogDataSheet> createState() => _ClintLogDataSheetState();
 }

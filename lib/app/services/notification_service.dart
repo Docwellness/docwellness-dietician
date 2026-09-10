@@ -4,6 +4,8 @@ import 'dart:io';
 
 import 'package:docwellnesdoc/app/modules/chat/controllers/chat_controller.dart';
 import 'package:docwellnesdoc/app/modules/chat/views/chat_screen.dart';
+import 'package:docwellnesdoc/app/modules/home/controllers/home_controller.dart';
+import 'package:docwellnesdoc/app/modules/patients/views/clint_log_data_sheet.dart';
 import 'package:docwellnesdoc/app/routes/app_pages.dart';
 import 'package:docwellnesdoc/app/utils/functions/dio_function.dart';
 import 'package:docwellnesdoc/main.dart';
@@ -133,6 +135,14 @@ class NotificationService {
             'Message also contained a notification: ${message.notification?.title}');
         _showLocalNotification(message);
       }
+
+      // A foreground push is also a signal that server-side state changed
+      // (a patient logged a meal, sent a message...). The socket usually
+      // beats the push, but if it's down this is the only nudge the Home
+      // dashboard gets - move the badge / refresh the action tiles.
+      if (Get.isRegistered<HomeController>()) {
+        Get.find<HomeController>().refreshHomeData();
+      }
     });
 
     // Tapped from background (app was open but backgrounded).
@@ -219,11 +229,12 @@ class NotificationService {
         Get.to(() => ChatScreen(conversationId: conversationId));
         break;
       case 'logged-data':
-        // A patient logged a meal - jump to that patient's profile, where
-        // the "Client Logged Data" screen is reachable.
+        // A patient logged a meal - open their "Client Logged Data" review
+        // sheet directly (was: their profile, one tap short of the data).
         final patientId = data['patientId'] as String?;
-        if (patientId != null && patientId.isNotEmpty) {
-          Get.toNamed('/patient-profile/$patientId');
+        final ctx = Get.context ?? Get.overlayContext;
+        if (patientId != null && patientId.isNotEmpty && ctx != null) {
+          ClintLogDataSheet.open(ctx, patientId);
         } else {
           Get.toNamed(Routes.NOTIFICATIONS);
         }

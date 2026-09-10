@@ -4,6 +4,7 @@ import 'package:docwellnesdoc/app/modules/chat/services/service.dart';
 import 'package:docwellnesdoc/app/modules/chat/views/chat_screen.dart';
 import 'package:docwellnesdoc/app/modules/home/controllers/home_controller.dart';
 import 'package:docwellnesdoc/app/modules/home/widgets/patient_request_container.dart';
+import 'package:docwellnesdoc/app/modules/patients/views/clint_log_data_sheet.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/app_toast.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
 import 'package:docwellnesdoc/app/utils/theme/app_shadows.dart';
@@ -13,25 +14,52 @@ import 'package:google_fonts/google_fonts.dart';
 
 class ActionDetailsView extends StatelessWidget {
   final String title;
-  final int count;
 
-  /// For Pending Payments — full patient request models with status badges
-  final List<PatientRequestModel> requestPatients;
+  const ActionDetailsView({super.key, required this.title});
 
-  /// For other categories — simple list of {patientId, patientName}
-  final List<Map<String, String>> simplePatients;
-
-  /// For Need Attention — history list of patients who were previously flagged
-  final List<Map<String, String>> historyPatients;
-
-  const ActionDetailsView({
-    super.key,
-    required this.title,
-    required this.count,
-    this.requestPatients = const [],
-    this.simplePatients = const [],
-    this.historyPatients = const [],
-  });
+  /// Live (count, simple patient list, request list) for [title], read from
+  /// HomeController inside an Obx so the detail screen tracks dashboard
+  /// refreshes instead of freezing on a snapshot taken at tap time.
+  static (int, List<Map<String, String>>, List<PatientRequestModel>) _liveData(
+    HomeController hc,
+    String title,
+  ) {
+    switch (title) {
+      case 'Messages Received':
+        return (
+          hc.messagesReceived.value,
+          hc.messagesReceivedPatients.toList(),
+          const <PatientRequestModel>[],
+        );
+      case 'Review Logged Data':
+        return (
+          hc.reviewLoggedData.value,
+          hc.reviewLoggedPatients.toList(),
+          const <PatientRequestModel>[],
+        );
+      case 'Clients Close to End':
+        return (
+          hc.closingClients.value,
+          hc.closingClientsPatients.toList(),
+          const <PatientRequestModel>[],
+        );
+      case 'Did Extremely Well':
+        return (
+          hc.didExtremelyWell.value,
+          hc.didExtremelyWellPatients.toList(),
+          const <PatientRequestModel>[],
+        );
+      case 'Pending Payments':
+        final r = hc.pendingPaymentRequests.toList();
+        return (r.length, const <Map<String, String>>[], r);
+      default:
+        return (
+          0,
+          const <Map<String, String>>[],
+          const <PatientRequestModel>[],
+        );
+    }
+  }
 
   IconData get _icon {
     switch (title) {
@@ -73,19 +101,23 @@ class ActionDetailsView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Need Attention uses tabbed layout (Present / History)
+    final hc = Get.find<HomeController>();
+
+    // Need Attention uses tabbed layout (Present / History) — already reads
+    // HomeController reactively inside.
     if (title == 'Need Attention') {
       return _NeedAttentionTabbedView(
         title: title,
-        count: count,
+        count: hc.needAttention.value,
         icon: _icon,
         description: _description,
-        presentPatients: simplePatients,
-        historyPatients: historyPatients,
+        presentPatients: hc.needAttentionPatients,
+        historyPatients: hc.needAttentionHistory,
       );
     }
 
     final bool isMessagesReceived = title == 'Messages Received';
+    final bool isReviewLogged = title == 'Review Logged Data';
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -103,189 +135,187 @@ class ActionDetailsView extends StatelessWidget {
           ),
         ),
       ),
-      body: Builder(
-        builder: (_) {
-          Widget buildBody(
-            int effectiveCount,
-            List<Map<String, String>> effectiveSimplePatients,
-          ) {
-            return SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // --- Stat header card ---
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 24,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xffFEF6FB),
-                      borderRadius: BorderRadius.circular(12),
-                      border: cardBorder,
-                      boxShadow: cardShadow,
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          height: 56,
-                          width: 56,
-                          decoration: BoxDecoration(
-                            color: const Color(0xffFDF2FA),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: const Color(0xffFCE7F6)),
-                          ),
-                          child: Icon(
-                            _icon,
-                            size: 28,
-                            color: const Color(0xff851653),
-                          ),
+      body: RefreshIndicator(
+        color: const Color(0xff851653),
+        onRefresh: hc.refreshHomeData,
+        child: Obx(() {
+          final (count, simplePatients, requestPatients) =
+              _liveData(hc, title);
+          final loading = hc.showHomeLoading.value;
+
+          return SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // --- Stat header card ---
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 24,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xffFEF6FB),
+                    borderRadius: BorderRadius.circular(12),
+                    border: cardBorder,
+                    boxShadow: cardShadow,
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        height: 56,
+                        width: 56,
+                        decoration: BoxDecoration(
+                          color: const Color(0xffFDF2FA),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xffFCE7F6)),
                         ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                        child: Icon(
+                          _icon,
+                          size: 28,
+                          color: const Color(0xff851653),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            CustomText(
+                              text: '$count',
+                              fontWeight: FontWeight.w600,
+                              fontSize: 28,
+                              color: const Color(0xff530630),
+                            ),
+                            const SizedBox(height: 2),
+                            CustomText(
+                              text: _description,
+                              fontWeight: FontWeight.w400,
+                              fontSize: 13,
+                              color: const Color(0xff851653),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // --- Patient list (Pending Payments — full request cards) ---
+                if (requestPatients.isNotEmpty) ...[
+                  const SizedBox(height: 24),
+                  CustomText(
+                    text: 'Patients',
+                    fontWeight: FontWeight.w500,
+                    fontSize: 16,
+                    color: const Color(0xff530630),
+                  ),
+                  const SizedBox(height: 12),
+                  ListView.builder(
+                    itemCount: requestPatients.length,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemBuilder: (context, index) {
+                      final p = requestPatients[index];
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: PatientRequestContainer(
+                          title: p.patientName ?? 'Patient',
+                          goal: p.primaryGoal ?? '',
+                          status: p.status ?? 'Unpaid',
+                          avatarUrl: p.avatarUrl,
+                          membershipPlan: p.membershipPlan,
+                          onTap: () {
+                            Get.toNamed(
+                              '/patient-profile/${p.patientId ?? ''}',
+                            );
+                          },
+                        ),
+                      );
+                    },
+                  ),
+                ],
+
+                // --- Patient list (other categories — simple name cards) ---
+                if (simplePatients.isNotEmpty) ...[
+                  const SizedBox(height: 24),
+                  CustomText(
+                    text: 'Patients',
+                    fontWeight: FontWeight.w500,
+                    fontSize: 16,
+                    color: const Color(0xff530630),
+                  ),
+                  const SizedBox(height: 12),
+                  ListView.builder(
+                    itemCount: simplePatients.length,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemBuilder: (context, index) {
+                      final p = simplePatients[index];
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: _PatientTile(
+                          name: p['patientName'] ?? 'Patient',
+                          onTap: () {
+                            final id = p['patientId'] ?? '';
+                            if (id.isEmpty) return;
+                            if (isMessagesReceived) {
+                              _openChatWithPatient(id);
+                            } else if (isReviewLogged) {
+                              // "Review Logged Data" → open the patient's
+                              // Client Logged Data sheet, not their profile.
+                              ClintLogDataSheet.open(context, id);
+                            } else {
+                              Get.toNamed('/patient-profile/$id');
+                            }
+                          },
+                        ),
+                      );
+                    },
+                  ),
+                ],
+
+                // --- Loading / empty state ---
+                if (count == 0 &&
+                    requestPatients.isEmpty &&
+                    simplePatients.isEmpty) ...[
+                  const SizedBox(height: 48),
+                  Center(
+                    child: loading
+                        ? const CircularProgressIndicator(
+                            color: Color(0xff851653),
+                          )
+                        : Column(
                             children: [
+                              Icon(
+                                _icon,
+                                size: 64,
+                                color: const Color(0xffFCE7F6),
+                              ),
+                              const SizedBox(height: 16),
                               CustomText(
-                                text: '$effectiveCount',
-                                fontWeight: FontWeight.w600,
-                                fontSize: 28,
+                                text: 'Nothing here right now',
+                                fontWeight: FontWeight.w500,
+                                fontSize: 16,
                                 color: const Color(0xff530630),
                               ),
-                              const SizedBox(height: 2),
-                              CustomText(
-                                text: _description,
+                              const SizedBox(height: 4),
+                              const CustomText(
+                                text: 'You\'re all caught up!',
                                 fontWeight: FontWeight.w400,
-                                fontSize: 13,
-                                color: const Color(0xff851653),
+                                fontSize: 14,
+                                color: Color(0xff851653),
                               ),
                             ],
                           ),
-                        ),
-                      ],
-                    ),
                   ),
-
-                  // --- Patient list (for Pending Payments — full request cards) ---
-                  if (requestPatients.isNotEmpty) ...[
-                    const SizedBox(height: 24),
-                    CustomText(
-                      text: 'Patients',
-                      fontWeight: FontWeight.w500,
-                      fontSize: 16,
-                      color: const Color(0xff530630),
-                    ),
-                    const SizedBox(height: 12),
-                    ListView.builder(
-                      itemCount: requestPatients.length,
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemBuilder: (context, index) {
-                        final p = requestPatients[index];
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: PatientRequestContainer(
-                            title: p.patientName ?? 'Patient',
-                            goal: p.primaryGoal ?? '',
-                            status: p.status ?? 'Unpaid',
-                            avatarUrl: p.avatarUrl,
-                            membershipPlan: p.membershipPlan,
-                            onTap: () {
-                              Get.toNamed(
-                                '/patient-profile/${p.patientId ?? ''}',
-                              );
-                            },
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-
-                  // --- Patient list (for other categories — simple name cards) ---
-                  if (effectiveSimplePatients.isNotEmpty) ...[
-                    const SizedBox(height: 24),
-                    CustomText(
-                      text: 'Patients',
-                      fontWeight: FontWeight.w500,
-                      fontSize: 16,
-                      color: const Color(0xff530630),
-                    ),
-                    const SizedBox(height: 12),
-                    ListView.builder(
-                      itemCount: effectiveSimplePatients.length,
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemBuilder: (context, index) {
-                        final p = effectiveSimplePatients[index];
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: _PatientTile(
-                            name: p['patientName'] ?? 'Patient',
-                            onTap: () {
-                              final id = p['patientId'] ?? '';
-                              if (id.isNotEmpty) {
-                                if (isMessagesReceived) {
-                                  _openChatWithPatient(id);
-                                } else {
-                                  Get.toNamed('/patient-profile/$id');
-                                }
-                              }
-                            },
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-
-                  // --- Empty state when count is zero ---
-                  if (effectiveCount == 0 &&
-                      requestPatients.isEmpty &&
-                      effectiveSimplePatients.isEmpty) ...[
-                    const SizedBox(height: 48),
-                    Center(
-                      child: Column(
-                        children: [
-                          Icon(_icon, size: 64, color: const Color(0xffFCE7F6)),
-                          const SizedBox(height: 16),
-                          CustomText(
-                            text: 'Nothing here right now',
-                            fontWeight: FontWeight.w500,
-                            fontSize: 16,
-                            color: const Color(0xff530630),
-                          ),
-                          const SizedBox(height: 4),
-                          const CustomText(
-                            text: 'You\'re all caught up!',
-                            fontWeight: FontWeight.w400,
-                            fontSize: 14,
-                            color: Color(0xff851653),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
                 ],
-              ),
-            );
-          }
-
-          // For Messages Received, use reactive data from HomeController
-          if (isMessagesReceived) {
-            final homeController = Get.find<HomeController>();
-            return Obx(
-              () => buildBody(
-                homeController.messagesReceived.value,
-                homeController.messagesReceivedPatients.toList(),
-              ),
-            );
-          }
-
-          // For other categories, use static data passed via constructor
-          return buildBody(count, simplePatients);
-        },
+              ],
+            ),
+          );
+        }),
       ),
     );
   }

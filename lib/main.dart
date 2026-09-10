@@ -92,6 +92,13 @@ Future<void> _bootstrap() async {
       final session = data.session;
       if (session != null) {
         token = session.accessToken;
+        // The realtime socket bakes the token in at build time - tell it to
+        // rebuild with the fresh one, otherwise its next reconnect (server
+        // restart / idle drop) handshakes with an expired token and
+        // realtime silently dies.
+        if (Get.isRegistered<SocketService>()) {
+          Get.find<SocketService>().refreshAuth();
+        }
       }
     });
   }
@@ -111,8 +118,10 @@ Future<void> _bootstrap() async {
     }
   }
 
-  // Initialize Socket Service
-  await Get.putAsync(() => SocketService().init());
+  // Initialize Socket Service (permanent - it's an app-lifetime service and
+  // HomeController/NotificationController hold subscriptions to its streams;
+  // nothing re-runs main() to re-create it if GetX ever disposed it).
+  await Get.putAsync(() => SocketService().init(), permanent: true);
 
   await _initPostHog();
 }

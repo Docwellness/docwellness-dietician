@@ -39,6 +39,15 @@ class SocketService extends GetxService with WidgetsBindingObserver {
   final _reconnectCallbacks = <VoidCallback>{};
   bool _hasConnectedBefore = false;
 
+  // The auth token baked into the socket options is a snapshot taken when
+  // the socket was built. Supabase rotates the access token roughly hourly
+  // (see main.dart's onAuthStateChange) - once the original expires, the
+  // next socket handshake (a server restart / idle drop / network blip
+  // triggers one) is rejected and realtime silently dies until the app is
+  // killed. refreshAuth() rebuilds the socket with whatever token is
+  // current; main.dart calls it on every Supabase token change.
+  String? _tokenInUse;
+
   void registerOnReconnect(VoidCallback onReconnect) {
     _reconnectCallbacks.add(onReconnect);
   }
@@ -87,7 +96,11 @@ class SocketService extends GetxService with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed) {
       if (_socket == null || !_socket!.connected) {
         log('🔄 App resumed — reconnecting socket');
-        connect();
+        connect(); // rebuilds with the current token
+      } else {
+        // Still connected, but the token may have rotated while
+        // backgrounded - rebuild only if it actually changed.
+        refreshAuth();
       }
     }
   }
@@ -104,23 +117,51 @@ class SocketService extends GetxService with WidgetsBindingObserver {
       return;
     }
 
+    // Always rebuild from scratch so the current auth token is used and no
+    // previous socket (with its listeners) is left dangling.
+    _teardownSocket();
+
+    _tokenInUse = token ?? '';
     log('🔌 Connecting to socket: $baseUrl');
 
     _socket = IO.io(
       baseUrl,
       IO.OptionBuilder()
-          .setTransports(['websocket'])
+          // websocket first, but allow the polling fallback: some proxies /
+          // edges in front of the API don't cleanly pass the WS upgrade, and
+          // a websocket-only client just never connects (no fallback).
+          .setTransports(['websocket', 'polling'])
           .enableAutoConnect()
           .enableReconnection()
           .setReconnectionAttempts(double.maxFinite.toInt())
           .setReconnectionDelay(1000)
           .setReconnectionDelayMax(10000)
-          .setAuth({'token': token ?? ''})
+          .setAuth({'token': _tokenInUse ?? ''})
           .build(),
     );
 
     _setupEventListeners();
     _socket!.connect();
+  }
+
+  /// Rebuild the connection with the current auth token if it has changed
+  /// since the live socket was built. Called from main.dart whenever the
+  /// Supabase session token rotates.
+  void refreshAuth() {
+    final current = token ?? '';
+    if (_socket != null && current == _tokenInUse) return;
+    log('🔑 Socket auth token changed — reconnecting');
+    connect();
+  }
+
+  void _teardownSocket() {
+    final old = _socket;
+    if (old == null) return;
+    _socket = null;
+    try {
+      old.clearListeners();
+      old.dispose();
+    } catch (_) {}
   }
 
   /// Setup all socket event listeners
@@ -160,6 +201,13 @@ class SocketService extends GetxService with WidgetsBindingObserver {
     _socket!.onConnectError((error) {
       log('❌ Socket connection error: $error');
       isConnected.value = false;
+      // A stale auth token is a common cause of a repeated connect error
+      // (the server rejects the handshake). If the app has since obtained a
+      // newer token, rebuild with it - guarded on an actual change so this
+      // can't spin.
+      if ((token ?? '') != _tokenInUse) {
+        refreshAuth();
+      }
     });
 
     _socket!.onError((error) {

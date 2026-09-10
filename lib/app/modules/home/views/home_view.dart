@@ -1,6 +1,5 @@
 import 'dart:math';
 
-import 'package:docwellnesdoc/app/models/patient_request_model.dart';
 import 'package:docwellnesdoc/app/modules/home/views/action_details_view.dart';
 import 'package:docwellnesdoc/app/modules/home/views/all_patient_requests_view.dart';
 import 'package:docwellnesdoc/app/modules/home/views/doctor_profile_view.dart';
@@ -617,50 +616,10 @@ class HomeView extends GetView<HomeController> {
   }
 
   void _showActionDetails(String actionTitle) {
-    int count;
-    List<PatientRequestModel> requestPatients = [];
-    List<Map<String, String>> simplePatients = [];
-
-    switch (actionTitle) {
-      case 'Messages Received':
-        count = controller.messagesReceived.value;
-        simplePatients = controller.messagesReceivedPatients;
-        break;
-      case 'Review Logged Data':
-        count = controller.reviewLoggedData.value;
-        simplePatients = controller.reviewLoggedPatients;
-        break;
-      case 'Clients Close to End':
-        count = controller.closingClients.value;
-        simplePatients = controller.closingClientsPatients;
-        break;
-      case 'Did Extremely Well':
-        count = controller.didExtremelyWell.value;
-        simplePatients = controller.didExtremelyWellPatients;
-        break;
-      case 'Need Attention':
-        count = controller.needAttention.value;
-        simplePatients = controller.needAttentionPatients;
-        break;
-      case 'Pending Payments':
-        requestPatients = controller.pendingPaymentRequests;
-        count = requestPatients.length;
-        break;
-      default:
-        count = 0;
-    }
-
-    Get.to(
-      () => ActionDetailsView(
-        title: actionTitle,
-        count: count,
-        requestPatients: requestPatients,
-        simplePatients: simplePatients,
-        historyPatients: actionTitle == 'Need Attention'
-            ? controller.needAttentionHistory
-            : const [],
-      ),
-    );
+    // ActionDetailsView now reads its count + patient lists live from
+    // HomeController (inside an Obx), so it stays in sync with dashboard
+    // refreshes instead of freezing on a snapshot captured here at tap time.
+    Get.to(() => ActionDetailsView(title: actionTitle));
   }
 }
 

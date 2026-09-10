@@ -15,7 +15,7 @@ import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
 import 'package:posthog_flutter/posthog_flutter.dart';
 
-class HomeController extends GetxController {
+class HomeController extends GetxController with WidgetsBindingObserver {
   final HomeService service = HomeService();
   final RecipeService _recipeService = RecipeService();
   final NotificationService _notifService = NotificationService();
@@ -94,6 +94,14 @@ class HomeController extends GetxController {
   StreamSubscription? _messageSub;
   Timer? _dashboardDebounce;
 
+  // Foreground backstop for realtime: the socket is the fast path, but it
+  // can silently drop (WS upgrade blocked at the edge, expired auth token on
+  // a reconnect). While the app is foreground on the Home tab, re-poll the
+  // notification badge + dashboard stats on a slow interval so a patient's
+  // logged meal always surfaces within ~a minute even with no live socket.
+  Timer? _foregroundPoll;
+  static const _pollInterval = Duration(seconds: 75);
+
   Worker? _requestBucketsWorker;
 
   @override
@@ -102,9 +110,11 @@ class HomeController extends GetxController {
     _requestBucketsWorker =
         ever(allRequestedPatientList, _recomputeRequestBuckets);
     _recomputeRequestBuckets(allRequestedPatientList); // seed (ever fires on change only)
+    WidgetsBinding.instance.addObserver(this);
     loadHomeData();
     _listenForNotifications();
     _listenForMessages();
+    _startForegroundPoll(); // Home is the initial tab
     Get.find<ConnectivityService>().registerOnReconnected(refreshHomeData);
     // AI_EXECUTION_PLAN.md Phase 7, P7-03 - syncUnreadCounts() on socket
     // reconnect (distinct from ConnectivityService's network-level signal
@@ -118,21 +128,50 @@ class HomeController extends GetxController {
 
   @override
   void onClose() {
+    WidgetsBinding.instance.removeObserver(this);
     Get.find<ConnectivityService>().unregister(refreshHomeData);
     Get.find<SocketService>().unregisterOnReconnect(refreshHomeData);
     _notifSub?.cancel();
     _messageSub?.cancel();
     _dashboardDebounce?.cancel();
+    _foregroundPoll?.cancel();
     _requestBucketsWorker?.dispose();
     super.onClose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // Coming back from background - the socket may have missed events.
+      refreshHomeData();
+      if (selectedIndex.value == 0) _startForegroundPoll();
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
+      _stopForegroundPoll();
+    }
+  }
+
+  void _startForegroundPoll() {
+    _foregroundPoll?.cancel();
+    _foregroundPoll = Timer.periodic(_pollInterval, (_) {
+      fetchNotificationCount();
+      fetchDashboardStats();
+    });
+  }
+
+  void _stopForegroundPoll() {
+    _foregroundPoll?.cancel();
+    _foregroundPoll = null;
   }
 
   void _listenForNotifications() {
     final socket = Get.find<SocketService>();
     _notifSub = socket.onNotification.listen((data) {
       notificationUnreadCount.value++;
-      // Also refresh dashboard stats when a chat notification arrives
-      if (data['type'] == 'chat') {
+      // Also refresh dashboard stats when a chat OR meal-log ('progress')
+      // notification arrives - both move the action tiles.
+      final type = data['type'];
+      if (type == 'chat' || type == 'progress') {
         _dashboardDebounce?.cancel();
         _dashboardDebounce = Timer(const Duration(seconds: 1), () {
           fetchDashboardStats();
@@ -205,9 +244,17 @@ class HomeController extends GetxController {
   }
 
   void onTabSelected(int index) {
-    // Refresh coupon count when returning to Home tab
+    // Returning to Home: refresh everything the dashboard shows (the tab is
+    // kept alive in an IndexedStack, so nothing re-fetches on its own), and
+    // resume the foreground poll. Leaving Home: stop the poll.
     if (index == 0) {
       fetchCouponCount();
+      fetchNotificationCount();
+      fetchDashboardStats();
+      getAllPatientRequest();
+      _startForegroundPoll();
+    } else {
+      _stopForegroundPoll();
     }
     switch (index) {
       case 1:

@@ -2626,30 +2626,8 @@ class _PatientProfileViewState extends State<PatientProfileView> {
             Padding(
               padding: const EdgeInsets.only(top: 16, left: 16, right: 16),
               child: CustomButton(
-                onTap: () {
-                  showModalBottomSheet(
-                    context: context,
-                    backgroundColor: Colors.white,
-                    useSafeArea: true,
-                    isScrollControlled: true,
-                    shape: const RoundedRectangleBorder(
-                      borderRadius: BorderRadius.vertical(
-                        top: Radius.circular(20),
-                      ),
-                    ),
-                    builder: (context) {
-                      return DraggableScrollableSheet(
-                        initialChildSize: 1,
-                        maxChildSize: 1,
-                        minChildSize: 0.5,
-                        expand: false,
-                        builder: (context, scrollController) {
-                          return ClintLogDataSheet(patientId: widget.patientId);
-                        },
-                      );
-                    },
-                  );
-                },
+                onTap: () =>
+                    ClintLogDataSheet.open(context, widget.patientId),
                 text: 'Show Logged Data',
                 fontSize: 14,
                 isOutline: false,

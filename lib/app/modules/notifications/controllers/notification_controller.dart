@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:docwellnesdoc/app/modules/chat/controllers/chat_controller.dart';
 import 'package:docwellnesdoc/app/modules/chat/views/chat_screen.dart';
 import 'package:docwellnesdoc/app/modules/notifications/services/notification_service.dart';
+import 'package:docwellnesdoc/app/modules/patients/views/clint_log_data_sheet.dart';
 import 'package:docwellnesdoc/app/services/socket_service.dart';
 import 'package:get/get.dart';
 
@@ -174,9 +175,19 @@ class NotificationController extends GetxController {
   /// Navigate based on notification type
   void onTapNotification(NotificationItem item) {
     markAsRead(item.id);
-    // 'progress' = a patient logged a meal; referenceId is their chat
-    // conversation (referenceModel 'Chat' on the backend), so it opens the
-    // same place as a chat notification.
+    // 'progress' = a patient logged a meal - open their "Client Logged Data"
+    // review sheet (data.patientId), which is the whole point of the alert.
+    // Fall back to the chat thread if the notification predates the
+    // patientId payload.
+    if (item.type == 'progress' &&
+        item.patientId != null &&
+        item.patientId!.isNotEmpty) {
+      final ctx = Get.context ?? Get.overlayContext;
+      if (ctx != null) {
+        ClintLogDataSheet.open(ctx, item.patientId!);
+        return;
+      }
+    }
     if ((item.type == 'chat' || item.type == 'progress') &&
         item.referenceId != null &&
         item.referenceId!.isNotEmpty) {
