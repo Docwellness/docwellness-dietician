@@ -32,28 +32,23 @@ class HomeController extends GetxController with WidgetsBindingObserver {
 
   // Dashboard request buckets, memoized. These getters were previously
   // recomputed (a full .where().toList()) on every read - and home_view's
-  // ListView.builder reads filteredPatientRequests ~9x per rebuild. Now
-  // they're derived once, whenever allRequestedPatientList changes, by an
-  // ever() worker (see onInit -> _recomputeRequestBuckets).
-  final RxList<PatientRequestModel> _restingRequests =
+  // ListView.builder reads the new-client list ~9x per rebuild. Now they're
+  // derived once, whenever allRequestedPatientList changes, by an ever()
+  // worker (see onInit -> _recomputeRequestBuckets).
+  final RxList<PatientRequestModel> _newClientRequests =
       <PatientRequestModel>[].obs;
   final RxList<PatientRequestModel> _pendingPaymentRequests =
       <PatientRequestModel>[].obs;
 
-  // Filtered list: resting states only (not mid-workflow) for dashboard display
-  List<PatientRequestModel> get filteredPatientRequests => _restingRequests;
+  /// Home "New client requests": clients who asked for a diet and have none
+  /// assigned yet (newest first - allRequestedPatientList is already sorted
+  /// by createdAt desc). Matches what the Patients tab's "New" list shows.
+  List<PatientRequestModel> get newClientRequests => _newClientRequests;
 
   List<PatientRequestModel> get pendingPaymentRequests => _pendingPaymentRequests;
 
   void _recomputeRequestBuckets(List<PatientRequestModel> all) {
-    _restingRequests.assignAll(
-      all.where(
-        (e) =>
-            e.status == 'Unpaid' ||
-            e.status == 'Paid' ||
-            e.status == 'PartiallyPaid',
-      ),
-    );
+    _newClientRequests.assignAll(all.where((e) => e.needsDietPlan));
     _pendingPaymentRequests.assignAll(
       all.where(
         (e) =>

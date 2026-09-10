@@ -1,8 +1,8 @@
 import 'dart:math';
 
 import 'package:docwellnesdoc/app/modules/home/views/action_details_view.dart';
-import 'package:docwellnesdoc/app/modules/home/views/all_patient_requests_view.dart';
 import 'package:docwellnesdoc/app/modules/home/views/doctor_profile_view.dart';
+import 'package:docwellnesdoc/app/modules/patients/controllers/patients_controller.dart';
 import 'package:docwellnesdoc/app/modules/home/widgets/patient_request_container.dart';
 import 'package:docwellnesdoc/app/modules/receipes/views/add_receipes.dart';
 import 'package:docwellnesdoc/app/modules/receipes/views/view_added_receipes.dart';
@@ -217,15 +217,13 @@ class HomeView extends GetView<HomeController> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 CustomText(
-                  text: 'New patient requests',
+                  text: 'New client requests',
                   fontWeight: FontWeight.w400,
                   fontSize: 17,
                   color: Color(0xff530630),
                 ),
                 GestureDetector(
-                  onTap: () {
-                    Get.to(() => const AllPatientRequestsView());
-                  },
+                  onTap: _openNewClientsTab,
                   child: Container(
                     height: 32,
                     width: 70,
@@ -248,18 +246,25 @@ class HomeView extends GetView<HomeController> {
             ),
             SizedBox(height: 26),
 
-            Obx(
-              () => ListView.builder(
-                itemCount: min(4, controller.filteredPatientRequests.length),
+            Obx(() {
+              final requests = controller.newClientRequests;
+              if (requests.isEmpty) {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: CustomText(
+                    text: 'No new client requests',
+                    fontWeight: FontWeight.w400,
+                    fontSize: 14,
+                    color: Color(0xff6C737F),
+                  ),
+                );
+              }
+              return ListView.builder(
+                itemCount: min(4, requests.length),
                 shrinkWrap: true,
-                physics: NeverScrollableScrollPhysics(),
+                physics: const NeverScrollableScrollPhysics(),
                 itemBuilder: (context, index) {
-                  if (controller.filteredPatientRequests.isEmpty) {
-                    return Text("No Request Found");
-                  }
-
-                  final data = controller.filteredPatientRequests[index];
-
+                  final data = requests[index];
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 8),
                     child: PatientRequestContainer(
@@ -274,8 +279,8 @@ class HomeView extends GetView<HomeController> {
                     ),
                   );
                 },
-              ),
-            ),
+              );
+            }),
 
             // SizedBox(height: 8),
             // PatientRequestContainer(
@@ -524,7 +529,7 @@ class HomeView extends GetView<HomeController> {
                       width: 235,
                       child: CustomText(
                         text:
-                            '80% of patients achieved their first-week goal. You got this!',
+                            '80% of clients achieved their first-week goal. You got this!',
                         fontWeight: FontWeight.w400,
                         fontSize: 14,
                         color: Color(0xff851653),
@@ -543,7 +548,7 @@ class HomeView extends GetView<HomeController> {
                     fontSize: 13,
 
                     onTap: () {},
-                    text: 'Add new patient',
+                    text: 'Add new client',
                     isOutline: true,
                   ),
                 ),
@@ -620,6 +625,20 @@ class HomeView extends GetView<HomeController> {
     // HomeController (inside an Obx), so it stays in sync with dashboard
     // refreshes instead of freezing on a snapshot captured here at tap time.
     Get.to(() => ActionDetailsView(title: actionTitle));
+  }
+
+  /// "See all" on the New client requests section - jump to the Patients tab
+  /// with its "New" segment selected (index 1), rather than a separate
+  /// requests screen.
+  void _openNewClientsTab() {
+    controller.onTabSelected(1); // registers PatientsController if needed
+    if (!Get.isRegistered<PatientsController>()) {
+      Get.put(PatientsController());
+    }
+    final pc = Get.find<PatientsController>();
+    pc.selectedTab.value = 1; // "New"
+    pc.fetchNewPatients();
+    controller.changeTab(1);
   }
 }
 

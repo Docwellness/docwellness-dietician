@@ -132,7 +132,7 @@ class _NewWidgetState extends State<NewWidget> {
             if (patients.isEmpty) {
               return const Center(
                 child: Text(
-                  'No new patients found',
+                  'No new clients found',
                   style: TextStyle(color: Color(0xff6C737F), fontSize: 16),
                 ),
               );

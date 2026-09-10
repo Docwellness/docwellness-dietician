@@ -32,6 +32,11 @@ class PatientsController extends GetxController {
 
   final PatientService service = PatientService();
 
+  // Which segmented tab the Patients screen shows (0 Ongoing / 1 New /
+  // 2 Past). Held here (not in PatientsView's State) so other screens - the
+  // Home "New client requests" > "See all" - can deep-link straight to a tab.
+  final RxInt selectedTab = 0.obs;
+
   // Patient lists for each tab
   RxList<OngoingPatientModel> ongoingPatients = <OngoingPatientModel>[].obs;
   RxList<NewPatientModel> newPatients = <NewPatientModel>[].obs;
