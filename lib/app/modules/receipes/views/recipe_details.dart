@@ -137,26 +137,37 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
     return s;
   }
 
-  // PORTIONS SUMMARY components get their own translation now
-  // (translations[lang].components[index], generated alongside everything
-  // else - see utils/openaiClient.js's generateTranslations on the
-  // backend), positionally aligned with recipe.components. Older recipes
-  // generated before that existed have no such array (or a shorter one),
-  // so this falls back to the previous heuristic: a component whose label
-  // matches an ingredient's English name, case/whitespace insensitive, is
-  // that ingredient (same convention RecipePreview._syncedIngredients uses
-  // to keep quantities synced) and can borrow its translated name. A
-  // composite label with no direct component translation and no matching
-  // ingredient (e.g. an old "Warm Water with Dates, Figs, Almonds,
-  // Walnuts" summary component) stays in English - there's nothing to
-  // borrow from.
+  // unify-recipe-ingredients-and-components: a DERIVABLE recipe's
+  // `components` is entirely server-derived from `ingredients.where((i) =>
+  // i.isCore)` (see RecipePreview.componentsAuthoredManually) - so its
+  // translated label always comes straight from that same ingredient's own
+  // translation, by name match. Deliberately does NOT consult
+  // `translations[lang].components` for a derivable recipe even when
+  // present: that array is generated once and not guaranteed to stay
+  // positionally aligned after a later ingredient edit re-derives
+  // `components` - reading it here would reintroduce the exact kind of
+  // stale-translation drift this change exists to remove (this was
+  // previously the actual case for "Warm Water with Dates, Figs, Almonds,
+  // Walnuts", the recipe whose mismatched pill row/ingredient tiles/AI
+  // inputs prompted this change).
+  //
+  // A COMPOSITE recipe (`componentsAuthoredManually: true`, e.g. "Pithla
+  // Bhakri") has no ingredient to borrow a translation from at all -
+  // "Pithla"/"Bhakri" aren't raw ingredients - so `translations[lang].
+  // components[index].label` (independently authored, same as `components`
+  // itself) is the only source and stays the primary lookup for it.
   String _componentLabel(int index, String label) {
     if (_selectedLanguage == 'English' || recipe == null) return label;
     final t = recipe!.translations[_selectedLanguage];
     if (t == null) return label;
-    if (index < t.components.length && t.components[index].label.isNotEmpty) {
-      return t.components[index].label;
+
+    if (recipe!.componentsAuthoredManually) {
+      if (index < t.components.length && t.components[index].label.isNotEmpty) {
+        return t.components[index].label;
+      }
+      return label;
     }
+
     final needle = label.trim().toLowerCase();
     for (var i = 0; i < recipe!.ingredients.length; i++) {
       if (recipe!.ingredients[i].name.trim().toLowerCase() == needle) {
@@ -254,6 +265,33 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
     } else {
       _mainImageUrl = recipe?.image;
     }
+    widget.scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    widget.scrollController.removeListener(_onScroll);
+    _showTitleBar.dispose();
+    super.dispose();
+  }
+
+  // Shows the pinned title bar once scrolled past the header image, so
+  // there's still a way to tell which recipe this is once the big header
+  // scrolls out of view - not shown at rest, since the header's own title
+  // is right there already and a second copy would just be redundant. Kept
+  // as the FIRST sliver in the list (not mid-list, between the portions
+  // card and tab bar) specifically so that when it's inserted, it's
+  // instantly pinned at the top rather than rendering in normal flow first
+  // and only snapping to the top on a later frame - a pinned sliver at
+  // position 0 has nothing above it to render "in flow" below, so it just
+  // appears stuck immediately.
+  static const double _titleBarShowDistance =
+      220; // drag handle(24) + image(196)
+  final ValueNotifier<bool> _showTitleBar = ValueNotifier(false);
+
+  void _onScroll() {
+    final show = widget.scrollController.offset > _titleBarShowDistance;
+    if (show != _showTitleBar.value) _showTitleBar.value = show;
   }
 
   // PORTIONS SUMMARY (component chips) + LANGUAGE SELECTOR, as their own
@@ -296,9 +334,16 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: CustomText(
-                      text: recipe!.components.length > 1
-                          ? '${_componentLabel(i, recipe!.components[i].label)}: ${_formatComponentQuantity(recipe!.components[i].quantity)} ${recipe!.components[i].unit}'
-                          : '${_formatComponentQuantity(recipe!.components[i].quantity)} ${recipe!.components[i].unit}',
+                      // Always show the label, even for a single component -
+                      // omitting it here (as this used to, for the
+                      // length==1 case) is exactly the kind of
+                      // view-dependent inconsistency openspec/changes/
+                      // unify-recipe-ingredients-and-components exists to
+                      // remove: the Update AI Inputs sheet always shows
+                      // "Giloy Tablet · 1 piece" for the same data, so this
+                      // pill showing bare "1 piece" read as a mismatch even
+                      // though the underlying data now fully agrees.
+                      text: '${_componentLabel(i, recipe!.components[i].label)}: ${_formatComponentQuantity(recipe!.components[i].quantity)} ${recipe!.components[i].unit}',
                       fontWeight: FontWeight.w500,
                       fontSize: 12,
                       color: const Color(0xff851653),
@@ -622,562 +667,565 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return CustomScrollView(
-      controller: widget.scrollController,
-      slivers: [
-        // Title bar - always pinned at the very top from the start, like an
-        // ordinary app bar, instead of only being inserted once scrolled
-        // past some threshold. The header's own big title (below) scrolls
-        // normally underneath it; the tab bar's own pinned sliver further
-        // down naturally sticks right below THIS one once scrolled that
-        // far, via Flutter's own multi-pinned-header stacking - no
-        // insertion, no "appears mid-page" glitch, nothing to compute.
-        SliverPersistentHeader(
-          pinned: true,
-          delegate: _TitleBarDelegate(
-            height: kToolbarHeight,
-            child: Container(
-              alignment: AlignmentDirectional.centerStart,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                boxShadow: [
-                  BoxShadow(
-                    color: Color(0x14000000),
-                    blurRadius: 10,
-                    offset: Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: CustomText(
-                text: recipeName,
-                fontWeight: FontWeight.w500,
-                fontSize: 16,
-                color: Color(0xff384250),
-              ),
-            ),
-          ),
-        ),
-
-        // Plain, naturally-sized header - drag handle, image, title. Not a
-        // collapsing SliverAppBar: that meant force-fitting this content
-        // into a manually-computed fixed height (see git history), which
-        // kept overflowing in new ways (a long translated/AI-generated
-        // title wrapping further than expected, a category badge changing
-        // the available text width, ...) no matter how precisely the guess
-        // was measured. A plain SliverToBoxAdapter has no height to get
-        // wrong - it just sizes itself to whatever this Column actually
-        // renders, the same way the portions/language card below it does.
-        // Only the tab bar + its content stay a pinned "elevated sheet";
-        // this part now scrolls away normally with the rest of the page.
-        SliverToBoxAdapter(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
+    return ValueListenableBuilder<bool>(
+      valueListenable: _showTitleBar,
+      builder: (context, showTitleBar, _) => CustomScrollView(
+        controller: widget.scrollController,
+        slivers: [
+          // Title bar - only shown once scrolled past the header (see
+          // _onScroll/_showTitleBar above), and kept as sliver #0 so it's
+          // never rendered "in flow" before snapping to the top - since
+          // nothing else exists above position 0, a pinned header there is
+          // stuck from the instant it's inserted, matching however far
+          // already scrolled, with no separate transition to render first.
+          if (showTitleBar)
+            SliverPersistentHeader(
+              pinned: true,
+              delegate: _TitleBarDelegate(
+                height: kToolbarHeight,
                 child: Container(
-                  width: 32,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 10, top: 10),
-                  decoration: BoxDecoration(
-                    color: Color(0xff79747E),
-                    borderRadius: BorderRadius.circular(100),
+                  alignment: AlignmentDirectional.centerStart,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Color(0x14000000),
+                        blurRadius: 10,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: CustomText(
+                    text: recipeName,
+                    fontWeight: FontWeight.w500,
+                    fontSize: 16,
+                    color: Color(0xff384250),
                   ),
                 ),
               ),
-              Stack(
-                children: [
-                  Container(
-                    height: 196,
-                    width: double.infinity,
+            ),
+
+          // Plain, naturally-sized header - drag handle, image, title. Not a
+          // collapsing SliverAppBar: that meant force-fitting this content
+          // into a manually-computed fixed height (see git history), which
+          // kept overflowing in new ways (a long translated/AI-generated
+          // title wrapping further than expected, a category badge changing
+          // the available text width, ...) no matter how precisely the guess
+          // was measured. A plain SliverToBoxAdapter has no height to get
+          // wrong - it just sizes itself to whatever this Column actually
+          // renders, the same way the portions/language card below it does.
+          // Only the tab bar + its content stay a pinned "elevated sheet";
+          // this part now scrolls away normally with the rest of the page.
+          SliverToBoxAdapter(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 32,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 10, top: 10),
                     decoration: BoxDecoration(
-                      color: const Color(0xffF9FAFB),
-                      border: Border.all(color: const Color(0xffE5E7EB)),
+                      color: Color(0xff79747E),
+                      borderRadius: BorderRadius.circular(100),
                     ),
-                    child:
-                        (_mainImageUrl != null &&
-                            _mainImageUrl!.trim().isNotEmpty)
-                        ? Image.network(_mainImageUrl!, fit: BoxFit.cover)
-                        : Center(
-                            child: _isUploadingMainImage
-                                ? const SizedBox(
-                                    height: 34,
-                                    width: 34,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2.6,
-                                    ),
-                                  )
-                                : const Icon(
-                                    Icons.add,
-                                    size: 72,
-                                    color: Color(0xff98A2B3),
-                                  ),
-                          ),
                   ),
-                  Positioned.fill(
-                    child: Material(
-                      color: Colors.transparent,
+                ),
+                Stack(
+                  children: [
+                    Container(
+                      height: 196,
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: const Color(0xffF9FAFB),
+                        border: Border.all(color: const Color(0xffE5E7EB)),
+                      ),
+                      child:
+                          (_mainImageUrl != null &&
+                              _mainImageUrl!.trim().isNotEmpty)
+                          ? Image.network(_mainImageUrl!, fit: BoxFit.cover)
+                          : Center(
+                              child: _isUploadingMainImage
+                                  ? const SizedBox(
+                                      height: 34,
+                                      width: 34,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2.6,
+                                      ),
+                                    )
+                                  : const Icon(
+                                      Icons.add,
+                                      size: 72,
+                                      color: Color(0xff98A2B3),
+                                    ),
+                            ),
+                    ),
+                    Positioned.fill(
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: _isUploadingMainImage
+                              ? null
+                              : _pickAndUploadMainImage,
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      right: 12,
+                      bottom: 12,
                       child: InkWell(
                         onTap: _isUploadingMainImage
                             ? null
                             : _pickAndUploadMainImage,
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    right: 12,
-                    bottom: 12,
-                    child: InkWell(
-                      onTap: _isUploadingMainImage
-                          ? null
-                          : _pickAndUploadMainImage,
-                      child: Container(
-                        height: 32,
-                        width: 32,
-                        decoration: BoxDecoration(
-                          color: const Color(0xff530630),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: _isUploadingMainImage
-                            ? const Padding(
-                                padding: EdgeInsets.all(7),
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                    Colors.white,
+                        child: Container(
+                          height: 32,
+                          width: 32,
+                          decoration: BoxDecoration(
+                            color: const Color(0xff530630),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: _isUploadingMainImage
+                              ? const Padding(
+                                  padding: EdgeInsets.all(7),
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      Colors.white,
+                                    ),
                                   ),
+                                )
+                              : const Icon(
+                                  Icons.add,
+                                  color: Colors.white,
+                                  size: 18,
                                 ),
-                              )
-                            : const Icon(
-                                Icons.add,
-                                color: Colors.white,
-                                size: 18,
-                              ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              Padding(
-                padding: EdgeInsets.only(left: 16, top: 8, right: 16),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          CustomText(
-                            text: recipeName,
-                            fontSize: 22,
-                            fontWeight: FontWeight.w400,
-                            color: Color(0xff384250),
-                          ),
-                          CustomText(
-                            text: recipeDescription,
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w500,
-                            color: Color(0xff6C737F),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (recipeCategory.isNotEmpty) ...[
-                      SizedBox(width: 5),
-                      Container(
-                        height: 24,
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xffFDF2FA),
-                          border: Border.all(color: Color(0xffFCE7F6)),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Center(
-                          child: CustomText(
-                            text: recipeCategory,
-                            color: Color(0xFFEF45B2),
-                            fontWeight: FontWeight.w500,
-                            fontSize: 12,
-                          ),
                         ),
                       ),
+                    ),
+                  ],
+                ),
+                Padding(
+                  padding: EdgeInsets.only(left: 16, top: 8, right: 16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            CustomText(
+                              text: recipeName,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w400,
+                              color: Color(0xff384250),
+                            ),
+                            CustomText(
+                              text: recipeDescription,
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w500,
+                              color: Color(0xff6C737F),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (recipeCategory.isNotEmpty) ...[
+                        SizedBox(width: 5),
+                        Container(
+                          height: 24,
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xffFDF2FA),
+                            border: Border.all(color: Color(0xffFCE7F6)),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Center(
+                            child: CustomText(
+                              text: recipeCategory,
+                              color: Color(0xFFEF45B2),
+                              fontWeight: FontWeight.w500,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
 
-        // PORTIONS SUMMARY + LANGUAGE SELECTOR now live in their own
-        // naturally-sized sliver instead of the fixed-height collapsing
-        // header above - a Wrap of component chips can legitimately run
-        // onto 2+ lines (many AI-detected components, long labels), and a
-        // sliver in normal flow just grows to fit that, so there's no
-        // height to predict or get wrong. Reads as a second elevated sheet
-        // (curved top, tinted background) stacked on the tab bar's sheet
-        // below it, rather than one guessed-height slab.
-        SliverToBoxAdapter(child: _buildPortionsAndLanguageCard()),
+          // PORTIONS SUMMARY + LANGUAGE SELECTOR now live in their own
+          // naturally-sized sliver instead of the fixed-height collapsing
+          // header above - a Wrap of component chips can legitimately run
+          // onto 2+ lines (many AI-detected components, long labels), and a
+          // sliver in normal flow just grows to fit that, so there's no
+          // height to predict or get wrong. Reads as a second elevated sheet
+          // (curved top, tinted background) stacked on the tab bar's sheet
+          // below it, rather than one guessed-height slab.
+          SliverToBoxAdapter(child: _buildPortionsAndLanguageCard()),
 
-        // The tab bar's own curved-top "sheet" - stays pinned right below
-        // the collapsed header, visually separating the tab content below
-        // from the collapsing photo/title area above.
-        SliverPersistentHeader(
-          pinned: true,
-          delegate: _StickyTabBarDelegate(
-            height: 66,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-              child: Container(
-                height: 40,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(40),
-                  border: Border.all(color: Color(0xff530630), width: 1),
-                ),
-                child: Row(
-                  children: [
-                    _buildTab(0, "Ingredients"),
-                    _verticalDivider(),
-                    _buildTab(1, "Nutrition value"),
-                    _verticalDivider(),
-                    _buildTab(2, _isSupplement ? "Dosage" : "Cooking steps"),
-                  ],
+          // The tab bar's own curved-top "sheet" - stays pinned right below
+          // the collapsed header, visually separating the tab content below
+          // from the collapsing photo/title area above.
+          SliverPersistentHeader(
+            pinned: true,
+            delegate: _StickyTabBarDelegate(
+              height: 66,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+                child: Container(
+                  height: 40,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(40),
+                    border: Border.all(color: Color(0xff530630), width: 1),
+                  ),
+                  child: Row(
+                    children: [
+                      _buildTab(0, "Ingredients"),
+                      _verticalDivider(),
+                      _buildTab(1, "Nutrition value"),
+                      _verticalDivider(),
+                      _buildTab(2, _isSupplement ? "Dosage" : "Cooking steps"),
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
-        ),
 
-        SliverFillRemaining(
-          hasScrollBody: true,
-          child: Container(
-            color: Colors.white,
-            child: Column(
-              children: [
-                SizedBox(height: selectedTab == 0 ? 9 : 16),
-                Expanded(
-                  child: IndexedStack(
-                    index: selectedTab,
-                    children: [
-                      SingleChildScrollView(
-                        child: Column(
-                          children: [
-                            if (selectedTab == 0 && warnings.isNotEmpty)
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 13,
-                                ),
-                                child: Container(
-                                  padding: EdgeInsets.only(
-                                    right: 27,
-                                    left: 24,
-                                    top: 21,
-                                    bottom: 21,
+          SliverFillRemaining(
+            hasScrollBody: true,
+            child: Container(
+              color: Colors.white,
+              child: Column(
+                children: [
+                  SizedBox(height: selectedTab == 0 ? 9 : 16),
+                  Expanded(
+                    child: IndexedStack(
+                      index: selectedTab,
+                      children: [
+                        SingleChildScrollView(
+                          child: Column(
+                            children: [
+                              if (selectedTab == 0 && warnings.isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 13,
                                   ),
-                                  width: double.infinity,
-                                  decoration: BoxDecoration(
-                                    color: Color(0xffFEF6FB),
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: cardBorder,
-                                    boxShadow: cardShadow,
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Image.asset(
-                                        'assets/icons/ion_warning-outline.png',
-                                        height: 30,
-                                        width: 30,
-                                      ),
-                                      SizedBox(width: 10),
-                                      Expanded(
-                                        child: CustomText(
-                                          text: warnings.join(' '),
-                                          fontWeight: FontWeight.w700,
-                                          fontSize: 18,
-                                          color: Color(0xff851653),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            if (selectedTab == 0)
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 6,
-                                ),
-                                child: Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    CustomText(
-                                      text: 'Servings',
-                                      fontWeight: FontWeight.w500,
-                                      fontSize: 22,
-                                      color: Color(0xff384250),
+                                  child: Container(
+                                    padding: EdgeInsets.only(
+                                      right: 27,
+                                      left: 24,
+                                      top: 21,
+                                      bottom: 21,
                                     ),
-                                    Row(
+                                    width: double.infinity,
+                                    decoration: BoxDecoration(
+                                      color: Color(0xffFEF6FB),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: cardBorder,
+                                      boxShadow: cardShadow,
+                                    ),
+                                    child: Row(
                                       children: [
-                                        GestureDetector(
-                                          onTap: () {
-                                            setState(() {
-                                              if (counter > 1) {
-                                                counter--;
-                                              }
-                                            });
-                                          },
-
-                                          child: Image.asset(
-                                            'assets/icons/_x37_7_Essential_Icons.png',
-                                            height: 22,
-                                            width: 22,
-                                            fit: BoxFit.cover,
-                                          ),
+                                        Image.asset(
+                                          'assets/icons/ion_warning-outline.png',
+                                          height: 30,
+                                          width: 30,
                                         ),
-                                        SizedBox(width: 15),
-                                        CustomText(
-                                          text: counter.toString(),
-                                          fontWeight: FontWeight.w400,
-                                          fontSize: 18,
-                                          color: Color(0xffC11576),
-                                        ),
-                                        SizedBox(width: 15),
-                                        GestureDetector(
-                                          onTap: () {
-                                            setState(() {
-                                              counter++;
-                                            });
-                                          },
-                                          child: Image.asset(
-                                            'assets/icons/Plus.png',
-                                            height: 30,
-                                            width: 30,
-                                            fit: BoxFit.cover,
+                                        SizedBox(width: 10),
+                                        Expanded(
+                                          child: CustomText(
+                                            text: warnings.join(' '),
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 18,
+                                            color: Color(0xff851653),
                                           ),
                                         ),
                                       ],
                                     ),
-                                  ],
+                                  ),
+                                ),
+                              if (selectedTab == 0)
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 6,
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      CustomText(
+                                        text: 'Servings',
+                                        fontWeight: FontWeight.w500,
+                                        fontSize: 22,
+                                        color: Color(0xff384250),
+                                      ),
+                                      Row(
+                                        children: [
+                                          GestureDetector(
+                                            onTap: () {
+                                              setState(() {
+                                                if (counter > 1) {
+                                                  counter--;
+                                                }
+                                              });
+                                            },
+
+                                            child: Image.asset(
+                                              'assets/icons/_x37_7_Essential_Icons.png',
+                                              height: 22,
+                                              width: 22,
+                                              fit: BoxFit.cover,
+                                            ),
+                                          ),
+                                          SizedBox(width: 15),
+                                          CustomText(
+                                            text: counter.toString(),
+                                            fontWeight: FontWeight.w400,
+                                            fontSize: 18,
+                                            color: Color(0xffC11576),
+                                          ),
+                                          SizedBox(width: 15),
+                                          GestureDetector(
+                                            onTap: () {
+                                              setState(() {
+                                                counter++;
+                                              });
+                                            },
+                                            child: Image.asset(
+                                              'assets/icons/Plus.png',
+                                              height: 30,
+                                              width: 30,
+                                              fit: BoxFit.cover,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                ),
+                                child: Divider(
+                                  thickness: 0.7,
+                                  color: Color(0xffFCCEEF),
                                 ),
                               ),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                              ),
-                              child: Divider(
-                                thickness: 0.7,
-                                color: Color(0xffFCCEEF),
+                              if (ingredients.isNotEmpty)
+                                ListView.builder(
+                                  physics: NeverScrollableScrollPhysics(),
+                                  shrinkWrap: true,
+                                  itemCount: ingredients.length,
+                                  itemBuilder: (context, index) {
+                                    final ingredient = ingredients[index];
+                                    return IngredientTile(
+                                      ingredient: ingredient,
+                                      servingsMultiplier:
+                                          counter / (recipe?.servings ?? 1),
+                                      onRefreshImageTap: () =>
+                                          _refetchIngredientImage(index),
+                                      isUploading: _uploadingIngredientIndexes
+                                          .contains(index),
+                                      translatedName:
+                                          _selectedLanguage != 'English'
+                                          ? ingredientName(index)
+                                          : null,
+                                      translatedDescription:
+                                          _selectedLanguage != 'English'
+                                          ? ingredientDescription(index)
+                                          : null,
+                                    );
+                                  },
+                                )
+                              else
+                                ListView.builder(
+                                  physics: NeverScrollableScrollPhysics(),
+                                  shrinkWrap: true,
+                                  itemCount: 3,
+                                  itemBuilder: (context, index) {
+                                    return const IngredientTile();
+                                  },
+                                ),
+                            ],
+                          ),
+                        ),
+                        NutritionDetailsWidget(
+                          nutrition: nutrition,
+                          supplementFacts: recipe?.supplementFacts,
+                        ),
+                        CookingStepsTab(cookingSteps: cookingSteps),
+                      ],
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  if (widget.fromAddRecipeScreen == true)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: CustomButton(
+                        fontSize: 13.5,
+                        onTap: () {
+                          final controller = _receipesController();
+                          // Pre-fill the form with current recipe values
+                          if (recipe != null) {
+                            controller.prefillFromRecipe(recipe!);
+                          }
+                          showModalBottomSheet(
+                            context: context,
+                            backgroundColor: Colors.white,
+                            useSafeArea: true,
+                            isScrollControlled: true,
+                            shape: const RoundedRectangleBorder(
+                              borderRadius: BorderRadius.vertical(
+                                top: Radius.circular(20),
                               ),
                             ),
-                            if (ingredients.isNotEmpty)
-                              ListView.builder(
-                                physics: NeverScrollableScrollPhysics(),
-                                shrinkWrap: true,
-                                itemCount: ingredients.length,
-                                itemBuilder: (context, index) {
-                                  final ingredient = ingredients[index];
-                                  return IngredientTile(
-                                    ingredient: ingredient,
-                                    servingsMultiplier:
-                                        counter / (recipe?.servings ?? 1),
-                                    onRefreshImageTap: () =>
-                                        _refetchIngredientImage(index),
-                                    isUploading: _uploadingIngredientIndexes
-                                        .contains(index),
-                                    translatedName:
-                                        _selectedLanguage != 'English'
-                                        ? ingredientName(index)
-                                        : null,
-                                    translatedDescription:
-                                        _selectedLanguage != 'English'
-                                        ? ingredientDescription(index)
-                                        : null,
+                            builder: (ctx) {
+                              return DraggableScrollableSheet(
+                                initialChildSize: 1,
+                                maxChildSize: 1,
+                                minChildSize: 0.5,
+                                expand: false,
+                                builder: (ctx, scrollCtrl) {
+                                  return UpdateAiInputsSheet(
+                                    scrollController: scrollCtrl,
+                                    onUpdated: () {
+                                      // Rebuild this screen with the updated recipe
+                                      setState(() {});
+                                    },
                                   );
                                 },
-                              )
-                            else
-                              ListView.builder(
-                                physics: NeverScrollableScrollPhysics(),
-                                shrinkWrap: true,
-                                itemCount: 3,
-                                itemBuilder: (context, index) {
-                                  return const IngredientTile();
-                                },
-                              ),
-                          ],
-                        ),
-                      ),
-                      NutritionDetailsWidget(
-                        nutrition: nutrition,
-                        supplementFacts: recipe?.supplementFacts,
-                      ),
-                      CookingStepsTab(cookingSteps: cookingSteps),
-                    ],
-                  ),
-                ),
-                SizedBox(height: 4),
-                if (widget.fromAddRecipeScreen == true)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: CustomButton(
-                      fontSize: 13.5,
-                      onTap: () {
-                        final controller = _receipesController();
-                        // Pre-fill the form with current recipe values
-                        if (recipe != null) {
-                          controller.prefillFromRecipe(recipe!);
-                        }
-                        showModalBottomSheet(
-                          context: context,
-                          backgroundColor: Colors.white,
-                          useSafeArea: true,
-                          isScrollControlled: true,
-                          shape: const RoundedRectangleBorder(
-                            borderRadius: BorderRadius.vertical(
-                              top: Radius.circular(20),
-                            ),
-                          ),
-                          builder: (ctx) {
-                            return DraggableScrollableSheet(
-                              initialChildSize: 1,
-                              maxChildSize: 1,
-                              minChildSize: 0.5,
-                              expand: false,
-                              builder: (ctx, scrollCtrl) {
-                                return UpdateAiInputsSheet(
-                                  scrollController: scrollCtrl,
-                                  onUpdated: () {
-                                    // Rebuild this screen with the updated recipe
-                                    setState(() {});
-                                  },
-                                );
-                              },
-                            );
-                          },
-                        );
-                      },
-                      text: 'Update AI Inputs',
-                      isOutline: true,
-                    ),
-                  ),
-                if (widget.fromAddRecipeScreen == true)
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Obx(() {
-                      final controller = _receipesController();
-                      return CustomButton(
-                        fontSize: 13.5,
-                        onTap: () async {
-                          if (controller.isSaving.value) return;
-                          final result = await controller.saveRecipe();
-
-                          if (result != null) {
-                            // Close the modal bottom sheet first
-                            Navigator.of(context).pop();
-
-                            // Go back to Recipes & Supplements screen
-                            Get.until((route) => route.isFirst);
-
-                            // Set bottom nav to Recipes tab (index 2)
-                            final homeController = Get.find<HomeController>();
-                            homeController.selectedIndex.value = 2;
-
-                            // Refresh recipes list
-                            controller.fetchRecipes(refresh: true);
-
-                            // Show success message
-                            showAppToast(
-                              Get.overlayContext!,
-                              message:
-                                  'Recipe "${result.name}" saved successfully!',
-                              type: AppToastType.success,
-                            );
-                          } else {
-                            showAppToast(
-                              Get.overlayContext!,
-                              message:
-                                  'Failed to save recipe. Please try again.',
-                              type: AppToastType.error,
-                            );
-                          }
+                              );
+                            },
+                          );
                         },
-                        text: controller.isSaving.value
-                            ? 'Saving...'
-                            : 'Add to Database',
-                        isOutline: false,
-                        isLoading: controller.isSaving.value,
-                      );
-                    }),
-                  ),
-                if (widget.fromAddRecipeScreen == false)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
+                        text: 'Update AI Inputs',
+                        isOutline: true,
+                      ),
                     ),
-                    child: CustomButton(
-                      fontSize: 13.5,
-                      onTap: () {
+                  if (widget.fromAddRecipeScreen == true)
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Obx(() {
                         final controller = _receipesController();
-                        if (recipe != null) {
-                          controller.generatedRecipe.value = recipe;
-                          controller.prefillFromRecipe(recipe!);
-                        }
-                        showModalBottomSheet(
-                          context: context,
-                          backgroundColor: Colors.white,
-                          useSafeArea: true,
-                          isScrollControlled: true,
-                          shape: const RoundedRectangleBorder(
-                            borderRadius: BorderRadius.vertical(
-                              top: Radius.circular(20),
-                            ),
-                          ),
-                          builder: (ctx) {
-                            return DraggableScrollableSheet(
-                              initialChildSize: 1,
-                              maxChildSize: 1,
-                              minChildSize: 0.5,
-                              expand: false,
-                              builder: (ctx, scrollCtrl) {
-                                return UpdateAiInputsSheet(
-                                  scrollController: scrollCtrl,
-                                  onUpdated: () {
-                                    // Make the refined recipe (including its
-                                    // preserved id, see copyWithId) authoritative
-                                    // for this screen - the `recipe` getter here
-                                    // doesn't consult the shared controller, only
-                                    // _editableRecipe then the original prop.
-                                    setState(() {
-                                      _editableRecipe =
-                                          controller.generatedRecipe.value;
-                                      _hasNewerAiVersion = true;
-                                    });
-                                  },
-                                );
-                              },
-                            );
+                        return CustomButton(
+                          fontSize: 13.5,
+                          onTap: () async {
+                            if (controller.isSaving.value) return;
+                            final result = await controller.saveRecipe();
+
+                            if (result != null) {
+                              // Close the modal bottom sheet first
+                              Navigator.of(context).pop();
+
+                              // Go back to Recipes & Supplements screen
+                              Get.until((route) => route.isFirst);
+
+                              // Set bottom nav to Recipes tab (index 2)
+                              final homeController = Get.find<HomeController>();
+                              homeController.selectedIndex.value = 2;
+
+                              // Refresh recipes list
+                              controller.fetchRecipes(refresh: true);
+
+                              // Show success message
+                              showAppToast(
+                                Get.overlayContext!,
+                                message:
+                                    'Recipe "${result.name}" saved successfully!',
+                                type: AppToastType.success,
+                              );
+                            } else {
+                              showAppToast(
+                                Get.overlayContext!,
+                                message:
+                                    'Failed to save recipe. Please try again.',
+                                type: AppToastType.error,
+                              );
+                            }
                           },
+                          text: controller.isSaving.value
+                              ? 'Saving...'
+                              : 'Add to Database',
+                          isOutline: false,
+                          isLoading: controller.isSaving.value,
                         );
-                      },
-                      text: 'Update AI Inputs',
-                      isOutline: true,
+                      }),
                     ),
-                  ),
-                if (widget.fromAddRecipeScreen == false &&
-                    (!widget.isPlanItemPreview ||
-                        (_hasNewerAiVersion &&
-                            widget.onUpdateExisting != null)))
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                    child: _buildBottomActionRow(),
-                  ),
-              ],
+                  if (widget.fromAddRecipeScreen == false)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      child: CustomButton(
+                        fontSize: 13.5,
+                        onTap: () {
+                          final controller = _receipesController();
+                          if (recipe != null) {
+                            controller.generatedRecipe.value = recipe;
+                            controller.prefillFromRecipe(recipe!);
+                          }
+                          showModalBottomSheet(
+                            context: context,
+                            backgroundColor: Colors.white,
+                            useSafeArea: true,
+                            isScrollControlled: true,
+                            shape: const RoundedRectangleBorder(
+                              borderRadius: BorderRadius.vertical(
+                                top: Radius.circular(20),
+                              ),
+                            ),
+                            builder: (ctx) {
+                              return DraggableScrollableSheet(
+                                initialChildSize: 1,
+                                maxChildSize: 1,
+                                minChildSize: 0.5,
+                                expand: false,
+                                builder: (ctx, scrollCtrl) {
+                                  return UpdateAiInputsSheet(
+                                    scrollController: scrollCtrl,
+                                    onUpdated: () {
+                                      // Make the refined recipe (including its
+                                      // preserved id, see copyWithId) authoritative
+                                      // for this screen - the `recipe` getter here
+                                      // doesn't consult the shared controller, only
+                                      // _editableRecipe then the original prop.
+                                      setState(() {
+                                        _editableRecipe =
+                                            controller.generatedRecipe.value;
+                                        _hasNewerAiVersion = true;
+                                      });
+                                    },
+                                  );
+                                },
+                              );
+                            },
+                          );
+                        },
+                        text: 'Update AI Inputs',
+                        isOutline: true,
+                      ),
+                    ),
+                  if (widget.fromAddRecipeScreen == false &&
+                      (!widget.isPlanItemPreview ||
+                          (_hasNewerAiVersion &&
+                              widget.onUpdateExisting != null)))
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                      child: _buildBottomActionRow(),
+                    ),
+                ],
+              ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 

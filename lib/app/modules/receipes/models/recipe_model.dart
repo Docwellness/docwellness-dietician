@@ -47,6 +47,16 @@ class RecipePreview {
   // meaningless "1 g" badge for a recipe with no real portion data.
   final List<RecipeComponent> components;
   final bool hasRealComponents;
+  // false (default): the backend fully derives `components` from
+  // `ingredients.where((i) => i.isCore)` on every save - editing ingredient
+  // roles (see UpdateAiInputsSheet's core/sub toggle) is the only way to
+  // change the portion summary. true: a composite, multi-dish recipe (e.g.
+  // "Pithla Bhakri") whose components name prepared sub-dishes that aren't
+  // raw ingredients at all - `components` stays independently authored, same
+  // as before this flag existed. See models/Recipe.js's
+  // `componentsAuthoredManually` field (backend) and openspec/changes/
+  // unify-recipe-ingredients-and-components.
+  final bool componentsAuthoredManually;
 
   RecipePreview({
     this.id,
@@ -69,6 +79,7 @@ class RecipePreview {
     this.languages = const ['English'],
     this.translations = const {},
     this.supplementFacts,
+    this.componentsAuthoredManually = false,
     List<RecipeComponent>? components,
     // Explicit override for callers that already know whether their
     // `components` value is real (e.g. a dietician's just-edited portion,
@@ -147,6 +158,7 @@ class RecipePreview {
       components: (json['components'] as List<dynamic>?)
           ?.map((e) => RecipeComponent.fromJson(e))
           .toList(),
+      componentsAuthoredManually: json['componentsAuthoredManually'] == true,
     );
   }
 
@@ -177,21 +189,25 @@ class RecipePreview {
       supplementFacts: supplementFacts,
       components: components,
       hasRealComponents: hasRealComponents,
+      componentsAuthoredManually: componentsAuthoredManually,
     );
   }
 
   /// Returns a copy with [components] and [nutrition] both overridden -
-  /// used by EditComponentsSheet to write back the dietician's edits,
+  /// used by EditComponentsSheet (currently unreachable from any live
+  /// screen) to write back a dietician's manual edit of an independently-
+  /// authored (`componentsAuthoredManually: true`) recipe's portions,
   /// together with a recomputed nutrition so calories/macros don't stay
-  /// frozen at whatever the AI originally generated once a part's quantity
-  /// changes - see [scaleNutritionForComponentEdit]. Also carries each
-  /// edited component's new quantity/unit onto the matching ingredient (by
-  /// name) - components and ingredients used to be two entirely independent
-  /// lists, so editing "Brown Bread" to 2 slices via Edit Portions left the
-  /// Ingredients tab's own "Brown Bread" row silently showing its old,
-  /// un-synced quantity. Best-effort: a component with no same-named
-  /// ingredient (e.g. one recipe part built from several ingredients) is
-  /// simply not reflected in the ingredient list, same as before.
+  /// frozen at whatever was originally generated once a part's quantity
+  /// changes - see [scaleNutritionForComponentEdit]. No longer syncs onto
+  /// [ingredients] by name-matching (the old `_syncedIngredients` helper) -
+  /// that was exactly the kind of ad-hoc, drift-prone reconciliation
+  /// between two independently-authored lists that openspec/changes/
+  /// unify-recipe-ingredients-and-components removes; for a derivable
+  /// recipe, editing ingredients (not components) is the only supported
+  /// path (see UpdateAiInputsSheet), and for a composite recipe a
+  /// component's label often has no matching ingredient to sync onto at
+  /// all (e.g. "Pithla Bhakri").
   RecipePreview copyWithComponentsAndNutrition(
     List<RecipeComponent> newComponents,
     Nutrition newNutrition,
@@ -209,7 +225,7 @@ class RecipePreview {
       cookingTime: cookingTime,
       dietaryHabits: dietaryHabits,
       freeFrom: freeFrom,
-      ingredients: _syncedIngredients(ingredients, newComponents),
+      ingredients: ingredients,
       servingSize: servingSize,
       nutrition: newNutrition,
       cookingSteps: cookingSteps,
@@ -223,6 +239,7 @@ class RecipePreview {
       // but derive from the raw param rather than hardcode, same
       // defensive reasoning as copyWithVersionOverride's own comment.
       hasRealComponents: newComponents.isNotEmpty,
+      componentsAuthoredManually: componentsAuthoredManually,
     );
   }
 
@@ -257,6 +274,7 @@ class RecipePreview {
       supplementFacts: supplementFacts,
       components: components,
       hasRealComponents: hasRealComponents,
+      componentsAuthoredManually: componentsAuthoredManually,
     );
   }
 
@@ -307,6 +325,10 @@ class RecipePreview {
       languages: languages,
       translations: const {},
       supplementFacts: supplementFacts,
+      // A RecipeVersion snapshot's `components` is frozen, review-only data
+      // (see this method's own doc comment) - never re-derived from
+      // `ingredients` the way a live, editable recipe's would be.
+      componentsAuthoredManually: true,
       components: components,
       // `components` here is this specific RecipeVersion's own stored
       // list, which can legitimately be empty (a version synced from a
@@ -316,23 +338,6 @@ class RecipePreview {
       // doc comment on why a copyWith* can't just say "yes, always real".
       hasRealComponents: components.isNotEmpty,
     );
-  }
-
-  static List<Ingredient> _syncedIngredients(
-    List<Ingredient> ingredients,
-    List<RecipeComponent> components,
-  ) {
-    return ingredients.map((ingredient) {
-      RecipeComponent? match;
-      for (final c in components) {
-        if (c.label.trim().toLowerCase() == ingredient.name.trim().toLowerCase()) {
-          match = c;
-          break;
-        }
-      }
-      if (match == null) return ingredient;
-      return ingredient.copyWith(quantity: match.quantity, unit: match.unit);
-    }).toList();
   }
 
   /// Scales [nutrition] by how much each component's quantity changed,
@@ -397,6 +402,7 @@ class RecipePreview {
       ),
       if (supplementFacts != null) 'supplementFacts': supplementFacts!.toJson(),
       'components': components.map((e) => e.toJson()).toList(),
+      'componentsAuthoredManually': componentsAuthoredManually,
     };
   }
 }
@@ -612,6 +618,13 @@ class Ingredient {
   final String description;
   final bool isScalable;
   final String? image;
+  // recipe-core-ingredient-scaling: 'core' = a clinically/portion-meaningful
+  // ingredient a dietician actually adjusts and that appears in the recipe's
+  // portion-summary (RecipePreview.components); 'sub' = only meaningful
+  // relative to the core ingredient(s), e.g. water/salt/oil/spices - never
+  // shown in the portion summary. See models/Recipe.js's `role` field
+  // (backend) and openspec/changes/unify-recipe-ingredients-and-components.
+  final String role;
 
   Ingredient({
     required this.name,
@@ -622,7 +635,10 @@ class Ingredient {
     required this.description,
     this.isScalable = true,
     this.image,
+    this.role = 'sub',
   });
+
+  bool get isCore => role == 'core';
 
   factory Ingredient.fromJson(Map<String, dynamic> json) {
     return Ingredient(
@@ -634,6 +650,7 @@ class Ingredient {
       description: json['description'] ?? '',
       isScalable: json['isScalable'] ?? true,
       image: json['image'],
+      role: json['role'] == 'core' ? 'core' : 'sub',
     );
   }
 
@@ -647,10 +664,11 @@ class Ingredient {
       'description': description,
       'isScalable': isScalable,
       'image': image,
+      'role': role,
     };
   }
 
-  Ingredient copyWith({num? quantity, String? unit}) {
+  Ingredient copyWith({num? quantity, String? unit, String? role}) {
     return Ingredient(
       name: name,
       quantity: quantity ?? this.quantity,
@@ -660,6 +678,7 @@ class Ingredient {
       description: description,
       isScalable: isScalable,
       image: image,
+      role: role ?? this.role,
     );
   }
 }

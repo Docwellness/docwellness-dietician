@@ -395,6 +395,12 @@ class UpdateAiInputsSheet extends StatelessWidget {
               // Ingredients (add/remove) - what the AI actually re-runs
               // nutrition/recipe generation against, see
               // ReceipesController.updateAiInputs's ingredients: currentRecipe.ingredients.
+              //
+              // Each row's Core/Sub chip is the sole editing surface for a
+              // derivable recipe's portion summary (RecipePreview.
+              // components, RecipeDetailsScreen's pill row) - the backend
+              // re-derives it from exactly these role flags on save. See
+              // openspec/changes/unify-recipe-ingredients-and-components.
               const CustomText(
                 text: 'Ingredients',
                 fontWeight: FontWeight.w400,
@@ -429,6 +435,34 @@ class UpdateAiInputsSheet extends StatelessWidget {
                                       child: Icon(Icons.edit_outlined, size: 16, color: Color(0xff851653)),
                                     ),
                                   ],
+                                ),
+                              ),
+                            ),
+                            InkWell(
+                              onTap: () => controller.toggleIngredientRoleAtEdit(i),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                margin: const EdgeInsets.only(right: 4),
+                                decoration: BoxDecoration(
+                                  color: ingredients[i].isCore
+                                      ? const Color(0xff851653)
+                                      : Colors.white,
+                                  border: Border.all(
+                                    color: ingredients[i].isCore
+                                        ? const Color(0xff851653)
+                                        : const Color(0xffCCCCCC),
+                                  ),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Text(
+                                  ingredients[i].isCore ? 'Core' : 'Sub',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                    color: ingredients[i].isCore
+                                        ? Colors.white
+                                        : const Color(0xff384250),
+                                  ),
                                 ),
                               ),
                             ),

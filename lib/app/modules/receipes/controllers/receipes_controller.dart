@@ -632,6 +632,20 @@ class ReceipesController extends GetxController {
     generatedRecipe.value = current.copyWithIngredients(updated);
   }
 
+  /// Flips an ingredient's core/sub role - the sole editing surface for a
+  /// derivable recipe's portion summary (RecipePreview.components), which
+  /// the backend re-derives from `ingredients.where((i) => i.isCore)` on
+  /// save. See UpdateAiInputsSheet's per-row toggle and openspec/changes/
+  /// unify-recipe-ingredients-and-components.
+  void toggleIngredientRoleAtEdit(int index) {
+    final current = generatedRecipe.value;
+    if (current == null || index < 0 || index >= current.ingredients.length) return;
+    final existing = current.ingredients[index];
+    final updated = List<Ingredient>.from(current.ingredients);
+    updated[index] = existing.copyWith(role: existing.isCore ? 'sub' : 'core');
+    generatedRecipe.value = current.copyWithIngredients(updated);
+  }
+
   /// Edit an existing ingredient in place (name/quantity/unit) - the way to
   /// fix an ingredient whose name doesn't match the food library, so it
   /// resolves for nutrition + diet-plan use on the next save. Keeps the
