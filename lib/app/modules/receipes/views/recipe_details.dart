@@ -180,10 +180,30 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
     return label;
   }
 
+  // unify-recipe-ingredients-and-components: the component pill row below
+  // the header is only shown for a composite, manually-authored recipe
+  // (see _buildPortionsAndLanguageCard's own hasComponents check) - for
+  // every derivable recipe (the common case), `components` is just
+  // `ingredients.where(role == core)` restated, which the Ingredients tab
+  // already shows per-item with its own quantity/unit. Folding the total
+  // weight in here instead of a pill is what actually carries that
+  // information forward once the (redundant) pill row is gone.
+  bool get _showsComponentPills =>
+      recipe != null &&
+      recipe!.hasRealComponents &&
+      recipe!.componentsAuthoredManually;
+
   String get recipeDescription {
     if (recipe != null) {
       final calories = recipe!.nutrition.calories ?? 0;
       final cuisine = recipe!.cuisine;
+      if (!_showsComponentPills) {
+        final qty = recipe!.servingSize.quantity;
+        final unit = recipe!.servingSize.unit;
+        if (qty != null && qty > 0 && unit != null && unit.trim().isNotEmpty) {
+          return '$cuisine • ${_formatComponentQuantity(qty)} $unit • $calories calories';
+        }
+      }
       return '$cuisine • $calories calories';
     }
     return 'Vitamin rich • 450 calories';
@@ -302,7 +322,7 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
   // its own content: unlike the header above it, nothing here needs a
   // height guess.
   Widget _buildPortionsAndLanguageCard() {
-    final hasComponents = recipe != null && recipe!.hasRealComponents;
+    final hasComponents = _showsComponentPills;
     final hasLanguages = availableLanguages.length > 1;
     if (!hasComponents && !hasLanguages) return const SizedBox.shrink();
 
@@ -895,14 +915,25 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
             ),
           ),
 
-          SliverFillRemaining(
-            hasScrollBody: true,
+          // A naturally-sized sliver, not SliverFillRemaining - this sheet's
+          // DraggableScrollableSheet can be dragged down to minChildSize
+          // (see the two showModalBottomSheet builders below), so "the
+          // remaining viewport space" can shrink to less than the header +
+          // tab content actually need. Forcing this Column to exactly fill
+          // that shrinking remainder is what produced "BOTTOM OVERFLOWED"
+          // once the drag went far enough - a fixed-height box for the tab
+          // content (sized off the full screen, not the current sheet
+          // height) plus a plain SliverToBoxAdapter instead just makes the
+          // whole sheet scrollable when it's shorter than its content,
+          // exactly like the header above already does.
+          SliverToBoxAdapter(
             child: Container(
               color: Colors.white,
               child: Column(
                 children: [
                   SizedBox(height: selectedTab == 0 ? 9 : 16),
-                  Expanded(
+                  SizedBox(
+                    height: MediaQuery.of(context).size.height * 0.55,
                     child: IndexedStack(
                       index: selectedTab,
                       children: [
