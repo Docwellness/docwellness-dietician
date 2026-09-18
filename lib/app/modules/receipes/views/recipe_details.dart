@@ -689,9 +689,25 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
   Widget build(BuildContext context) {
     return ValueListenableBuilder<bool>(
       valueListenable: _showTitleBar,
-      builder: (context, showTitleBar, _) => CustomScrollView(
-        controller: widget.scrollController,
-        slivers: [
+      // Column + Expanded(CustomScrollView) + a fixed footer, not just a
+      // bare CustomScrollView - the bottom action buttons (Save Recipe /
+      // Update AI Inputs) used to be the last sliver in this same
+      // scrollable, which meant reaching them required scrolling the
+      // DraggableScrollableSheet's own controller PAST the ingredients
+      // list's sliver, and that extra scroll distance wasn't reliably
+      // reachable in practice - they'd end up effectively unscrollable-to.
+      // Pulling them out to a footer outside the scrollable area makes
+      // them always visible (never requires scrolling) and keeps the
+      // Expanded(CustomScrollView) safe from the overflow bug the same way
+      // as before: a Scrollable given a small/zero height from a shrunk
+      // sheet just shows less and becomes scrollable, it never overflows
+      // the way a Column's non-flex children would.
+      builder: (context, showTitleBar, _) => Column(
+        children: [
+          Expanded(
+            child: CustomScrollView(
+              controller: widget.scrollController,
+              slivers: [
           // Title bar - only shown once scrolled past the header (see
           // _onScroll/_showTitleBar above), and kept as sliver #0 so it's
           // never rendered "in flow" before snapping to the top - since
@@ -915,25 +931,38 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
             ),
           ),
 
-          // A naturally-sized sliver, not SliverFillRemaining - this sheet's
-          // DraggableScrollableSheet can be dragged down to minChildSize
-          // (see the two showModalBottomSheet builders below), so "the
-          // remaining viewport space" can shrink to less than the header +
-          // tab content actually need. Forcing this Column to exactly fill
-          // that shrinking remainder is what produced "BOTTOM OVERFLOWED"
-          // once the drag went far enough - a fixed-height box for the tab
-          // content (sized off the full screen, not the current sheet
-          // height) plus a plain SliverToBoxAdapter instead just makes the
-          // whole sheet scrollable when it's shorter than its content,
-          // exactly like the header above already does.
-          SliverToBoxAdapter(
+          // SliverFillRemaining wraps ONLY the tab content (never the
+          // buttons below - see the separate SliverToBoxAdapter after this
+          // one). That split fixes two bugs at once:
+          // 1. "BOTTOM OVERFLOWED BY N PIXELS" once the DraggableScrollable
+          //    Sheet is dragged down toward minChildSize: 0.5 - the
+          //    remaining viewport space shrinks below what this Column
+          //    needs, and SliverFillRemaining clamps that to 0 rather than
+          //    negative, so Expanded(IndexedStack) just renders at 0
+          //    height instead of overflowing. It used to overflow because
+          //    the buttons were ALSO inside this same Column, forcing extra
+          //    height Expanded couldn't absorb.
+          // 2. A previous attempt fixed the overflow by giving this area a
+          //    MediaQuery-based fixed height inside a plain
+          //    SliverToBoxAdapter - which stopped the overflow but broke
+          //    scrolling: it gave the outer CustomScrollView (bound to the
+          //    sheet's own drag-to-resize scrollController) real
+          //    scrollable extent even at the sheet's full size, so a
+          //    scroll gesture over the ingredients list dragged the whole
+          //    header off-screen instead of scrolling the list in place.
+          //    SliverFillRemaining exactly fills the viewport at full sheet
+          //    size (like it always did), so the outer scroll view has
+          //    nothing extra to scroll and the inner nested
+          //    SingleChildScrollView/ListView handles the gesture, exactly
+          //    as before either bug existed.
+          SliverFillRemaining(
+            hasScrollBody: true,
             child: Container(
               color: Colors.white,
               child: Column(
                 children: [
                   SizedBox(height: selectedTab == 0 ? 9 : 16),
-                  SizedBox(
-                    height: MediaQuery.of(context).size.height * 0.55,
+                  Expanded(
                     child: IndexedStack(
                       index: selectedTab,
                       children: [
@@ -1094,6 +1123,20 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
                       ],
                     ),
                   ),
+                ],
+              ), // closes SliverFillRemaining's Column
+            ), // closes SliverFillRemaining's Container
+          ), // closes SliverFillRemaining
+              ], // closes the CustomScrollView's slivers list
+            ), // closes CustomScrollView
+          ), // closes Expanded
+
+          // Fixed footer, outside the scrollable area (see build()'s own
+          // doc comment above for why these moved out of the last sliver).
+          Container(
+            color: Colors.white,
+            child: Column(
+              children: [
                   SizedBox(height: 4),
                   if (widget.fromAddRecipeScreen == true)
                     Padding(
@@ -1251,12 +1294,11 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                       child: _buildBottomActionRow(),
                     ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
+              ], // closes footer Column's children
+            ), // closes footer Column
+          ), // closes footer Container
+        ], // closes outer Column's children
+      ), // closes outer Column
     );
   }
 
