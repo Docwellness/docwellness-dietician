@@ -699,8 +699,17 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
     // with buttons sharing its Column did).
     return ValueListenableBuilder<bool>(
       valueListenable: _showTitleBar,
-      builder: (context, showTitleBar, _) => Column(
-        children: [
+      // ClipRRect, matching the modal sheet's own rounded-top shape - the
+      // showModalBottomSheet `shape` only paints the rounded background, it
+      // doesn't clip descendant content, so the header image's square
+      // corners poked out past the curve during an overscroll bounce at
+      // the very top of the CustomScrollView. Clipping here guarantees it
+      // regardless of which call site opened this screen (several don't
+      // set clipBehavior on their own showModalBottomSheet call).
+      builder: (context, showTitleBar, _) => ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        child: Column(
+          children: [
           Expanded(
             child: CustomScrollView(
               controller: widget.scrollController,
@@ -1274,7 +1283,8 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
             ), // closes footer Column
           ), // closes footer Container
         ], // closes outer Column's children
-      ), // closes outer Column
+        ), // closes outer Column
+      ), // closes ClipRRect
     );
   }
 
