@@ -285,6 +285,27 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
     } else {
       _mainImageUrl = recipe?.image;
     }
+    widget.scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    widget.scrollController.removeListener(_onScroll);
+    _showTitleBar.dispose();
+    super.dispose();
+  }
+
+  // Shows the pinned title bar once scrolled past the header image, so
+  // there's still a way to tell which recipe this is once the big header
+  // scrolls out of view - not shown at rest, since the header's own title
+  // is right there already and a second copy would just be redundant.
+  static const double _titleBarShowDistance =
+      220; // drag handle(24) + image(196)
+  final ValueNotifier<bool> _showTitleBar = ValueNotifier(false);
+
+  void _onScroll() {
+    final show = widget.scrollController.offset > _titleBarShowDistance;
+    if (show != _showTitleBar.value) _showTitleBar.value = show;
   }
 
   // PORTIONS SUMMARY (component chips) + LANGUAGE SELECTOR, as their own
@@ -660,25 +681,69 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Plain Column, not a CustomScrollView/sliver stack - the header,
-    // portions/language card, and tab bar are fixed, ordinary Column
-    // children here, structurally outside any Scrollable, so no scroll
-    // gesture can ever move them regardless of where on screen it starts.
-    // Earlier attempts kept the header inside the same CustomScrollView as
-    // the tab content (as a normal or pinned sliver) and repeatedly hit the
-    // same class of bug in different shapes - an overflow when the sheet
-    // was dragged down, then a scroll conflict where dragging the
-    // ingredient list scrolled the whole header away instead - because a
-    // single linear scroll offset moving through multiple slivers can
-    // always, from some gesture start point, end up moving content that's
-    // meant to stay fixed. Making the header genuinely not part of any
-    // Scrollable removes that whole class of bug rather than patching this
-    // particular shape of it: only the Expanded region below can ever move.
-    return Column(
-      children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+    // Column(Expanded(CustomScrollView(...)), footer) - the header, portions
+    // card, and tab bar are slivers in the scrollable area (so the header
+    // collapses and the title sticks to the top as you scroll, same as
+    // before this whole round of fixes), but the SliverFillRemaining wraps
+    // ONLY the tab content, never the bottom action buttons - those are a
+    // fixed footer below Expanded(CustomScrollView(...)), not a sliver in
+    // it at all. That split is what fixes the overflow (the buttons no
+    // longer share space with Expanded(IndexedStack) inside the flex
+    // Column that SliverFillRemaining sizes, so there's nothing non-flex
+    // demanding more height than a shrunk sheet can give) without also
+    // reintroducing the earlier scroll-conflict bug (a fixed-height
+    // stand-in for SliverFillRemaining previously gave the outer
+    // CustomScrollView real scroll extent even at full sheet size, so
+    // scrolling the ingredient list dragged the header along with it -
+    // SliverFillRemaining alone doesn't have that problem, only pairing it
+    // with buttons sharing its Column did).
+    return ValueListenableBuilder<bool>(
+      valueListenable: _showTitleBar,
+      builder: (context, showTitleBar, _) => Column(
+        children: [
+          Expanded(
+            child: CustomScrollView(
+              controller: widget.scrollController,
+              slivers: [
+                // Title bar - only shown once scrolled past the header (see
+                // _onScroll/_showTitleBar above), kept as sliver #0 so it's
+                // pinned at the top from the instant it's inserted rather
+                // than rendering in flow first.
+                if (showTitleBar)
+                  SliverPersistentHeader(
+                    pinned: true,
+                    delegate: _TitleBarDelegate(
+                      height: kToolbarHeight,
+                      child: Container(
+                        alignment: AlignmentDirectional.centerStart,
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Color(0x14000000),
+                              blurRadius: 10,
+                              offset: Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: CustomText(
+                          text: recipeName,
+                          fontWeight: FontWeight.w500,
+                          fontSize: 16,
+                          color: Color(0xff384250),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                // Plain, naturally-sized header - drag handle, image,
+                // title. Collapses away as the sheet is scrolled (the
+                // title bar above takes over once it's gone).
+                SliverToBoxAdapter(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                 Center(
                   child: Container(
                     width: 32,
@@ -812,81 +877,72 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
                 ),
               ],
             ),
-
-          // PORTIONS SUMMARY + LANGUAGE SELECTOR - a Wrap of component chips
-          // can legitimately run onto 2+ lines (many AI-detected components,
-          // long labels), and a plain Column child just grows to fit that,
-          // so there's no height to predict or get wrong. Reads as a second
-          // elevated sheet (curved top, tinted background) stacked on the
-          // tab bar below it, rather than one guessed-height slab.
-          _buildPortionsAndLanguageCard(),
-
-          // The tab bar's own curved-top "sheet" - a plain fixed Container,
-          // not a pinned sliver (nothing here scrolls anymore, see build()'s
-          // own doc comment above), visually separating the tab content
-          // below from the header above it.
-          Container(
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-              boxShadow: [
-                BoxShadow(
-                  color: Color(0x14000000),
-                  blurRadius: 10,
-                  offset: Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-              child: Container(
-                height: 40,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(40),
-                  border: Border.all(color: Color(0xff530630), width: 1),
-                ),
-                child: Row(
-                  children: [
-                    _buildTab(0, "Ingredients"),
-                    _verticalDivider(),
-                    _buildTab(1, "Nutrition value"),
-                    _verticalDivider(),
-                    _buildTab(2, _isSupplement ? "Dosage" : "Cooking steps"),
-                  ],
-                ),
-              ),
-            ),
           ),
 
-          // The ONLY scrollable region in this whole screen - everything
-          // above (header, portions card, tab bar) and below (the buttons
-          // footer) is a fixed, non-scrolling Column child, so a scroll
-          // gesture anywhere can only ever move content in here. Only the
-          // Ingredients tab's SingleChildScrollView is given
-          // widget.scrollController (below) - that's the one Scrollable the
-          // DraggableScrollableSheet's drag-to-resize mechanic needs to
-          // reach minChildSize from within this tab; the Nutrition/Cooking
-          // Steps tabs keep their own widgets' default internal scrolling,
-          // a minor - not a correctness - gap (dragging to shrink the sheet
-          // from those two tabs' content doesn't work, only from the
-          // header/handle... except the header can't be dragged either now
-          // that it's fixed; shrinking the sheet works from the Ingredients
-          // tab, or by dragging where the DraggableScrollableSheet itself
-          // still owns the gesture outside this Column's own hit-test area).
-          Expanded(
-            child: Container(
-              color: Colors.white,
-              child: Column(
-                children: [
-                  SizedBox(height: selectedTab == 0 ? 9 : 16),
-                  Expanded(
-                    child: IndexedStack(
-                      index: selectedTab,
+                // PORTIONS SUMMARY + LANGUAGE SELECTOR - a Wrap of component
+                // chips can legitimately run onto 2+ lines, and a naturally-
+                // sized sliver just grows to fit that, so there's no height
+                // to predict or get wrong.
+                SliverToBoxAdapter(child: _buildPortionsAndLanguageCard()),
+
+                // The tab bar's own curved-top "sheet" - pinned right below
+                // the collapsed header, visually separating the tab content
+                // below from the collapsing photo/title area above.
+                SliverPersistentHeader(
+                  pinned: true,
+                  delegate: _StickyTabBarDelegate(
+                    height: 66,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+                      child: Container(
+                        height: 40,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(40),
+                          border: Border.all(
+                            color: Color(0xff530630),
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            _buildTab(0, "Ingredients"),
+                            _verticalDivider(),
+                            _buildTab(1, "Nutrition value"),
+                            _verticalDivider(),
+                            _buildTab(
+                              2,
+                              _isSupplement ? "Dosage" : "Cooking steps",
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+                // SliverFillRemaining wraps ONLY the tab content - never the
+                // bottom action buttons, which are a fixed footer below
+                // Expanded(CustomScrollView(...)) instead (see build()'s own
+                // doc comment above for why). hasScrollBody: true clamps
+                // "remaining space" to 0 (never negative) once the sheet is
+                // dragged down toward minChildSize: 0.5, so
+                // Expanded(IndexedStack) just renders at 0 height instead of
+                // overflowing - this Column has nothing else in it competing
+                // for that space.
+                SliverFillRemaining(
+                  hasScrollBody: true,
+                  child: Container(
+                    color: Colors.white,
+                    child: Column(
                       children: [
-                        SingleChildScrollView(
-                          controller: widget.scrollController,
-                          child: Column(
+                        SizedBox(height: selectedTab == 0 ? 9 : 16),
+                        Expanded(
+                          child: IndexedStack(
+                            index: selectedTab,
                             children: [
+                              SingleChildScrollView(
+                                child: Column(
+                                  children: [
                               if (selectedTab == 0 && warnings.isNotEmpty)
                                 Padding(
                                   padding: const EdgeInsets.symmetric(
@@ -1042,8 +1098,11 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
                     ),
                   ),
                 ],
-              ), // closes the tab-content Column
-            ), // closes the tab-content Container
+                        ), // closes the tab-content Column
+                      ), // closes the tab-content Container
+                    ), // closes SliverFillRemaining
+              ], // closes the CustomScrollView's slivers list
+            ), // closes CustomScrollView
           ), // closes Expanded (the only scrollable region)
 
           // Fixed footer, below the scrollable area - never inside it (see
@@ -1215,6 +1274,7 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
             ), // closes footer Column
           ), // closes footer Container
         ], // closes outer Column's children
+      ), // closes outer Column
     );
   }
 
@@ -1357,5 +1417,78 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
       height: double.infinity,
       color: Color(0xff530630),
     );
+  }
+}
+
+/// The tab bar's curved-top "sheet" - pinned in place once scrolled under,
+/// separating the Ingredients/Nutrition value/Cooking steps tab content
+/// below from the collapsing header above it.
+class _StickyTabBarDelegate extends SliverPersistentHeaderDelegate {
+  final Widget child;
+  final double height;
+
+  const _StickyTabBarDelegate({required this.child, required this.height});
+
+  @override
+  double get minExtent => height;
+
+  @override
+  double get maxExtent => height;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        boxShadow: [
+          BoxShadow(
+            color: Color(0x14000000),
+            blurRadius: 10,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+
+  @override
+  bool shouldRebuild(covariant _StickyTabBarDelegate oldDelegate) {
+    return oldDelegate.child != child || oldDelegate.height != height;
+  }
+}
+
+/// The pinned title bar shown once scrolled past the header (see
+/// _showTitleBar) - a plain SliverPersistentHeaderDelegate whose `child`
+/// already carries its own decoration/shadow, so this just sizes it.
+class _TitleBarDelegate extends SliverPersistentHeaderDelegate {
+  final Widget child;
+  final double height;
+
+  const _TitleBarDelegate({required this.child, required this.height});
+
+  @override
+  double get minExtent => height;
+
+  @override
+  double get maxExtent => height;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    return child;
+  }
+
+  @override
+  bool shouldRebuild(covariant _TitleBarDelegate oldDelegate) {
+    return oldDelegate.child != child || oldDelegate.height != height;
   }
 }
