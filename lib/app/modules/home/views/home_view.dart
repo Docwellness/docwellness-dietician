@@ -5,7 +5,7 @@ import 'package:docwellnesdoc/app/modules/home/views/doctor_profile_view.dart';
 import 'package:docwellnesdoc/app/modules/patients/controllers/patients_controller.dart';
 import 'package:docwellnesdoc/app/modules/patients/widgets/new_patients_container.dart';
 import 'package:docwellnesdoc/app/modules/receipes/views/add_receipes.dart';
-import 'package:docwellnesdoc/app/modules/receipes/views/view_added_receipes.dart';
+import 'package:docwellnesdoc/app/modules/receipes/views/recipe_list_by_filter_view.dart';
 import 'package:docwellnesdoc/app/modules/receipes/widgets/receipe_container.dart';
 import 'package:docwellnesdoc/app/routes/app_pages.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_button.dart';
@@ -368,12 +368,7 @@ class HomeView extends GetView<HomeController> {
                             'assets/demos/4338dff1fae4820e15916dfa19ae06cd6d19c5ed.jpg',
                         title: category.name,
                         subTitle: '${category.count} recipes',
-                        onTap: () {
-                          Get.to(
-                            () =>
-                                ViewAddedReceipes(categoryName: category.name),
-                          );
-                        },
+                        onTap: () => _openRecipeCategory(category.name),
                       ),
                     );
                   },
@@ -641,6 +636,29 @@ class HomeView extends GetView<HomeController> {
     pc.selectedTab.value = 1; // "New"
     pc.fetchNewPatients();
     controller.changeTab(1);
+  }
+
+  // A Recipes card here used to push ViewAddedReceipes - a whole separate
+  // screen/list layout from RecipeListByFilterView, the grid the Diet &
+  // Exercise tab's own category drill-down already uses, so the same
+  // "browse recipes by category" action looked and behaved differently
+  // depending on where it was started from. Switching to that tab first
+  // (registers ReceipesController if needed, same as _openNewClientsTab
+  // does for Patients) means backing out of the pushed grid lands on the
+  // Diet & Exercise tab instead of some disconnected screen, and pushing
+  // the shared view on top of it means every entry point now looks
+  // identical.
+  void _openRecipeCategory(String categoryName) {
+    controller.onTabSelected(2); // registers ReceipesController if needed
+    controller.changeTab(2);
+    Get.to(
+      () => RecipeListByFilterView(
+        title: categoryName,
+        topCategory: 'All',
+        servingTime: null,
+        category: categoryName,
+      ),
+    );
   }
 }
 

@@ -114,7 +114,7 @@ class _SelectDietSheetState extends State<SelectDietSheet>
 
   /// Fetches the recipe's full detail and opens it in a bottom sheet -
   /// mirrors the exact pattern already used to open RecipeDetailsScreen
-  /// elsewhere in the app (see receipes/views/view_added_receipes.dart).
+  /// elsewhere in the app (see receipes/views/recipe_list_by_filter_view.dart).
   Future<void> _openRecipeDetails(String recipeId) async {
     final fullRecipe = await _recipeService.getRecipeById(recipeId);
     if (fullRecipe == null || !mounted) return;

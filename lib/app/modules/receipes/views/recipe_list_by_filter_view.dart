@@ -10,12 +10,25 @@ import '../controllers/receipes_controller.dart';
 /// (a specific serving time within the current top category, or the
 /// Supplements shortcut) - this is the same grid/pagination/recipe-details
 /// flow the old single-screen ReceipesView used to render inline, now
-/// reused as a drill-down destination.
+/// reused as a drill-down destination. Also the single destination for an
+/// exact-category quick link (e.g. "Mexican", "Thai" - see
+/// ReceipesController.topCategories's own doc comment for why these aren't
+/// curated topCategory groups) via [category], from either the Diet &
+/// Exercise tab's own quick-category row or the dashboard's Recipes
+/// section - both used to each push their own separate screen
+/// (RecipesTabBody's inline grid vs. the now-removed ViewAddedReceipes);
+/// unified onto this one so every "browse recipes by category" entry point
+/// looks and behaves identically.
 class RecipeListByFilterView extends StatefulWidget {
   final String title;
   final String topCategory;
   final String? servingTime;
   final String? tag;
+  // Exact Recipe.category match (e.g. "Mexican") - independent of, and
+  // narrower than, topCategory's curated grouping. Passed straight through
+  // to ReceipesController.selectedCategory instead of the 'All' reset every
+  // other call site here uses, since this IS the filter for those callers.
+  final String? category;
 
   const RecipeListByFilterView({
     super.key,
@@ -23,6 +36,7 @@ class RecipeListByFilterView extends StatefulWidget {
     required this.topCategory,
     required this.servingTime,
     this.tag,
+    this.category,
   });
 
   @override
@@ -37,16 +51,18 @@ class _RecipeListByFilterViewState extends State<RecipeListByFilterView> {
   void initState() {
     super.initState();
     // selectedCategory is a separate exact-match filter the shared
-    // ReceipesController also carries (for ViewAddedReceipes's dashboard
-    // quick-links) - reset it here so a stale value doesn't silently
-    // combine with this screen's filters and return zero results.
+    // ReceipesController also carries - an exact-category quick link
+    // (widget.category) sets it to that category; every other call site
+    // here (a servingTime/tag drill-down, already scoped by topCategory)
+    // resets it to 'All' so a stale value doesn't silently combine with
+    // this screen's filters and return zero results.
     // topCategory is passed as an explicit fetchRecipes override rather
     // than written into the shared selectedTopCategory Rx, since that Rx
     // is watched by the landing page's Obx which stays mounted underneath
     // this drill-down (Get.to doesn't dispose it) - mutating it here during
     // initState previously caused "setState() called during build" on the
     // still-building landing page.
-    controller.selectedCategory.value = 'All';
+    controller.selectedCategory.value = widget.category ?? 'All';
     controller.fetchRecipes(
       refresh: true,
       servingTime: widget.servingTime,
