@@ -8,20 +8,21 @@ import '../controllers/receipes_controller.dart';
 
 /// Flat, paginated grid of individual recipes for one landing-grid card
 /// (a specific serving time within the current top category, or the
-/// Supplements shortcut) - this is the same grid/pagination/recipe-details
-/// flow the old single-screen ReceipesView used to render inline, now
-/// reused as a drill-down destination. Also the destination for the
-/// dashboard's Recipes section cards via [category], an exact
+/// Supplements/Sides/Salad shortcuts) - this is the same grid/pagination/
+/// recipe-details flow the old single-screen ReceipesView used to render
+/// inline, now reused as a drill-down destination. Also the destination for
+/// the dashboard's Recipes section cards via [category], an exact
 /// Recipe.category match independent of a servingTime.
 class RecipeListByFilterView extends StatefulWidget {
   final String title;
   final String topCategory;
   final String? servingTime;
   final String? tag;
-  // Exact Recipe.category match (e.g. "Mexican") - independent of, and
-  // narrower than, topCategory's curated grouping. Passed straight through
-  // to ReceipesController.selectedCategory instead of the 'All' reset every
-  // other call site here uses, since this IS the filter for those callers.
+  // Exact Recipe.category match (e.g. "Mexican", or "Supplements" for that
+  // shortcut card) - intersects with topCategory rather than overriding it
+  // (backend: intersectCategoryFilter), so e.g. the Supplements card can
+  // combine "category is exactly Supplements" with whichever cuisine chip
+  // is currently selected and correctly return nothing when they disagree.
   final String? category;
 
   const RecipeListByFilterView({

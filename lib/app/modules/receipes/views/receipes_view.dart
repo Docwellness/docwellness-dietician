@@ -177,15 +177,24 @@ class _RecipesTabBodyState extends State<RecipesTabBody> {
                   ),
                 ),
               ),
+              // Supplements/Sides/Salad now scope to the currently selected
+              // top category, same as the count shown on each card
+              // (backend: getServingTimeSummary intersects them with it
+              // too) - Supplements is its own exclusive category so this is
+              // empty unless "All" or "Supplements" itself is selected;
+              // Sides/Salad are tags independent of category (a Sides
+              // recipe can be Indian, Continental, etc.) so they narrow to
+              // just that category's sides/salad recipes.
               _CategoryCardData(
                 title: 'Supplements',
                 count: summary.supplementsCount,
                 icon: Icons.medication_outlined,
                 onTap: () => Get.to(
-                  () => const RecipeListByFilterView(
+                  () => RecipeListByFilterView(
                     title: 'Supplements',
-                    topCategory: 'Supplements',
+                    topCategory: controller.selectedTopCategory.value,
                     servingTime: null,
+                    category: 'Supplements',
                   ),
                 ),
               ),
@@ -194,9 +203,9 @@ class _RecipesTabBodyState extends State<RecipesTabBody> {
                 count: summary.sidesCount,
                 icon: Icons.rice_bowl_outlined,
                 onTap: () => Get.to(
-                  () => const RecipeListByFilterView(
+                  () => RecipeListByFilterView(
                     title: 'Sides',
-                    topCategory: 'All',
+                    topCategory: controller.selectedTopCategory.value,
                     servingTime: null,
                     tag: 'side',
                   ),
@@ -207,9 +216,9 @@ class _RecipesTabBodyState extends State<RecipesTabBody> {
                 count: summary.saladCount,
                 icon: Icons.eco_outlined,
                 onTap: () => Get.to(
-                  () => const RecipeListByFilterView(
+                  () => RecipeListByFilterView(
                     title: 'Salad',
-                    topCategory: 'All',
+                    topCategory: controller.selectedTopCategory.value,
                     servingTime: null,
                     tag: 'salad',
                   ),
