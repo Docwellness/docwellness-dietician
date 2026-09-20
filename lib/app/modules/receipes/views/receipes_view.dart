@@ -37,14 +37,15 @@ class ReceipesView extends StatelessWidget {
   }
 }
 
-/// The "Recipes & Supplements" content: a top-level cuisine filter (All/
-/// Indian/Continental/Western/Supplements - a curated grouping over the full
-/// 24-value Recipe.category enum, see utils/recipeCategoryGroups.js)
-/// followed by a grid of real, per-serving-time recipe counts, plus
-/// Supplements/Sides/Salad shortcut cards. Tapping a card drills into
-/// RecipeListByFilterView's flat recipe grid. Extracted from ReceipesView
-/// (formerly that screen's whole body) so DietAndExerciseView can embed it
-/// as one page of its Recipes/Exercises PageView.
+/// The "Recipes & Supplements" content: a top-level category chip strip
+/// (All plus every real Recipe.category value this dietician has recipes
+/// in - the same list the Dashboard's Recipes card row shows, see
+/// controller.categories) followed by a grid of real, per-serving-time
+/// recipe counts scoped to the selected chip, plus Supplements/Sides/Salad
+/// shortcut cards. Tapping a grid card drills into RecipeListByFilterView's
+/// flat recipe grid. Extracted from ReceipesView (formerly that screen's
+/// whole body) so DietAndExerciseView can embed it as one page of its
+/// Recipes/Exercises PageView.
 class RecipesTabBody extends StatefulWidget {
   const RecipesTabBody({super.key});
 
@@ -63,9 +64,9 @@ class _RecipesTabBodyState extends State<RecipesTabBody> {
     }
     controller = Get.find<ReceipesController>();
     // Shared controller singleton - reset the exact-category filter (only
-    // used by the quick-category row below and the dashboard's Recipes
-    // section, both via RecipeListByFilterView's category param) so it
-    // can't leak into this screen's topCategory-based summary fetch.
+    // used by the dashboard's Recipes section, via RecipeListByFilterView's
+    // category param) so it can't leak into this screen's topCategory-based
+    // summary fetch.
     controller.selectedCategory.value = 'All';
     controller.fetchServingTimeSummary();
   }
@@ -94,6 +95,12 @@ class _RecipesTabBodyState extends State<RecipesTabBody> {
         // Top-level category chip strip lives directly in the body (not
         // AppBar.bottom) so its background always matches the AppBar
         // exactly and its left inset lines up with the title above it.
+        // Options are the exact same list the Dashboard's Recipes card row
+        // shows (controller.categories, sourced from GET /recipes/categories
+        // - "All" plus every real Recipe.category value this dietician
+        // actually has recipes in), not a curated subset - so a category
+        // tapped from Home lands here on the matching, already-selected
+        // chip instead of a different set of options.
         Container(
           width: double.infinity,
           color: _headerColor,
@@ -103,13 +110,13 @@ class _RecipesTabBodyState extends State<RecipesTabBody> {
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Row(
-                children: ReceipesController.topCategories.map((catName) {
+                children: controller.categories.map((cat) {
                   final isSelected =
-                      controller.selectedTopCategory.value == catName;
+                      controller.selectedTopCategory.value == cat.name;
                   return Padding(
                     padding: const EdgeInsets.only(right: 8),
                     child: GestureDetector(
-                      onTap: () => controller.changeTopCategory(catName),
+                      onTap: () => controller.changeTopCategory(cat.name),
                       child: Container(
                         height: 38,
                         padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -127,7 +134,7 @@ class _RecipesTabBodyState extends State<RecipesTabBody> {
                         ),
                         alignment: Alignment.center,
                         child: Text(
-                          catName,
+                          cat.name,
                           style: GoogleFonts.roboto(
                             color: isSelected
                                 ? Color(0xff530630)
@@ -144,77 +151,6 @@ class _RecipesTabBodyState extends State<RecipesTabBody> {
             ),
           ),
         ),
-        // Quick links for every real Recipe.category value that ISN'T one
-        // of the 5 curated topCategories chips above (Mexican, Thai,
-        // Japanese, Middle Eastern, Asian, Mediterranean, Vegan Specials,
-        // American, Smoothies & Drinks, Detox, Healthy Bowls, Other -
-        // "Western" folds several of these together for the chips above,
-        // see ReceipesController.topCategories's own doc comment, but a
-        // dietician reaching for one specifically by name couldn't get
-        // there any faster than scrolling "All"). Unlike the chips above,
-        // tapping one of these navigates straight to
-        // RecipeListByFilterView's exact-category grid instead of
-        // filtering the serving-time summary below - there's no per-
-        // serving-time count for an arbitrary category to show first, and
-        // that's not what a "show me the Mexican recipes" tap wants anyway.
-        // Not a toggleable filter, so no selected/unselected state.
-        Obx(() {
-          final extras = controller.categories
-              .where(
-                (c) =>
-                    c.name != 'All' &&
-                    !ReceipesController.topCategories.contains(c.name),
-              )
-              .toList();
-          if (extras.isEmpty) return const SizedBox.shrink();
-          return Container(
-            width: double.infinity,
-            color: _headerColor,
-            padding: const EdgeInsets.only(bottom: 16),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: extras.map((cat) {
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: GestureDetector(
-                      onTap: () => Get.to(
-                        () => RecipeListByFilterView(
-                          title: cat.name,
-                          topCategory: 'All',
-                          servingTime: null,
-                          category: cat.name,
-                        ),
-                      ),
-                      child: Container(
-                        height: 32,
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        decoration: BoxDecoration(
-                          color: Colors.transparent,
-                          border: Border.all(
-                            color: const Color(0xffFCCEEF),
-                            width: 1,
-                          ),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        alignment: Alignment.center,
-                        child: Text(
-                          cat.name,
-                          style: GoogleFonts.roboto(
-                            color: const Color(0xff851653),
-                            fontWeight: FontWeight.w500,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-            ),
-          );
-        }),
         const SizedBox(height: 12),
         Expanded(
           child: Obx(() {

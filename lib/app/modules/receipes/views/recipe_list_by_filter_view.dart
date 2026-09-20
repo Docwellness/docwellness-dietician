@@ -10,15 +10,9 @@ import '../controllers/receipes_controller.dart';
 /// (a specific serving time within the current top category, or the
 /// Supplements shortcut) - this is the same grid/pagination/recipe-details
 /// flow the old single-screen ReceipesView used to render inline, now
-/// reused as a drill-down destination. Also the single destination for an
-/// exact-category quick link (e.g. "Mexican", "Thai" - see
-/// ReceipesController.topCategories's own doc comment for why these aren't
-/// curated topCategory groups) via [category], from either the Diet &
-/// Exercise tab's own quick-category row or the dashboard's Recipes
-/// section - both used to each push their own separate screen
-/// (RecipesTabBody's inline grid vs. the now-removed ViewAddedReceipes);
-/// unified onto this one so every "browse recipes by category" entry point
-/// looks and behaves identically.
+/// reused as a drill-down destination. Also the destination for the
+/// dashboard's Recipes section cards via [category], an exact
+/// Recipe.category match independent of a servingTime.
 class RecipeListByFilterView extends StatefulWidget {
   final String title;
   final String topCategory;

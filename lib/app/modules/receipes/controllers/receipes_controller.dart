@@ -106,22 +106,23 @@ class ReceipesController extends GetxController {
   RxBool hasMoreRecipes = false.obs;
   int _currentPage = 1;
 
-  // "Recipes & Supplements" landing grid state: top-level cuisine group
-  // (All/Indian/Continental/Western/Supplements) and the real per-serving-
-  // time counts scoped to it.
-  static const List<String> topCategories = [
-    'All',
-    'Indian',
-    'Continental',
-    'Western',
-    'Supplements',
-  ];
+  // "Recipes & Supplements" landing grid state: the selected top-level
+  // category chip (any value from `categories`, i.e. "All" or a real
+  // Recipe.category) and the real per-serving-time counts scoped to it.
   RxString selectedTopCategory = 'All'.obs;
   Rx<ServingTimeSummary> servingTimeSummary = ServingTimeSummary(
     counts: [],
     supplementsCount: 0,
   ).obs;
   RxBool isLoadingServingTimeSummary = false.obs;
+  // Multiple triggers can legitimately call fetchServingTimeSummary() close
+  // together (onInit, a Home category tap's changeTopCategory, the landing
+  // page's own initState re-fetch) and their responses can arrive out of
+  // order over the network - without this, whichever response lands last
+  // wins even if it was requested first, silently showing counts for the
+  // wrong category. Bumped at the start of each fetch; a response is only
+  // applied if it's still the most recently *started* request.
+  int _servingTimeSummaryRequestId = 0;
 
   // Drill-down list (shown after tapping a landing-grid card): the current
   // servingTime filter, if any - null means "just topCategory" (used for
@@ -161,13 +162,22 @@ class ReceipesController extends GetxController {
   /// Fetch real per-serving-time recipe counts for the landing grid, scoped
   /// to the currently selected top category.
   Future<void> fetchServingTimeSummary() async {
+    final requestId = ++_servingTimeSummaryRequestId;
     isLoadingServingTimeSummary.value = true;
     try {
-      servingTimeSummary.value = await _recipeService.getServingTimeSummary(
+      final result = await _recipeService.getServingTimeSummary(
         topCategory: selectedTopCategory.value,
       );
+      // A newer fetch was started while this one was in flight - its
+      // response (for whatever category is now actually selected) is the
+      // one that should win, not this stale one, however the two happen to
+      // resolve.
+      if (requestId != _servingTimeSummaryRequestId) return;
+      servingTimeSummary.value = result;
     } finally {
-      isLoadingServingTimeSummary.value = false;
+      if (requestId == _servingTimeSummaryRequestId) {
+        isLoadingServingTimeSummary.value = false;
+      }
     }
   }
 

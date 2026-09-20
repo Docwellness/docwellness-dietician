@@ -4,8 +4,8 @@ import 'package:docwellnesdoc/app/modules/home/views/action_details_view.dart';
 import 'package:docwellnesdoc/app/modules/home/views/doctor_profile_view.dart';
 import 'package:docwellnesdoc/app/modules/patients/controllers/patients_controller.dart';
 import 'package:docwellnesdoc/app/modules/patients/widgets/new_patients_container.dart';
+import 'package:docwellnesdoc/app/modules/receipes/controllers/receipes_controller.dart';
 import 'package:docwellnesdoc/app/modules/receipes/views/add_receipes.dart';
-import 'package:docwellnesdoc/app/modules/receipes/views/recipe_list_by_filter_view.dart';
 import 'package:docwellnesdoc/app/modules/receipes/widgets/receipe_container.dart';
 import 'package:docwellnesdoc/app/routes/app_pages.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_button.dart';
@@ -638,27 +638,20 @@ class HomeView extends GetView<HomeController> {
     controller.changeTab(1);
   }
 
-  // A Recipes card here used to push ViewAddedReceipes - a whole separate
-  // screen/list layout from RecipeListByFilterView, the grid the Diet &
-  // Exercise tab's own category drill-down already uses, so the same
-  // "browse recipes by category" action looked and behaved differently
-  // depending on where it was started from. Switching to that tab first
-  // (registers ReceipesController if needed, same as _openNewClientsTab
-  // does for Patients) means backing out of the pushed grid lands on the
-  // Diet & Exercise tab instead of some disconnected screen, and pushing
-  // the shared view on top of it means every entry point now looks
-  // identical.
+  // A Recipes card here used to push ViewAddedReceipes, then later
+  // RecipeListByFilterView's flat grid directly - both opened a separate
+  // screen instead of landing on the Diet & Exercise tab itself. Tapping a
+  // category on Home should feel identical to switching to that tab and
+  // tapping the same chip there: select the category (same mechanism the
+  // tab's own chip row uses, ReceipesController.changeTopCategory) and
+  // switch the bottom nav to it, landing on its normal serving-time-summary
+  // grid scoped to that category - not a separate flat "all recipes" screen.
   void _openRecipeCategory(String categoryName) {
     controller.onTabSelected(2); // registers ReceipesController if needed
+    final rc = Get.find<ReceipesController>();
+    rc.selectedCategory.value = 'All';
+    rc.changeTopCategory(categoryName);
     controller.changeTab(2);
-    Get.to(
-      () => RecipeListByFilterView(
-        title: categoryName,
-        topCategory: 'All',
-        servingTime: null,
-        category: categoryName,
-      ),
-    );
   }
 }
 

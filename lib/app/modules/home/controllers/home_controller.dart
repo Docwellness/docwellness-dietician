@@ -282,7 +282,16 @@ class HomeController extends GetxController with WidgetsBindingObserver {
         Get.put(PatientsController());
         break;
       case 2:
-        Get.put(ReceipesController());
+        // Guarded like case 4's ChatController - Get.put() unconditionally
+        // replaces an already-registered singleton and re-runs onInit
+        // (which re-fetches categories/serving-time-summary with default
+        // filters), so recreating it here would race with, and can
+        // overwrite, a category selection a caller (e.g. the Home
+        // dashboard's Recipes cards) just made on the existing instance
+        // before switching to this tab.
+        if (!Get.isRegistered<ReceipesController>()) {
+          Get.put(ReceipesController());
+        }
         break;
       case 3:
         Get.put(PerformanceController());
