@@ -21,6 +21,7 @@ class DoctorProfileController extends GetxController {
   final experienceController = TextEditingController();
   final qualificationController = TextEditingController();
   final bioController = TextEditingController();
+  final pullQuoteController = TextEditingController();
   final postTextController = TextEditingController();
 
   final youtubeUrlController = TextEditingController();
@@ -101,6 +102,7 @@ class DoctorProfileController extends GetxController {
     experienceController.dispose();
     qualificationController.dispose();
     bioController.dispose();
+    pullQuoteController.dispose();
     postTextController.dispose();
     youtubeUrlController.dispose();
     youtubeCaptionController.dispose();
@@ -162,6 +164,7 @@ class DoctorProfileController extends GetxController {
             : '';
         qualificationController.text = data.qualification;
         bioController.text = data.bio;
+        pullQuoteController.text = data.pullQuote;
       }
     } catch (e) {
       log('❌ Error loading profile: $e');
@@ -181,6 +184,7 @@ class DoctorProfileController extends GetxController {
         'specialization': specializationController.text.trim(),
         'qualification': qualificationController.text.trim(),
         'bio': bioController.text.trim(),
+        'pullQuote': pullQuoteController.text.trim(),
       };
 
       if (experienceController.text.trim().isNotEmpty) {

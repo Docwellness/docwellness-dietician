@@ -5,6 +5,7 @@ import 'package:docwellnesdoc/app/utils/common_widgets/custom_button.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_dropdown.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_field.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
+import 'package:docwellnesdoc/app/utils/common_widgets/motion.dart';
 import 'package:docwellnesdoc/app/utils/theme/app_shadows.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -59,7 +60,8 @@ class DoctorProfileView extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               // Profile Image
-              GestureDetector(
+              TapScale(
+                scale: 0.95,
                 onTap: controller.pickAndUploadImage,
                 child: Stack(
                   children: [
@@ -241,6 +243,36 @@ class DoctorProfileView extends StatelessWidget {
                 controller: controller.bioController,
                 hintText: 'Tell patients about yourself...',
                 maxLines: 4,
+              ),
+
+              const SizedBox(height: 16),
+
+              // Philosophy / Pull Quote - the single highlighted line shown
+              // in its own quote card on the About Doctor page, right below
+              // "My Story". Left empty, the patient app falls back to a
+              // generic placeholder line instead of leaving the section
+              // blank.
+              Align(
+                alignment: Alignment.centerLeft,
+                child: CustomText(
+                  text: 'Philosophy Quote',
+                  fontWeight: FontWeight.w500,
+                  fontSize: 14,
+                  color: const Color(0xff1F2A37),
+                ),
+              ),
+              const SizedBox(height: 4),
+              CustomText(
+                text: 'One distilled line of your philosophy - shown highlighted on your About Doctor page.',
+                fontWeight: FontWeight.w400,
+                fontSize: 12,
+                color: const Color(0xff6C737F),
+              ),
+              const SizedBox(height: 8),
+              CustomField(
+                controller: controller.pullQuoteController,
+                hintText: 'e.g. Real change comes from a plan that fits your actual life.',
+                maxLines: 2,
               ),
 
               const SizedBox(height: 30),
@@ -519,25 +551,37 @@ class DoctorProfileView extends StatelessWidget {
               const Divider(color: Color(0xffE5E7EB)),
               const SizedBox(height: 20),
 
-              _PhotoGalleryManager(controller: controller),
+              FadeSlideIn(
+                delay: const Duration(milliseconds: 80),
+                child: _PhotoGalleryManager(controller: controller),
+              ),
 
               const SizedBox(height: 30),
               const Divider(color: Color(0xffE5E7EB)),
               const SizedBox(height: 20),
 
-              _SocialMediaManager(controller: controller),
+              FadeSlideIn(
+                delay: const Duration(milliseconds: 140),
+                child: _SocialMediaManager(controller: controller),
+              ),
 
               const SizedBox(height: 30),
               const Divider(color: Color(0xffE5E7EB)),
               const SizedBox(height: 20),
 
-              _ArticlesManager(controller: controller),
+              FadeSlideIn(
+                delay: const Duration(milliseconds: 200),
+                child: _ArticlesManager(controller: controller),
+              ),
 
               const SizedBox(height: 30),
               const Divider(color: Color(0xffE5E7EB)),
               const SizedBox(height: 20),
 
-              _ReviewsManager(controller: controller),
+              FadeSlideIn(
+                delay: const Duration(milliseconds: 260),
+                child: _ReviewsManager(controller: controller),
+              ),
 
               const SizedBox(height: 20),
             ],

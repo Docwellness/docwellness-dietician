@@ -7,6 +7,7 @@ class DoctorProfileModel {
   final int experience;
   final String qualification;
   final String bio;
+  final String pullQuote;
 
   DoctorProfileModel({
     required this.fullName,
@@ -17,6 +18,7 @@ class DoctorProfileModel {
     required this.experience,
     required this.qualification,
     required this.bio,
+    this.pullQuote = '',
   });
 
   factory DoctorProfileModel.fromJson(Map<String, dynamic> json) {
@@ -31,6 +33,7 @@ class DoctorProfileModel {
       experience: (json['experience'] as num?)?.toInt() ?? 0,
       qualification: json['qualification'] ?? '',
       bio: json['bio'] ?? '',
+      pullQuote: json['pullQuote'] ?? '',
     );
   }
 
@@ -43,6 +46,7 @@ class DoctorProfileModel {
       'experience': experience,
       'qualification': qualification,
       'bio': bio,
+      'pullQuote': pullQuote,
     };
   }
 
