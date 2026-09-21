@@ -291,6 +291,37 @@ class PatientsController extends GetxController {
   RxMap<String, dynamic> clientExerciseStats = <String, dynamic>{}.obs;
   RxList<Map<String, dynamic>> clientMeals = <Map<String, dynamic>>[].obs;
 
+  /// The pause window (if any) covering clientLogSelectedDate - both
+  /// getPatientMealLogStats and getPatientExerciseStats now return the
+  /// patient's full pause window list (see utils/subscriptionPause.js), so
+  /// "Client Logged Data" can show a paused notice instead of that day's
+  /// (possibly all-zero, or simply wrong-week) numbers, matching what the
+  /// patient's own app shows for the same date. Reads clientMealStats since
+  /// it's always fetched; either response carries the same windows.
+  Map<String, DateTime>? get clientLogSelectedDatePauseWindow {
+    final pause = clientMealStats['pause'];
+    if (pause is! Map) return null;
+    final windows = pause['windows'];
+    if (windows is! List) return null;
+    final day = DateTime(
+      clientLogSelectedDate.value.year,
+      clientLogSelectedDate.value.month,
+      clientLogSelectedDate.value.day,
+    );
+    for (final w in windows) {
+      if (w is! Map) continue;
+      final s = DateTime.tryParse(w['startDate']?.toString() ?? '');
+      final r = DateTime.tryParse(w['resumeDate']?.toString() ?? '');
+      if (s == null || r == null) continue;
+      final sd = DateTime(s.year, s.month, s.day);
+      final rd = DateTime(r.year, r.month, r.day);
+      if (!day.isBefore(sd) && day.isBefore(rd)) {
+        return {'startDate': sd, 'resumeDate': rd};
+      }
+    }
+    return null;
+  }
+
   /// questions
   RxString report = ''.obs;
 

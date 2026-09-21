@@ -1,4 +1,5 @@
 import 'package:docwellnesdoc/app/modules/patients/controllers/patients_controller.dart';
+import 'package:docwellnesdoc/app/modules/patients/widgets/client_pause_banner.dart';
 import 'package:docwellnesdoc/app/modules/patients/widgets/log_meal_container.dart';
 import 'package:docwellnesdoc/app/modules/patients/widgets/progress_card_for_sheet.dart';
 import 'package:docwellnesdoc/app/modules/patients/widgets/water_intake_container.dart';
@@ -94,6 +95,7 @@ class _ClintLogDataSheetState extends State<ClintLogDataSheet> {
       final planned = Map<String, dynamic>.from(macros['planned'] ?? {});
       final waterData = controller.clientWaterData;
       final selectedDate = controller.clientLogSelectedDate.value;
+      final pauseWindow = controller.clientLogSelectedDatePauseWindow;
 
       return SingleChildScrollView(
         child: Column(
@@ -190,6 +192,11 @@ class _ClintLogDataSheetState extends State<ClintLogDataSheet> {
                   padding: EdgeInsets.all(40),
                   child: CircularProgressIndicator(color: Color(0xffDE2493)),
                 ),
+              )
+            else if (pauseWindow != null)
+              ClientPauseBanner(
+                startDate: pauseWindow['startDate']!,
+                resumeDate: pauseWindow['resumeDate']!,
               )
             else ...[
               // Progress card with real data
