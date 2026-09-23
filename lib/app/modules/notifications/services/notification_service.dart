@@ -77,4 +77,19 @@ class NotificationService {
     }
     return false;
   }
+
+  /// Permanently delete all notifications
+  Future<bool> clearAll() async {
+    try {
+      final response = await _api.request(
+        endPoint: '/notifications/clear-all',
+        method: 'DELETE',
+        headers: _authHeader,
+      );
+      return response != null && response.statusCode == 200;
+    } catch (e) {
+      debugPrint('clearAll error: $e');
+    }
+    return false;
+  }
 }

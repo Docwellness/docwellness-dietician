@@ -165,6 +165,17 @@ class NotificationController extends GetxController {
     unreadCount.value = await _service.getUnreadCount();
   }
 
+  /// Permanently delete all notifications. Caller (the view) is
+  /// responsible for confirming with the user first - this does not ask.
+  Future<bool> clearAllNotifications() async {
+    final success = await _service.clearAll();
+    if (success) {
+      notifications.clear();
+      unreadCount.value = 0;
+    }
+    return success;
+  }
+
   /// Auto-mark all visible notifications as read
   Future<void> _autoMarkAllRead() async {
     if (unreadCount.value > 0) {

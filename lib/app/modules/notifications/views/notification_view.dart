@@ -39,6 +39,17 @@ class NotificationView extends GetView<NotificationController> {
               ),
             );
           }),
+          Obx(() {
+            if (controller.notifications.isEmpty) return const SizedBox();
+            return IconButton(
+              icon: const Icon(
+                Icons.delete_outline_rounded,
+                color: Color(0xff851653),
+              ),
+              tooltip: 'Clear all notifications',
+              onPressed: () => _confirmAndClearAll(context),
+            );
+          }),
         ],
       ),
       body: Obx(() {
@@ -115,6 +126,54 @@ class NotificationView extends GetView<NotificationController> {
         );
       }),
     );
+  }
+
+  Future<void> _confirmAndClearAll(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const CustomText(
+          text: 'Clear all notifications?',
+          fontWeight: FontWeight.w600,
+          fontSize: 16,
+          color: Color(0xff530630),
+        ),
+        content: const CustomText(
+          text: 'This permanently deletes your notification history. This can\'t be undone.',
+          fontWeight: FontWeight.w400,
+          fontSize: 13,
+          color: Color(0xff1F2A37),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const CustomText(
+              text: 'Cancel',
+              fontWeight: FontWeight.w500,
+              fontSize: 13,
+              color: Color(0xff6C737F),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const CustomText(
+              text: 'Clear all',
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
+              color: Colors.red,
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final success = await controller.clearAllNotifications();
+    if (!context.mounted) return;
+    if (!success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to clear notifications. Please try again.')),
+      );
+    }
   }
 }
 
