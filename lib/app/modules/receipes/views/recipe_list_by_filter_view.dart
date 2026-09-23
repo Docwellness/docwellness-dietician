@@ -126,7 +126,11 @@ class _RecipeListByFilterViewState extends State<RecipeListByFilterView> {
                   controller.recipes.length +
                   (controller.hasMoreRecipes.value ? 1 : 0),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                mainAxisExtent: 200,
+                // 200 was too tight for a full-length recipe name (2 lines)
+                // plus the ingredient-summary subtitle - titles like "Warm
+                // Water with Dates, Figs and Almonds" were cropping early.
+                // See ReceipeContainer.height.
+                mainAxisExtent: 224,
                 mainAxisSpacing: 8,
                 crossAxisSpacing: 8,
                 crossAxisCount: 3,
@@ -153,6 +157,7 @@ class _RecipeListByFilterViewState extends State<RecipeListByFilterView> {
                       subTitle: '${recipe.ingredientsCount} ingredients',
                       ingredientSummary: recipe.ingredientSummary,
                       imageWidth: constraints.maxWidth,
+                      height: 216,
                       onTap: () async {
                         final fullRecipe = await controller.fetchRecipeById(
                           recipe.id,

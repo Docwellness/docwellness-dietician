@@ -17,6 +17,15 @@ class ReceipeContainer extends StatelessWidget {
   // up to 2 ingredients with portions below the title instead of just
   // the "N ingredients" count. Falls back to subTitle when empty.
   final List<String> ingredientSummary;
+  // Total card height. Defaults to the historical 192 (matches the Home
+  // screen's recipe-category rail, whose short category names/counts
+  // never needed more room). A caller whose title text runs longer (e.g.
+  // full recipe names in a browse grid) should pass more - see
+  // recipe_list_by_filter_view.dart, which found 192 too tight to
+  // reliably fit a 2-line title plus the ingredient-summary subtitle
+  // without cropping text early (real Roboto line-height ran past what
+  // that budget assumed).
+  final double height;
 
   const ReceipeContainer({
     super.key,
@@ -26,6 +35,7 @@ class ReceipeContainer extends StatelessWidget {
     required this.onTap,
     this.imageWidth = 121.33,
     this.ingredientSummary = const [],
+    this.height = 192,
   });
 
   bool get _isNetworkImage =>
@@ -36,7 +46,7 @@ class ReceipeContainer extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: SizedBox(
-        height: 192,
+        height: height,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -96,6 +106,7 @@ class ReceipeContainer extends StatelessWidget {
                 maxLines: 2,
               ),
             ),
+            const SizedBox(height: 2),
             if (ingredientSummary.isNotEmpty)
               Flexible(
                 child: CustomText(
