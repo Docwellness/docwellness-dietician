@@ -326,6 +326,10 @@ class _ClintLogDataSheetState extends State<ClintLogDataSheet> {
                             caloriesConsumed: _toInt(meal['caloriesConsumed']),
                             loggedServings: _toInt(meal['loggedServings']),
                             isLogged: meal['isLogged'] == true,
+                            protein: _toDouble(meal['protein']),
+                            fiber: _toDouble(meal['fiber']),
+                            carbs: _toDouble(meal['carbs']),
+                            fat: _toDouble(meal['fat']),
                           ),
                         )
                         .toList(),
