@@ -19,6 +19,8 @@ class ChatController extends GetxController {
   RxBool showChatLoading = false.obs;
 
   RxList<ChatUser> allChatsList = <ChatUser>[].obs;
+  RxList<ChatUser> archivedChatsList = <ChatUser>[].obs;
+  RxBool showArchivedChatsLoading = false.obs;
   RxList<ChatModel> chatList = <ChatModel>[].obs;
   final Rx<ChatModel?> replyMessage = Rx<ChatModel?>(null);
 
@@ -272,6 +274,46 @@ class ChatController extends GetxController {
     } catch (e) {
       debugPrint("Silent refresh error: $e");
     }
+  }
+
+  Future<void> getArchivedChats() async {
+    showArchivedChatsLoading.value = true;
+    try {
+      final response = await service.getArchivedChats();
+      if (response != null) {
+        archivedChatsList.value = (response['data'] as List)
+            .map((e) => ChatUser.fromJson(e))
+            .toList();
+      }
+    } catch (e) {
+      debugPrint("getArchivedChats error: $e");
+    }
+    showArchivedChatsLoading.value = false;
+  }
+
+  /// Optimistically removes the chat from the active list the moment the
+  /// backend confirms the archive - a silent conversation-list refresh
+  /// (e.g. _refreshConversationList firing right after) would otherwise
+  /// briefly race and could flash it back in before this method's caller
+  /// even returns, so allChatsList itself is what's authoritative here, not
+  /// a follow-up fetch.
+  Future<bool> archiveConversation(String id) async {
+    final ok = await service.archiveConversation(id);
+    if (ok) {
+      allChatsList.removeWhere((c) => c.id == id);
+    }
+    return ok;
+  }
+
+  /// Mirrors archiveConversation - removes from the archived list on
+  /// success (the caller is responsible for getting it back onto
+  /// allChatsList, e.g. by calling getAllPatientChat()).
+  Future<bool> unarchiveConversation(String id) async {
+    final ok = await service.unarchiveConversation(id);
+    if (ok) {
+      archivedChatsList.removeWhere((c) => c.id == id);
+    }
+    return ok;
   }
 
   Future<void> getPatientChat(String id) async {

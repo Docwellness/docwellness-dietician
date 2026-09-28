@@ -28,6 +28,60 @@ class ChatService {
     return null;
   }
 
+  /// The archived-chats view's own list - same shape as getAllPatientsChat,
+  /// just the ?archived=true side of the same per-participant archivedAt
+  /// filter (see backend getConversations).
+  Future<dynamic> getArchivedChats() async {
+    try {
+      final response = await service.request(
+        endPoint: '$getAllPatientsChatPath?archived=true',
+        method: 'GET',
+        headers: {'Authorization': "Bearer $token"},
+      );
+
+      if (response != null &&
+          response.statusCode == 200 &&
+          response.data['success'] == true) {
+        return response.data;
+      }
+    } catch (e) {
+      debugPrint('-----------------------> $e');
+    }
+    return null;
+  }
+
+  Future<bool> archiveConversation(String id) async {
+    try {
+      final response = await service.request(
+        endPoint: '/chat/conversations/$id/archive',
+        method: 'PATCH',
+        headers: {'Authorization': "Bearer $token"},
+      );
+      return response != null &&
+          response.statusCode == 200 &&
+          response.data['success'] == true;
+    } catch (e) {
+      debugPrint('archiveConversation error: $e');
+    }
+    return false;
+  }
+
+  Future<bool> unarchiveConversation(String id) async {
+    try {
+      final response = await service.request(
+        endPoint: '/chat/conversations/$id/unarchive',
+        method: 'PATCH',
+        headers: {'Authorization': "Bearer $token"},
+      );
+      return response != null &&
+          response.statusCode == 200 &&
+          response.data['success'] == true;
+    } catch (e) {
+      debugPrint('unarchiveConversation error: $e');
+    }
+    return false;
+  }
+
   /// [before] (ISO-8601, UTC) is the cursor for older-page loads - the oldest
   /// message currently on screen; omit for the first page. [limit] caps the
   /// page size. With neither, the backend returns the whole history.

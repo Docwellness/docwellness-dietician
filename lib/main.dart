@@ -14,6 +14,7 @@ import 'app/routes/app_pages.dart';
 import 'app/services/connectivity_service.dart';
 import 'app/services/notification_service.dart';
 import 'app/services/socket_service.dart';
+import 'app/utils/functions/startup_permissions.dart';
 import 'core/config/env_service.dart';
 import 'core/session/session_service.dart';
 
@@ -117,6 +118,13 @@ Future<void> _bootstrap() async {
       );
     }
   }
+
+  // Prime every other runtime permission (photo library, microphone) right
+  // here, back-to-back with the notification prompt above, instead of
+  // leaving them to surface one at a time later - first on opening the
+  // Photo Gallery uploader, then again on first tapping the chat mic - which
+  // is what was producing the "permissions trickling in with a delay" effect.
+  await requestStartupPermissions();
 
   // Initialize Socket Service (permanent - it's an app-lifetime service and
   // HomeController/NotificationController hold subscriptions to its streams;
