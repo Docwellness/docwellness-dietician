@@ -236,8 +236,17 @@ class GenerationStepController extends GetxController {
   /// Mirrors utils/membershipTiers.js's TIER_INITIAL_WEEKS exactly - Silver
   /// gets all 4 weeks in the single initial "Create Diet Plan" action (no
   /// regeneration ever offered, see validateRegenerateRequest's explicit
-  /// rejection for 'silver'), Golden gets weeks 1-2, Platinum (or an
-  /// unrecognized/missing tier) gets week 1 only.
+  /// rejection for 'silver'), Golden gets weeks 1-2, Platinum gets week 1
+  /// only.
+  ///
+  /// An unrecognized/missing tier is treated the same as Silver (all 4
+  /// weeks up front), NOT Platinum - matching validateRegenerateRequest,
+  /// which rejects regeneration for a falsy tier exactly like it does for
+  /// 'silver', and matching patient_profile_view.dart's _weekCardState,
+  /// which assumes any week not yet generated for an unrecognized tier is
+  /// simply locked (never "eligible"). Falling back to Platinum's [1] here
+  /// would leave weeks 2-4 permanently locked in the UI for such a patient,
+  /// with no card state that ever offers a way to generate them.
   List<int> _initialWeeksForTier() {
     final status = wizard.patientsController.patientProfileModel.value?.status;
     // During a renewal this wizard is building the NEXT cycle, so gate on
@@ -248,9 +257,9 @@ class GenerationStepController extends GetxController {
             ? status?.pendingMembershipTier
             : status?.membershipTier)
         ?.toLowerCase();
-    if (tier == 'silver') return [1, 2, 3, 4];
     if (tier == 'golden') return [1, 2];
-    return [1];
+    if (tier == 'platinum') return [1];
+    return [1, 2, 3, 4];
   }
 
   Map<String, dynamic>? _nonEmpty(Map<String, dynamic> m) => m.isEmpty ? null : m;
