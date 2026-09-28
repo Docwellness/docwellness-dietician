@@ -588,6 +588,36 @@ class RecipeService {
     }
   }
 
+  /// Generates (or regenerates) this recipe's main dish photo with AI - Jev
+  /// picks a photography style + hero ingredient from the recipe's own
+  /// data, OpenAI renders it, and the backend persists it directly (no
+  /// separate "save" step needed, unlike the device-upload flow). Can be
+  /// called repeatedly ("refresh") to get a different result each time.
+  /// POST /api/dietician/recipes/:id/generate-image
+  Future<String?> regenerateRecipeImage({required String recipeId}) async {
+    try {
+      final response = await _apiService.request(
+        endPoint: '/recipes/$recipeId/generate-image',
+        method: 'POST',
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      if (response != null &&
+          response.statusCode == 200 &&
+          response.data['success'] == true) {
+        return response.data['data']?['url']?.toString();
+      }
+
+      print(
+        '❌ regenerateRecipeImage failed: status=${response?.statusCode}, data=${response?.data}',
+      );
+      return null;
+    } catch (e) {
+      print('❌ regenerateRecipeImage exception: $e');
+      return null;
+    }
+  }
+
   /// Upload ingredient image to Cloudinary via backend
   /// POST /api/dietician/uploads/ingredient-image
   Future<String?> uploadIngredientImage(String filePath) async {
