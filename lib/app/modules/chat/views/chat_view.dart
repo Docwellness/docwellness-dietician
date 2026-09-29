@@ -1,6 +1,9 @@
+import 'package:docwellnesdoc/app/modules/chat/views/archived_chats_view.dart';
 import 'package:docwellnesdoc/app/modules/chat/views/chat_screen.dart';
 import 'package:docwellnesdoc/app/modules/chat/widgets/chat_info_container.dart';
+import 'package:docwellnesdoc/app/utils/common_widgets/app_toast.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -23,6 +26,13 @@ class ChatView extends GetView<ChatController> {
             color: Color(0xff1F2A37),
           ),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.archive_outlined, color: Color(0xff851653)),
+            tooltip: 'Archived chats',
+            onPressed: () => Get.to(() => const ArchivedChatsView()),
+          ),
+        ],
       ),
       body: Obx(
         () => controller.showAllChatLoading.value
@@ -95,17 +105,63 @@ class ChatView extends GetView<ChatController> {
                             }
                           }
 
-                          return MessageCard(
-                            onTap: () {
-                              Get.to(() => ChatScreen(conversationId: data.id,));
-                            },
-                            isOnline: data.isOnline == false ? 0 : 1,
-                            name: data.name,
-                            message: data.message,
-                            time: timeAgo(data.time),
-                            unreadCount: data.count,
-                            avatar:
-                                "assets/demos/ce29dbd660832e9f4562a5667afb49dd0e192653.png",
+                          // Runs the actual archive call + list update -
+                          // shared by both the revealed button (a small
+                          // swipe, tapped explicitly) and a full swipe past
+                          // the pane's own dismiss threshold, same as
+                          // WhatsApp's chat list.
+                          Future<bool> doArchive() async {
+                            final ok = await controller.archiveConversation(
+                              data.id,
+                            );
+                            if (!ok) {
+                              showAppToast(
+                                Get.overlayContext!,
+                                message: 'Failed to archive chat. Please try again.',
+                                type: AppToastType.error,
+                              );
+                            }
+                            return ok;
+                          }
+
+                          return Slidable(
+                            key: ValueKey(data.id),
+                            endActionPane: ActionPane(
+                              motion: const StretchMotion(),
+                              extentRatio: 0.28,
+                              // A full swipe (past the pane's own extent)
+                              // archives immediately - confirmDismiss (not
+                              // onDismissed) is where the actual network
+                              // call happens so a failed archive springs
+                              // the row back instead of leaving it visually
+                              // gone but still present in allChatsList.
+                              dismissible: DismissiblePane(
+                                onDismissed: () {},
+                                confirmDismiss: doArchive,
+                              ),
+                              children: [
+                                SlidableAction(
+                                  onPressed: (_) => doArchive(),
+                                  backgroundColor: const Color(0xff851653),
+                                  foregroundColor: Colors.white,
+                                  icon: Icons.archive_outlined,
+                                  label: 'Archive',
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                              ],
+                            ),
+                            child: MessageCard(
+                              onTap: () {
+                                Get.to(() => ChatScreen(conversationId: data.id,));
+                              },
+                              isOnline: data.isOnline == false ? 0 : 1,
+                              name: data.name,
+                              message: data.message,
+                              time: timeAgo(data.time),
+                              unreadCount: data.count,
+                              avatar:
+                                  "assets/demos/ce29dbd660832e9f4562a5667afb49dd0e192653.png",
+                            ),
                           );
                         },
                       ),

@@ -48,6 +48,7 @@ dependencies:
   video_thumbnail: ^0.5.6
   lottie: ^3.3.2
   speech_to_text: ^7.3.0
+  permission_handler: ^11.3.1
   intl: ^0.19.0
   cached_network_image: ^3.4.1
   socket_io_client: ^3.1.4
@@ -62,6 +63,11 @@ dependencies:
   # Phase 9, P9-D7
   flutter_jailbreak_detection: ^1.10.0
   local_auth: ^2.3.0
+  # WhatsApp-style swipe-to-reveal on the Chats list (a small swipe exposes
+  # a tappable Archive button that stays open; continuing to drag all the
+  # way triggers DismissiblePane's own full-swipe-to-archive) - plain
+  # Dismissible only supports the latter, not a persistent revealed action.
+  flutter_slidable: ^4.0.1
 
 dev_dependencies:
   flutter_test:

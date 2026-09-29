@@ -77,6 +77,7 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
   final Set<int> _uploadingIngredientIndexes = <int>{};
   RecipePreview? _editableRecipe;
   bool _isUploadingMainImage = false;
+  bool _isGeneratingMainImage = false;
   bool _isSavingExistingRecipe = false;
   bool _isSavingAsNewRecipe = false;
   bool _isUpdatingExisting = false;
@@ -486,6 +487,58 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
     }
   }
 
+  /// AI-regenerates this recipe's main dish photo (Jev art-direction +
+  /// OpenAI image generation, see the backend's utils/recipeImageGenerator.js)
+  /// - can be tapped repeatedly to get a different result, same "refresh"
+  /// contract as IngredientTile's onRefreshImageTap. Only available for an
+  /// already-saved recipe (needs a real id for the backend to build the
+  /// prompt from and persist onto) - never shown from the not-yet-saved
+  /// preview flow, see its gate at the call site below.
+  Future<void> _regenerateMainImageWithAI() async {
+    final recipeId = recipe?.id;
+    if (recipeId == null || recipeId.isEmpty) return;
+    if (_isGeneratingMainImage || _isUploadingMainImage) return;
+
+    setState(() {
+      _isGeneratingMainImage = true;
+    });
+
+    try {
+      final imageUrl = await _recipeService.regenerateRecipeImage(
+        recipeId: recipeId,
+      );
+      if (imageUrl == null || imageUrl.isEmpty) {
+        showAppToast(
+          Get.overlayContext!,
+          message: "Couldn't generate a new image. Please try again.",
+          type: AppToastType.error,
+        );
+        return;
+      }
+
+      // Already persisted server-side (generate-image both generates and
+      // saves in one call, unlike the device-upload flow) - just refresh
+      // local state and the list.
+      _mainImageUrl = imageUrl;
+      setState(() {});
+      if (Get.isRegistered<ReceipesController>()) {
+        _receipesController().fetchRecipes(refresh: true);
+      }
+
+      showAppToast(
+        Get.overlayContext!,
+        message: 'Generated a new recipe image.',
+        type: AppToastType.success,
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isGeneratingMainImage = false;
+        });
+      }
+    }
+  }
+
   /// "Save as New Recipe" - forks the current (possibly AI-refined via
   /// Update AI Inputs) preview into a brand-new recipe document under a
   /// different name, instead of overwriting the one being viewed. Prompts
@@ -797,17 +850,63 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
                       child: Material(
                         color: Colors.transparent,
                         child: InkWell(
-                          onTap: _isUploadingMainImage
+                          onTap:
+                              (_isUploadingMainImage ||
+                                  _isGeneratingMainImage)
                               ? null
                               : _pickAndUploadMainImage,
                         ),
                       ),
                     ),
+                    // AI-regenerate ("refresh") - only once the recipe is
+                    // actually saved (needs a real id, see
+                    // _regenerateMainImageWithAI's doc comment), same
+                    // bottom-left/bottom-right pairing IngredientTile uses
+                    // for its own refresh button.
+                    if (!widget.fromAddRecipeScreen &&
+                        recipe?.id != null &&
+                        recipe!.id!.isNotEmpty)
+                      Positioned(
+                        left: 12,
+                        bottom: 12,
+                        child: InkWell(
+                          onTap:
+                              (_isUploadingMainImage ||
+                                  _isGeneratingMainImage)
+                              ? null
+                              : _regenerateMainImageWithAI,
+                          child: Container(
+                            height: 32,
+                            width: 32,
+                            decoration: BoxDecoration(
+                              color: const Color(0xff530630),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: _isGeneratingMainImage
+                                ? const Padding(
+                                    padding: EdgeInsets.all(7),
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor:
+                                          AlwaysStoppedAnimation<Color>(
+                                            Colors.white,
+                                          ),
+                                    ),
+                                  )
+                                : const Icon(
+                                    Icons.refresh,
+                                    color: Colors.white,
+                                    size: 18,
+                                  ),
+                          ),
+                        ),
+                      ),
                     Positioned(
                       right: 12,
                       bottom: 12,
                       child: InkWell(
-                        onTap: _isUploadingMainImage
+                        onTap:
+                            (_isUploadingMainImage || _isGeneratingMainImage)
                             ? null
                             : _pickAndUploadMainImage,
                         child: Container(
