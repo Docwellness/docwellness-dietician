@@ -1,7 +1,7 @@
 // Mirrors the backend's utils/dayGroups.js DAY_GROUPS rotation exactly:
 // Monday's meals repeat on Friday, Tuesday's on Saturday, Wednesday's on
 // Sunday, Thursday is unique (see that file's own comment, sourced from
-// the DocWellness Diet Plan 4page-4.pdf 7-day template) - the underlying
+// the Docwellness Diet Plan 4page-4.pdf 7-day template) - the underlying
 // value sent to/from the backend is always the canonical 'Monday'/
 // 'Tuesday'/'Wednesday'/'Thursday' string; this only affects display.
 //

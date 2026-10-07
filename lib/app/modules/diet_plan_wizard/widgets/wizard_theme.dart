@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 /// diet-plan-wizard/wizard-visual-language).
 ///
 /// Direction: the professional counterpart to the patient app's Diet Plan
-/// view - same DocWellness identity (`#530630` / `#851653`), but tighter and
+/// view - same Docwellness identity (`#530630` / `#851653`), but tighter and
 /// more information-dense, with one signature structural device: the
 /// [MealTimeline] rail. Every wizard screen (Generate review, Timeline &
 /// Supplements, Review & Finalize) draws from this one token set and the

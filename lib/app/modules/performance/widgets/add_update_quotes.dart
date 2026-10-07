@@ -136,7 +136,7 @@ class _AddUpdateQuotesState extends State<AddUpdateQuotes> {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: TextField(
                 controller: controller.quoteAuthorController,
-                decoration: _fieldDecoration('Author (defaults to DocWellness)'),
+                decoration: _fieldDecoration('Author (defaults to Docwellness)'),
               ),
             ),
             const SizedBox(height: 12),

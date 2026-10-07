@@ -117,7 +117,7 @@ class QuestionsView extends StatelessWidget {
                   children: [
               // ── Consultation form - driven by the dietician's own template
               // (Performance > Customize Consultation), pre-populated by
-              // default with the DocWellness standard questionnaire the
+              // default with the Docwellness standard questionnaire the
               // first time a dietician opens this screen. Reactive on
               // customAnswerValues too, so conditional follow-up fields
               // (dependsOnFieldId) appear/disappear live as answers change.
