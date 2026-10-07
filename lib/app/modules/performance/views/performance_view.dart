@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:docwellnesdoc/app/modules/performance/views/consultation_form_builder_view.dart';
 import 'package:docwellnesdoc/app/modules/performance/widgets/add_coupon_sheet.dart';
 import 'package:docwellnesdoc/app/modules/performance/widgets/add_update_quotes.dart';
+import 'package:docwellnesdoc/app/modules/performance/widgets/client_journeys_section.dart';
 import 'package:docwellnesdoc/app/modules/performance/widgets/patients_line_chart.dart';
 import 'package:docwellnesdoc/app/modules/performance/widgets/revenue_line_chart.dart';
 import 'package:docwellnesdoc/app/modules/performance/widgets/upload_video.dart';
@@ -1494,6 +1495,8 @@ class PerformanceView extends GetView<PerformanceController> {
                 ),
               ),
             ),
+            const SizedBox(height: 24),
+            const ClientJourneysSection(),
             SizedBox(height: 28.5),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
