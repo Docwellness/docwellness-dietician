@@ -7,6 +7,7 @@ import 'package:docwellnesdoc/app/utils/functions/day_group_label.dart';
 import 'package:docwellnesdoc/app/utils/functions/quantity_label.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:intl/intl.dart';
 
 import '../controllers/plan_item_finalize_step_controller.dart';
 import '../controllers/wizard_controller.dart';
@@ -93,6 +94,8 @@ class PlanItemFinalizeStepView extends StatelessWidget {
                     const SizedBox(height: 14),
                     if (controller.targetCalories != null) _CalorieChecklist(controller: controller),
                   ],
+                  const SizedBox(height: 12),
+                  _DietStartDateRow(wizard: wizard),
                   if (selectableDayGroups.length > 1) ...[
                     const SizedBox(height: 12),
                     DayGroupSelector(
@@ -414,5 +417,111 @@ class _SupplementRow extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+/// The "Diet starts on" row - preset to the start date the patient chose when
+/// requesting the plan, adjustable here by the dietician until the plan goes
+/// live. Persisting goes through PatientsController.updateDietStartDate (same
+/// PATCH as the profile's Basic Info field), which re-anchors the plan's week
+/// schedule + exercise plan; activation then begins the diet on that date
+/// rather than immediately.
+class _DietStartDateRow extends StatelessWidget {
+  final WizardController wizard;
+
+  const _DietStartDateRow({required this.wizard});
+
+  static DateTime _today() {
+    final now = DateTime.now();
+    return DateTime(now.year, now.month, now.day);
+  }
+
+  /// dd-MM-yyyy (the backend's formatDate output on the profile) -> DateTime.
+  static DateTime? _parse(String? value) {
+    final parts = value?.split('-');
+    if (parts == null || parts.length != 3) return null;
+    final day = int.tryParse(parts[0]);
+    final month = int.tryParse(parts[1]);
+    final year = int.tryParse(parts[2]);
+    if (day == null || month == null || year == null) return null;
+    return DateTime(year, month, day);
+  }
+
+  Future<void> _pick(BuildContext context, DateTime current) async {
+    final today = _today();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: current,
+      firstDate: today,
+      lastDate: today.add(const Duration(days: 365)),
+      helpText: 'Diet start date',
+    );
+    if (picked == null) return;
+    await wizard.patientsController.updateDietStartDate(wizard.patientId, picked);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final patients = wizard.patientsController;
+    return Obx(() {
+      final saving = patients.updateDietStartDateLoading.value;
+      final requested = _parse(patients.patientProfileModel.value?.healthSummary?.startDateForDiet);
+      // A requested date already in the past means "as soon as possible".
+      final today = _today();
+      final date = (requested != null && !requested.isBefore(today)) ? requested : today;
+      final isToday = date == today;
+
+      return InkWell(
+        onTap: saving ? null : () => _pick(context, date),
+        borderRadius: BorderRadius.circular(WizardPalette.cardRadius),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: WizardPalette.surface,
+            borderRadius: BorderRadius.circular(WizardPalette.cardRadius),
+            border: Border.all(color: WizardPalette.line),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.event_outlined, size: 20, color: WizardPalette.plum),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const CustomText(
+                      text: 'Diet starts on',
+                      fontWeight: FontWeight.w400,
+                      fontSize: 12,
+                      color: WizardPalette.muted,
+                    ),
+                    const SizedBox(height: 2),
+                    CustomText(
+                      text: isToday ? 'Today, ${DateFormat('dd MMM yyyy').format(date)}' : DateFormat('EEE, dd MMM yyyy').format(date),
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15,
+                      color: WizardPalette.plum,
+                    ),
+                  ],
+                ),
+              ),
+              if (saving)
+                const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: WizardPalette.magenta),
+                )
+              else
+                const CustomText(
+                  text: 'Change',
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                  color: WizardPalette.magenta,
+                ),
+            ],
+          ),
+        ),
+      );
+    });
   }
 }
