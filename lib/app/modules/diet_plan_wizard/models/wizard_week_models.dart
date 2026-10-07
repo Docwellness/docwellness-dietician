@@ -220,6 +220,10 @@ class WizardIngredientLine {
   /// in [toJson].
   final Map<String, double> gramsPerUnitByUnit;
 
+  /// Photo borrowed from the parent (V1) Recipe's matching ingredient -
+  /// versions don't store their own. Display-only, never sent in [toJson].
+  final String? image;
+
   WizardIngredientLine({
     required this.foodItemId,
     this.foodItemName,
@@ -229,6 +233,7 @@ class WizardIngredientLine {
     this.role = 'sub',
     this.per100gCalories,
     this.resolvedGramsPerUnit,
+    this.image,
     this.gramsPerUnitByUnit = const {},
   });
 
@@ -245,6 +250,7 @@ class WizardIngredientLine {
     role: role,
     per100gCalories: per100gCalories,
     resolvedGramsPerUnit: (unit == null || unit == this.unit) ? resolvedGramsPerUnit : gramsPerUnitByUnit[unit],
+    image: image,
     gramsPerUnitByUnit: gramsPerUnitByUnit,
   );
 
@@ -258,6 +264,7 @@ class WizardIngredientLine {
       role: json['role'] == 'core' ? 'core' : 'sub',
       per100gCalories: (json['nutritionPer100g']?['calories'] as num?)?.toDouble(),
       resolvedGramsPerUnit: (json['resolvedGramsPerUnit'] as num?)?.toDouble(),
+      image: json['image'] as String?,
       gramsPerUnitByUnit: (json['gramsPerUnitByUnit'] as Map<String, dynamic>?)?.map(
             (key, value) => MapEntry(key, (value as num).toDouble()),
           ) ??
@@ -308,6 +315,10 @@ class WizardRecipeVersion {
   final Map<String, dynamic>? nutritionPerServing;
   final bool hasUnresolvedIngredients;
 
+  /// Main dish photo of the parent (V1) Recipe - see planItemController's
+  /// buildWeekPlanItemsPayload. Null on payloads that don't join it in.
+  final String? image;
+
   WizardRecipeVersion({
     required this.id,
     required this.parentRecipeId,
@@ -315,6 +326,7 @@ class WizardRecipeVersion {
     required this.versionNumber,
     required this.ingredients,
     required this.steps,
+    this.image,
     this.components = const [],
     this.nutritionPerServing,
     required this.hasUnresolvedIngredients,
@@ -332,6 +344,7 @@ class WizardRecipeVersion {
           .map((i) => WizardIngredientLine.fromJson(i))
           .toList(),
       steps: List<String>.from(json['steps'] ?? []),
+      image: json['image'] as String?,
       components: (json['components'] as List? ?? [])
           .map((c) => WizardComponent.fromJson(c))
           .toList(),
@@ -355,6 +368,7 @@ extension WizardRecipeVersionPreview on WizardRecipeVersion {
       id: parentRecipeId,
       name: name,
       description: '',
+      image: image,
       category: category,
       cuisine: '',
       servingTime: servingTime,
@@ -369,6 +383,7 @@ extension WizardRecipeVersionPreview on WizardRecipeVersion {
                 category: 'Other',
                 priceLevel: '₹₹',
                 description: i.preparation ?? '',
+                image: i.image,
               ))
           .toList(),
       servingSize: ServingSize.fromJson(const {}),

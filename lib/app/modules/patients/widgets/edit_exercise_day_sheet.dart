@@ -124,58 +124,17 @@ class _EditExerciseDayGroupSheetState extends State<EditExerciseDayGroupSheet> {
   }
 
   Future<void> _openDurationDialog(Exercise exercise) async {
-    final durationController = TextEditingController();
-    final setsController = TextEditingController();
-    final repsController = TextEditingController();
-
-    await showDialog(
+    // The dialog owns its text controllers and hands the entry back through
+    // Navigator.pop; the list is only touched after the dialog route has
+    // fully closed. Mutating this sheet from inside the dialog's onPressed
+    // (and disposing controllers right after pop) rebuilt the tree mid-route-
+    // transition, which tripped '_dependents.isEmpty' in InheritedElement.
+    final entry = await showDialog<_DraftEntry>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: CustomText(
-          text: exercise.name,
-          fontWeight: FontWeight.w700,
-          fontSize: 16,
-          color: const Color(0xff530630),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CustomField(
-              controller: durationController,
-              lable: 'Duration per set, in minutes (optional)',
-              hintText: 'Total duration if Sets is left blank',
-              keyboardType: TextInputType.number,
-            ),
-            const SizedBox(height: 12),
-            CustomField(controller: setsController, lable: 'Sets (optional)', keyboardType: TextInputType.number),
-            const SizedBox(height: 12),
-            CustomField(controller: repsController, lable: 'Reps (optional)', keyboardType: TextInputType.number),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          TextButton(
-            onPressed: () {
-              setState(() {
-                _entries.add(
-                  _DraftEntry(
-                    exercise: exercise,
-                    durationMinutes: int.tryParse(durationController.text.trim()),
-                    sets: int.tryParse(setsController.text.trim()),
-                    reps: int.tryParse(repsController.text.trim()),
-                  ),
-                );
-              });
-              Navigator.pop(context);
-            },
-            child: const Text('Add', style: TextStyle(fontWeight: FontWeight.w700, color: _accent)),
-          ),
-        ],
-      ),
+      builder: (_) => _DurationDialog(exercise: exercise),
     );
-    durationController.dispose();
-    setsController.dispose();
-    repsController.dispose();
+    if (entry == null || !mounted) return;
+    setState(() => _entries.add(entry));
   }
 
   Future<void> _save() async {
@@ -189,7 +148,7 @@ class _EditExerciseDayGroupSheetState extends State<EditExerciseDayGroupSheet> {
     setState(() => _isSaving = false);
 
     if (ok) {
-      Get.back();
+      Navigator.of(context).pop();
       showAppToast(
         Get.overlayContext!,
         message: '${widget.dayGroupLabel} exercises saved',
@@ -309,6 +268,72 @@ class _EditExerciseDayGroupSheetState extends State<EditExerciseDayGroupSheet> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _DurationDialog extends StatefulWidget {
+  final Exercise exercise;
+  const _DurationDialog({required this.exercise});
+
+  @override
+  State<_DurationDialog> createState() => _DurationDialogState();
+}
+
+class _DurationDialogState extends State<_DurationDialog> {
+  static const _accent = Color(0xff851653);
+
+  final durationController = TextEditingController();
+  final setsController = TextEditingController();
+  final repsController = TextEditingController();
+
+  @override
+  void dispose() {
+    durationController.dispose();
+    setsController.dispose();
+    repsController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: CustomText(
+        text: widget.exercise.name,
+        fontWeight: FontWeight.w700,
+        fontSize: 16,
+        color: const Color(0xff530630),
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          CustomField(
+            controller: durationController,
+            lable: 'Duration per set, in minutes (optional)',
+            hintText: 'Total duration if Sets is left blank',
+            keyboardType: TextInputType.number,
+          ),
+          const SizedBox(height: 12),
+          CustomField(controller: setsController, lable: 'Sets (optional)', keyboardType: TextInputType.number),
+          const SizedBox(height: 12),
+          CustomField(controller: repsController, lable: 'Reps (optional)', keyboardType: TextInputType.number),
+        ],
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        TextButton(
+          onPressed: () => Navigator.pop(
+            context,
+            _DraftEntry(
+              exercise: widget.exercise,
+              durationMinutes: int.tryParse(durationController.text.trim()),
+              sets: int.tryParse(setsController.text.trim()),
+              reps: int.tryParse(repsController.text.trim()),
+            ),
+          ),
+          child: const Text('Add', style: TextStyle(fontWeight: FontWeight.w700, color: _accent)),
+        ),
+      ],
     );
   }
 }

@@ -61,6 +61,7 @@ class _AddExerciseViewState extends State<AddExerciseView> {
       category: selectedCategory,
       languages: ['English', ...selectedLanguages],
     );
+    if (!mounted) return;
     setState(() => isGenerating = false);
 
     if (preview == null) {
@@ -129,10 +130,18 @@ class _AddExerciseViewState extends State<AddExerciseView> {
         translations: translations,
       ),
     );
+    // The user may have backed out while the request was in flight - touching
+    // setState/the navigator on a disposed page is what trips framework
+    // assertions like '_dependents.isEmpty'.
+    if (!mounted) return;
     setState(() => isSaving = false);
 
     if (created != null) {
-      Get.back();
+      // Pop via this page's own Navigator rather than Get.back(): with a
+      // GetX snackbar still on screen, Get.back() can tear down the wrong
+      // overlay entry mid-transition.
+      FocusScope.of(context).unfocus();
+      Navigator.of(context).pop(created);
     } else {
       Get.snackbar(
         'Failed',
@@ -284,7 +293,8 @@ class _AddExerciseViewState extends State<AddExerciseView> {
               controller: metController,
               lable: 'MET value',
               hintText: 'e.g. 3.5 for brisk walking, 9.8 for running',
-              keyboardType: TextInputType.number,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              isPoint: true,
             ),
             const SizedBox(height: 16),
             CustomField(
