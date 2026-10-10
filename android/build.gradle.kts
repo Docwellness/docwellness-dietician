@@ -3,6 +3,16 @@ allprojects {
         google()
         mavenCentral()
     }
+
+    // flutter_jailbreak_detection pins RootBeer 0.1.0, whose libtool-checker.so
+    // isn't 16 KB page-size compatible (Play Console warning). 0.1.2 on Maven
+    // Central ships a fixed native lib.
+    configurations.all {
+        resolutionStrategy.dependencySubstitution {
+            substitute(module("com.github.scottyab:rootbeer"))
+                .using(module("com.scottyab:rootbeer-lib:0.1.2"))
+        }
+    }
 }
 
 val newBuildDir: Directory =
