@@ -137,8 +137,12 @@ class TargetWeightChart extends StatelessWidget {
                           (points.length - 1 - i) < labelStep / 2) {
                         return const SizedBox.shrink();
                       }
-                      return Padding(
-                        padding: const EdgeInsets.only(top: 6),
+                      // fitInside nudges the first/last label back inside the
+                      // chart so they never poke past the page margins.
+                      return SideTitleWidget(
+                        meta: meta,
+                        space: 6,
+                        fitInside: SideTitleFitInsideData.fromTitleMeta(meta),
                         child: Text(
                           points[i].label,
                           style: const TextStyle(fontSize: 10, color: _muted),
@@ -236,6 +240,7 @@ class TargetWeightChart extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         Wrap(
+          alignment: WrapAlignment.end,
           spacing: 16,
           runSpacing: 4,
           children: [
