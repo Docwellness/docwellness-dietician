@@ -22,6 +22,16 @@ class ResetPasswordView extends GetView<AuthController> {
     final passwordController = TextEditingController();
     final rePasswordController = TextEditingController();
     final isLoading = false.obs;
+    final obscureNew = true.obs;
+    final obscureRe = true.obs;
+
+    Widget eyeToggle(RxBool flag) => IconButton(
+          icon: Icon(
+            flag.value ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+            color: const Color(0xff6C737F),
+          ),
+          onPressed: () => flag.value = !flag.value,
+        );
 
     Future<void> submit() async {
       if (!formKey.currentState!.validate()) return;
@@ -41,7 +51,10 @@ class ResetPasswordView extends GetView<AuthController> {
         message: 'Password reset. Please sign in with your new password.',
         type: AppToastType.success,
       );
-      Get.offAllNamed(Routes.AUTH);
+      // Pop back to the existing login screen instead of offAllNamed, which
+      // disposed the AuthController (and its text controllers) the login
+      // screen was still using.
+      Get.until((route) => route.settings.name == Routes.AUTH || route.isFirst);
     }
 
     Future<void> resend() async {
@@ -89,28 +102,34 @@ class ResetPasswordView extends GetView<AuthController> {
                 },
               ),
               const SizedBox(height: 16),
-              CustomField(
-                space: false,
-                hide: true,
-                lable: 'New password',
-                controller: passwordController,
-                validator: (value) => validatePassword(value, email: email),
+              Obx(
+                () => CustomField(
+                  space: false,
+                  hide: obscureNew.value,
+                  suffixIcon: eyeToggle(obscureNew),
+                  lable: 'New password',
+                  controller: passwordController,
+                  validator: (value) => validatePassword(value, email: email),
+                ),
               ),
               const SizedBox(height: 16),
-              CustomField(
-                space: false,
-                hide: true,
-                lable: 'Re-type new password',
-                controller: rePasswordController,
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please re-type your new password';
-                  }
-                  if (value != passwordController.text) {
-                    return 'Passwords do not match';
-                  }
-                  return null;
-                },
+              Obx(
+                () => CustomField(
+                  space: false,
+                  hide: obscureRe.value,
+                  suffixIcon: eyeToggle(obscureRe),
+                  lable: 'Re-type new password',
+                  controller: rePasswordController,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please re-type your new password';
+                    }
+                    if (value != passwordController.text) {
+                      return 'Passwords do not match';
+                    }
+                    return null;
+                  },
+                ),
               ),
               const SizedBox(height: 32),
               Obx(
