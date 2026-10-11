@@ -2680,7 +2680,11 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                 if (td == null || td.weightTrend.isEmpty) {
                   return SizedBox.shrink();
                 }
-                return TargetWeightChart(weightData: td.weightTrend);
+                return TargetWeightChart(
+                  weightData: td.weightTrend,
+                  targetWeight: td.targetWeight,
+                  startWeight: td.startWeight,
+                );
               }),
             ),
 

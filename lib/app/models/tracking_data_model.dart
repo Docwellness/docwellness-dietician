@@ -11,6 +11,9 @@ class TrackingData {
   final DateRangeLabel dateRange;
   final int currentIndex;
   final double currentWeight;
+  // Plan-start and target weight - 0 when the backend didn't send them.
+  final double startWeight;
+  final double targetWeight;
   final double currentBmi;
   final int plannedDailyCalories;
   final int tdee;
@@ -26,6 +29,8 @@ class TrackingData {
     required this.dateRange,
     required this.currentIndex,
     required this.currentWeight,
+    this.startWeight = 0,
+    this.targetWeight = 0,
     required this.currentBmi,
     required this.plannedDailyCalories,
     required this.tdee,
@@ -49,6 +54,8 @@ class TrackingData {
       dateRange: DateRangeLabel.fromJson(json['dateRange'] ?? {}),
       currentIndex: json['currentIndex'] ?? 0,
       currentWeight: (json['currentWeight'] ?? 0).toDouble(),
+      startWeight: (json['startWeight'] ?? 0).toDouble(),
+      targetWeight: (json['targetWeight'] ?? 0).toDouble(),
       currentBmi: (json['currentBmi'] ?? 0).toDouble(),
       plannedDailyCalories: json['plannedDailyCalories'] ?? 0,
       tdee: json['tdee'] ?? 0,
@@ -122,10 +129,15 @@ class WeightDataPoint {
   final String date;
   final double weight;
 
+  /// The patient's actual logged weight in this bucket, null if they didn't
+  /// weigh in. [weight] is the planned trend line and is unaffected by it.
+  final double? measuredWeight;
+
   WeightDataPoint({
     required this.label,
     required this.date,
     required this.weight,
+    this.measuredWeight,
   });
 
   factory WeightDataPoint.fromJson(Map<String, dynamic> json) {
@@ -133,6 +145,9 @@ class WeightDataPoint {
       label: json['label'] ?? '',
       date: json['date'] ?? '',
       weight: (json['weight'] ?? 0).toDouble(),
+      measuredWeight: json['measuredWeight'] == null
+          ? null
+          : (json['measuredWeight'] as num).toDouble(),
     );
   }
 }
