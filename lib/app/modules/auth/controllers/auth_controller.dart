@@ -7,6 +7,7 @@ import 'package:docwellnesdoc/core/session/session_service.dart';
 import 'package:docwellnesdoc/main.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:docwellnesdoc/app/utils/functions/safe_dispose.dart';
 import 'package:posthog_flutter/posthog_flutter.dart';
 
 /// Real login for the single dietician account - replaces the previous
@@ -63,8 +64,7 @@ class AuthController extends GetxController {
   @override
   void onClose() {
     _loginLockTimer?.cancel();
-    emailController.dispose();
-    passwordController.dispose();
+    disposeAfterTransition([emailController, passwordController]);
     super.onClose();
   }
 

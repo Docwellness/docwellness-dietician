@@ -4,6 +4,7 @@ import 'package:docwellnesdoc/app/modules/receipes/utils/dietary_constraints.dar
 import 'package:docwellnesdoc/app/utils/common_widgets/app_toast.dart';
 import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
+import 'package:docwellnesdoc/app/utils/functions/safe_dispose.dart';
 
 class DietOption {
   String name;
@@ -760,8 +761,7 @@ class ReceipesController extends GetxController {
 
   @override
   void onClose() {
-    recipeNameController.dispose();
-    customPreferencesController.dispose();
+    disposeAfterTransition([recipeNameController, customPreferencesController]);
     super.onClose();
   }
 }

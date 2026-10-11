@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:docwellnesdoc/app/utils/functions/safe_dispose.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:video_thumbnail/video_thumbnail.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/app_toast.dart';
@@ -99,17 +100,7 @@ class PerformanceController extends GetxController {
 
   @override
   void onClose() {
-    youtubeUrlController.dispose();
-    videoTitleController.dispose();
-    videoTextController.dispose();
-    quoteTextController.dispose();
-    quoteTextHiController.dispose();
-    quoteTextMrController.dispose();
-    quoteAuthorController.dispose();
-    couponNameController.dispose();
-    couponCodeController.dispose();
-    couponPercentageController.dispose();
-    couponValidTillController.dispose();
+    disposeAfterTransition([youtubeUrlController, videoTitleController, videoTextController, quoteTextController, quoteTextHiController, quoteTextMrController, quoteAuthorController, couponNameController, couponCodeController, couponPercentageController, couponValidTillController]);
     super.onClose();
   }
 

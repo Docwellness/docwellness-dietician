@@ -8,6 +8,7 @@ import 'package:docwellnesdoc/core/session/session_service.dart';
 import 'package:docwellnesdoc/main.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:docwellnesdoc/app/utils/functions/safe_dispose.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -96,22 +97,7 @@ class DoctorProfileController extends GetxController {
 
   @override
   void onClose() {
-    nameController.dispose();
-    dobController.dispose();
-    specializationController.dispose();
-    experienceController.dispose();
-    qualificationController.dispose();
-    bioController.dispose();
-    pullQuoteController.dispose();
-    postTextController.dispose();
-    youtubeUrlController.dispose();
-    youtubeCaptionController.dispose();
-    instagramUrlController.dispose();
-    instagramCaptionController.dispose();
-    articleTitleController.dispose();
-    articleCategoryController.dispose();
-    articleExcerptController.dispose();
-    articleContentController.dispose();
+    disposeAfterTransition([nameController, dobController, specializationController, experienceController, qualificationController, bioController, pullQuoteController, postTextController, youtubeUrlController, youtubeCaptionController, instagramUrlController, instagramCaptionController, articleTitleController, articleCategoryController, articleExcerptController, articleContentController]);
     super.onClose();
   }
 

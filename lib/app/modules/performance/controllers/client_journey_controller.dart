@@ -2,6 +2,7 @@ import 'package:docwellnesdoc/app/modules/performance/services/client_journey_se
 import 'package:docwellnesdoc/app/utils/common_widgets/app_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:docwellnesdoc/app/utils/functions/safe_dispose.dart';
 import 'package:image_picker/image_picker.dart';
 
 enum JourneyImageSlot { before, after, review }
@@ -44,8 +45,7 @@ class ClientJourneyController extends GetxController {
 
   @override
   void onClose() {
-    titleController.dispose();
-    reviewTextController.dispose();
+    disposeAfterTransition([titleController, reviewTextController]);
     super.onClose();
   }
 
