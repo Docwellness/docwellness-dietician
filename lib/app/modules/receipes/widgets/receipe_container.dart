@@ -1,4 +1,5 @@
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
+import 'package:docwellnesdoc/app/utils/common_widgets/sponsored_label.dart';
 import 'package:flutter/material.dart';
 
 class ReceipeContainer extends StatelessWidget {
@@ -26,6 +27,8 @@ class ReceipeContainer extends StatelessWidget {
   // without cropping text early (real Roboto line-height ran past what
   // that budget assumed).
   final double height;
+  // Disclosure for a paid product-placement image (null for normal images).
+  final String? sponsoredLabel;
 
   const ReceipeContainer({
     super.key,
@@ -36,6 +39,7 @@ class ReceipeContainer extends StatelessWidget {
     this.imageWidth = 121.33,
     this.ingredientSummary = const [],
     this.height = 192,
+    this.sponsoredLabel,
   });
 
   bool get _isNetworkImage =>
@@ -57,7 +61,10 @@ class ReceipeContainer extends StatelessWidget {
                 color: const Color(0xffFDF2FA),
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: ClipRRect(
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+              ClipRRect(
                 borderRadius: BorderRadius.circular(16),
                 child: imageUrl.isEmpty
                     ? _buildPlaceholder()
@@ -93,6 +100,15 @@ class ReceipeContainer extends StatelessWidget {
                           return _buildPlaceholder();
                         },
                       ),
+              ),
+                  if (sponsoredLabel != null &&
+                      sponsoredLabel!.trim().isNotEmpty)
+                    Positioned(
+                      top: 8,
+                      left: 8,
+                      child: SponsoredBadge(sponsoredLabel),
+                    ),
+                ],
               ),
             ),
             SizedBox(height: 4),

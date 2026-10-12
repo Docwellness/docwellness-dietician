@@ -153,6 +153,7 @@ class _RecipeListByFilterViewState extends State<RecipeListByFilterView> {
                   builder: (context, constraints) {
                     return ReceipeContainer(
                       imageUrl: recipe.image ?? '',
+                      sponsoredLabel: recipe.sponsoredLabel,
                       title: recipe.name,
                       subTitle: '${recipe.ingredientsCount} ingredients',
                       ingredientSummary: recipe.ingredientSummary,

@@ -776,6 +776,8 @@ class RecipeListItem {
   final String id;
   final String name;
   final String? image;
+  // Disclosure for a paid product-placement image (null for normal images).
+  final String? sponsoredLabel;
   final String category;
   final String cuisine;
   final String servingTime;
@@ -804,6 +806,7 @@ class RecipeListItem {
     required this.id,
     required this.name,
     this.image,
+    this.sponsoredLabel,
     required this.category,
     required this.cuisine,
     required this.servingTime,
@@ -826,6 +829,7 @@ class RecipeListItem {
       id: json['id'] ?? '',
       name: json['name'] ?? '',
       image: json['image'],
+      sponsoredLabel: json['sponsoredLabel']?.toString(),
       category: json['category'] ?? 'Other',
       cuisine: json['cuisine'] ?? '',
       servingTime: json['servingTime'] ?? '',

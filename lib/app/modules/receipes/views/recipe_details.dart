@@ -9,6 +9,7 @@ import 'package:docwellnesdoc/app/modules/receipes/widgets/update_ai_inputs_shee
 import 'package:docwellnesdoc/app/utils/common_widgets/app_toast.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_button.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
+import 'package:docwellnesdoc/app/utils/common_widgets/sponsored_label.dart';
 import 'package:docwellnesdoc/app/utils/theme/app_shadows.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -858,6 +859,16 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
                         ),
                       ),
                     ),
+                    // Paid product placements must always be disclosed.
+                    if (recipe?.sponsoredLabel != null &&
+                        recipe!.sponsoredLabel!.trim().isNotEmpty)
+                      Positioned(
+                        top: 12,
+                        left: 12,
+                        child: IgnorePointer(
+                          child: SponsoredBadge(recipe!.sponsoredLabel),
+                        ),
+                      ),
                     // AI-regenerate ("refresh") - only once the recipe is
                     // actually saved (needs a real id, see
                     // _regenerateMainImageWithAI's doc comment), same

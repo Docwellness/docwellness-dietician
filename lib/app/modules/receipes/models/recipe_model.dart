@@ -6,6 +6,8 @@ class RecipePreview {
   final String? id;
   final String name;
   final String? image;
+  // Disclosure for a paid product-placement image, e.g. "Sponsored".
+  final String? sponsoredLabel;
   final String description;
   final String category;
   final String cuisine;
@@ -62,6 +64,7 @@ class RecipePreview {
     this.id,
     required this.name,
     this.image,
+    this.sponsoredLabel,
     required this.description,
     required this.category,
     required this.cuisine,
@@ -132,6 +135,7 @@ class RecipePreview {
       id: (json['_id'] ?? json['id'])?.toString(),
       name: json['name'] ?? '',
       image: json['image'],
+      sponsoredLabel: json['sponsoredLabel']?.toString(),
       description: json['description'] ?? '',
       category: json['category'] ?? 'Indian',
       cuisine: json['cuisine'] ?? 'Indian',
@@ -170,6 +174,7 @@ class RecipePreview {
       id: newId,
       name: name,
       image: image,
+      sponsoredLabel: sponsoredLabel,
       description: description,
       category: category,
       cuisine: cuisine,
@@ -216,6 +221,7 @@ class RecipePreview {
       id: id,
       name: name,
       image: image,
+      sponsoredLabel: sponsoredLabel,
       description: description,
       category: category,
       cuisine: cuisine,
@@ -255,6 +261,7 @@ class RecipePreview {
       id: id,
       name: name,
       image: image,
+      sponsoredLabel: sponsoredLabel,
       description: description,
       category: category,
       cuisine: cuisine,
@@ -308,6 +315,7 @@ class RecipePreview {
       id: id,
       name: name,
       image: image,
+      sponsoredLabel: sponsoredLabel,
       description: description,
       category: category,
       cuisine: cuisine,
