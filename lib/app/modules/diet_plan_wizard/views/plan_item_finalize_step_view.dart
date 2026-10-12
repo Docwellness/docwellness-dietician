@@ -199,10 +199,12 @@ class _CalorieChecklist extends StatelessWidget {
           ),
         ),
         if (!controller.canActivate)
-          const Padding(
-            padding: EdgeInsets.only(top: 2, bottom: 4),
+          Padding(
+            padding: const EdgeInsets.only(top: 2, bottom: 4),
             child: CustomText(
-              text: 'Every day must be within ±5% of the calorie target before this plan can be finalized.',
+              text: controller.recipesMissingServing.isNotEmpty
+                  ? 'No serving was calculated for ${controller.recipesMissingServing.join(', ')}. Go back to Refine Portions and set it before finalizing.'
+                  : 'Every day must be within ±5% of the calorie target before this plan can be finalized.',
               fontWeight: FontWeight.w400,
               fontSize: 12,
               color: WizardPalette.warn,

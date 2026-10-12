@@ -77,6 +77,11 @@ class PlanItemFinalizeStepController extends GetxController {
     }).toList();
   }
 
+  /// Recipes in this week with no serving computed/set - finalize is blocked
+  /// until the dietician edits each one in Refine Portions.
+  List<String> get recipesMissingServing =>
+      {for (final day in weekDays) ...day.recipesMissingServing}.toList();
+
   /// False whenever finalize would be rejected by the server anyway (no
   /// target set, or any generated day outside +/-5%) - drives the Finalize
   /// Plan button's disabled state so the dietician sees the block before
@@ -84,6 +89,7 @@ class PlanItemFinalizeStepController extends GetxController {
   bool get canActivate {
     final target = targetCalories;
     if (target == null || target <= 0) return false;
+    if (recipesMissingServing.isNotEmpty) return false;
     final checks = dayCalorieChecks;
     return checks.every((day) => day.withinTolerance);
   }

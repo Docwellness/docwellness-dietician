@@ -242,6 +242,16 @@ class _RecipeCard extends StatelessWidget {
                         color: _mutedColor,
                       ),
                     ),
+                  if (item.missingServing)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 4),
+                      child: CustomText(
+                        text: 'No serving calculated - tap to set it',
+                        fontWeight: FontWeight.w500,
+                        fontSize: 11,
+                        color: Color(0xffDC2626),
+                      ),
+                    ),
                   if (item.pinned && !item.locked)
                     Padding(
                       padding: const EdgeInsets.only(top: 6),

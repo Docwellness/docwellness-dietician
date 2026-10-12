@@ -416,6 +416,11 @@ class WizardPlanItemV2 {
   final Map<String, dynamic>? calculatedNutrition;
   final bool isLinkedComponent;
 
+  /// True when the server reports no real serving was computed for this item
+  /// (a null `servingLabel`) - the dietician has to set one before the plan
+  /// can be finalized. Stays false when the server doesn't send the field.
+  final bool missingServing;
+
   WizardPlanItemV2({
     required this.id,
     required this.recipeVersionId,
@@ -424,6 +429,7 @@ class WizardPlanItemV2 {
     this.pinned = false,
     this.calculatedNutrition,
     required this.isLinkedComponent,
+    this.missingServing = false,
   });
 
   double? get calories => (calculatedNutrition?['calories'] as num?)?.toDouble();
@@ -439,6 +445,7 @@ class WizardPlanItemV2 {
       pinned: json['pinned'] == true,
       calculatedNutrition: json['calculatedNutrition'] as Map<String, dynamic>?,
       isLinkedComponent: json['isLinkedComponent'] == true,
+      missingServing: json.containsKey('servingLabel') && json['servingLabel'] == null,
     );
   }
 }
@@ -504,6 +511,13 @@ class WizardDayGroupV2 {
   /// day with nothing yet has nothing to validate (same "excluded rather
   /// than counted as a failure" rule as the backend).
   bool get hasItems => meals.any((meal) => meal.items.isNotEmpty);
+
+  /// Names of this day's recipes that still have no serving set.
+  List<String> get recipesMissingServing => [
+    for (final meal in meals)
+      for (final item in meal.items)
+        if (item.missingServing) item.recipeName,
+  ];
 
   factory WizardDayGroupV2.fromJson(Map<String, dynamic> json) {
     return WizardDayGroupV2(
