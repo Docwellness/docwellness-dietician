@@ -162,6 +162,9 @@ class _JourneyTile extends StatelessWidget {
           children: [
             Expanded(
               child: Row(
+                // Stretch so both thumbs fill the same box regardless of the
+                // source images' aspect ratios (cover crops them to fit).
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Expanded(child: _thumb(journey['beforeImageUrl'])),
                   const SizedBox(width: 4),
