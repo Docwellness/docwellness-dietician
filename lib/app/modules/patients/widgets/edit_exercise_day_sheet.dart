@@ -287,6 +287,21 @@ class _DurationDialogState extends State<_DurationDialog> {
   final setsController = TextEditingController();
   final repsController = TextEditingController();
 
+  // Reps-based exercises (push-ups, squats, dips...) are prescribed as sets x
+  // reps; timed ones (jump rope, plank...) as minutes. Asking for the wrong
+  // one is how a "Tricep Dips - 20 min" plan ended up logged as a 20 minute
+  // session.
+  bool get _isReps => widget.exercise.trackingType == 'reps';
+
+  @override
+  void initState() {
+    super.initState();
+    if (_isReps) {
+      setsController.text = '3';
+      repsController.text = '12';
+    }
+  }
+
   @override
   void dispose() {
     durationController.dispose();
@@ -306,18 +321,22 @@ class _DurationDialogState extends State<_DurationDialog> {
       ),
       content: Column(
         mainAxisSize: MainAxisSize.min,
-        children: [
-          CustomField(
-            controller: durationController,
-            lable: 'Duration per set, in minutes (optional)',
-            hintText: 'Total duration if Sets is left blank',
-            keyboardType: TextInputType.number,
-          ),
-          const SizedBox(height: 12),
-          CustomField(controller: setsController, lable: 'Sets (optional)', keyboardType: TextInputType.number),
-          const SizedBox(height: 12),
-          CustomField(controller: repsController, lable: 'Reps (optional)', keyboardType: TextInputType.number),
-        ],
+        children: _isReps
+            ? [
+                CustomField(controller: setsController, lable: 'Sets', keyboardType: TextInputType.number),
+                const SizedBox(height: 12),
+                CustomField(controller: repsController, lable: 'Reps per set', keyboardType: TextInputType.number),
+              ]
+            : [
+                CustomField(
+                  controller: durationController,
+                  lable: 'Duration per set, in minutes (optional)',
+                  hintText: 'Total duration if Sets is left blank',
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: 12),
+                CustomField(controller: setsController, lable: 'Sets (optional)', keyboardType: TextInputType.number),
+              ],
       ),
       actions: [
         TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
@@ -326,9 +345,9 @@ class _DurationDialogState extends State<_DurationDialog> {
             context,
             _DraftEntry(
               exercise: widget.exercise,
-              durationMinutes: int.tryParse(durationController.text.trim()),
+              durationMinutes: _isReps ? null : int.tryParse(durationController.text.trim()),
               sets: int.tryParse(setsController.text.trim()),
-              reps: int.tryParse(repsController.text.trim()),
+              reps: _isReps ? int.tryParse(repsController.text.trim()) : null,
             ),
           ),
           child: const Text('Add', style: TextStyle(fontWeight: FontWeight.w700, color: _accent)),

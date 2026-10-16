@@ -11,6 +11,12 @@ class Exercise {
   // for the duration-estimate fallback this feeds when a patient logs
   // completion without entering a duration.
   final double? secondsPerRep;
+
+  /// How this exercise is prescribed and logged: 'reps' (sets x repetitions -
+  /// push-ups, squats, dips...) or 'duration' (minutes / a timed hold - jump
+  /// rope, plank...). Resolved by the backend (explicit value, else the
+  /// built-in catalog table, else the category); null from an older backend.
+  final String? trackingType;
   final String description;
   final List<String> instructions;
   final List<String> equipment;
@@ -31,6 +37,7 @@ class Exercise {
     required this.category,
     required this.met,
     this.secondsPerRep,
+    this.trackingType,
     this.description = '',
     this.instructions = const [],
     this.equipment = const [],
@@ -50,6 +57,7 @@ class Exercise {
       category: json['category'] ?? 'Other',
       met: (json['met'] as num?)?.toDouble() ?? 0,
       secondsPerRep: (json['secondsPerRep'] as num?)?.toDouble(),
+      trackingType: json['trackingType'] as String?,
       description: json['description'] ?? '',
       instructions: List<String>.from(json['instructions'] ?? []),
       equipment: List<String>.from(json['equipment'] ?? []),
