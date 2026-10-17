@@ -224,19 +224,19 @@ class NewPatientsContainer extends StatelessWidget {
                 _statItem(
                   "BMI",
                   bmi?.toStringAsFixed(1) ?? "--",
-                  bmi != null ? (bmi! / 40).clamp(0.0, 1.0) : 0.0,
+                  Icons.monitor_weight_outlined,
                 ),
                 const SizedBox(width: 10),
                 _statItem(
                   "BMR",
                   bmr?.toStringAsFixed(0) ?? "--",
-                  bmr != null ? (bmr! / 2500).clamp(0.0, 1.0) : 0.0,
+                  Icons.bedtime_outlined,
                 ),
                 const SizedBox(width: 10),
                 _statItem(
                   "TDEE",
                   tdee?.toStringAsFixed(0) ?? "--",
-                  tdee != null ? (tdee! / 3000).clamp(0.0, 1.0) : 0.0,
+                  Icons.local_fire_department_outlined,
                 ),
               ],
             ),
@@ -247,19 +247,18 @@ class NewPatientsContainer extends StatelessWidget {
   }
 
   // ----------------- Indicator Item -----------------
-  Widget _statItem(String title, String value, double percent) {
+  Widget _statItem(String title, String value, IconData icon) {
     return Expanded(
       child: Row(
         children: [
-          SizedBox(
-            width: 22,
-            height: 22,
-            child: CircularProgressIndicator(
-              value: percent,
-              strokeWidth: 2.5,
-              color: Color(0xff851653),
-              backgroundColor: Color(0xffFCE7F6),
+          Container(
+            width: 26,
+            height: 26,
+            decoration: BoxDecoration(
+              color: const Color(0xffFCE7F6),
+              borderRadius: BorderRadius.circular(8),
             ),
+            child: Icon(icon, size: 16, color: const Color(0xff851653)),
           ),
 
           const SizedBox(width: 8),
