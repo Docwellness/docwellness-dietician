@@ -626,6 +626,10 @@ class Ingredient {
   final String description;
   final bool isScalable;
   final String? image;
+  // Optional sponsor / "where to buy" link set by an admin (http(s) only).
+  // Read-only here - carried through every rebuild so a recipe edit never
+  // erases it.
+  final String? buyLink;
   // recipe-core-ingredient-scaling: 'core' = a clinically/portion-meaningful
   // ingredient a dietician actually adjusts and that appears in the recipe's
   // portion-summary (RecipePreview.components); 'sub' = only meaningful
@@ -643,6 +647,7 @@ class Ingredient {
     required this.description,
     this.isScalable = true,
     this.image,
+    this.buyLink,
     this.role = 'sub',
   });
 
@@ -658,6 +663,7 @@ class Ingredient {
       description: json['description'] ?? '',
       isScalable: json['isScalable'] ?? true,
       image: json['image'],
+      buyLink: json['buyLink'],
       role: json['role'] == 'core' ? 'core' : 'sub',
     );
   }
@@ -672,6 +678,7 @@ class Ingredient {
       'description': description,
       'isScalable': isScalable,
       'image': image,
+      'buyLink': buyLink,
       'role': role,
     };
   }
@@ -686,6 +693,7 @@ class Ingredient {
       description: description,
       isScalable: isScalable,
       image: image,
+      buyLink: buyLink,
       role: role ?? this.role,
     );
   }

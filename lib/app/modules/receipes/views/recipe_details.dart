@@ -711,6 +711,8 @@ class _RecipeDetailsScreenState extends State<RecipeDetailsScreen> {
         description: current.description,
         isScalable: current.isScalable,
         image: imageUrl,
+        buyLink: current.buyLink,
+        role: current.role,
       );
 
       final updatedRecipeMap = recipe!.toJson();

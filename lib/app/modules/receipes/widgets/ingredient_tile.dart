@@ -1,6 +1,8 @@
 import 'package:docwellnesdoc/app/modules/receipes/models/recipe_model.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class IngredientTile extends StatelessWidget {
   final Ingredient? ingredient;
@@ -32,6 +34,26 @@ class IngredientTile extends StatelessWidget {
     return s;
   }
 
+  /// Opens the admin-set sponsor link in the external browser. Only plain
+  /// http(s) links are ever launched.
+  static Future<void> _openBuyLink(String link) async {
+    final uri = Uri.tryParse(link.trim());
+    final ok = uri != null && (uri.scheme == 'https' || uri.scheme == 'http');
+    var launched = false;
+    if (ok) {
+      try {
+        launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } catch (_) {}
+    }
+    if (!launched) {
+      Get.snackbar(
+        'Could not open link',
+        'The buy link could not be opened.',
+        backgroundColor: Colors.white,
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final name = translatedName ?? ingredient?.name ?? 'Ingredient';
@@ -46,6 +68,8 @@ class IngredientTile extends StatelessWidget {
     final uploadedImage = ingredient?.image;
     final hasNetworkImage =
         uploadedImage != null && uploadedImage.trim().isNotEmpty;
+    final buyLink = ingredient?.buyLink?.trim();
+    final hasBuyLink = buyLink != null && buyLink.isNotEmpty;
 
     return Padding(
       padding: const EdgeInsets.only(left: 16, right: 16, top: 10),
@@ -163,6 +187,41 @@ class IngredientTile extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         maxLines: 2,
                       ),
+                      if (hasBuyLink) ...[
+                        const SizedBox(height: 6),
+                        InkWell(
+                          onTap: () => _openBuyLink(buyLink),
+                          borderRadius: BorderRadius.circular(12),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xffFEF6FB),
+                              border: Border.all(color: const Color(0xffFCCEEF)),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.shopping_bag_outlined,
+                                  size: 14,
+                                  color: Color(0xff530630),
+                                ),
+                                SizedBox(width: 4),
+                                CustomText(
+                                  text: 'Buy',
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xff530630),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),

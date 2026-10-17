@@ -680,6 +680,8 @@ class ReceipesController extends GetxController {
       description: existing.description,
       isScalable: existing.isScalable,
       image: existing.image,
+      buyLink: existing.buyLink,
+      role: existing.role,
     );
     generatedRecipe.value = current.copyWithIngredients(updated);
   }
