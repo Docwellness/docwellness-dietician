@@ -17,6 +17,9 @@ migrate_working_dir/
 *.txt
 !CMakeLists.txt
 !RELEASE_CHECKLIST.md
+# dw agentic setup: guidance for agents and reviewers lives in the code repo, so keep it versioned
+!CLAUDE.md
+!REVIEW.md
 
 # Environment files
 .env
