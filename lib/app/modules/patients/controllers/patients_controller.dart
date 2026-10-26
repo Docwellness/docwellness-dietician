@@ -1580,8 +1580,15 @@ class PatientsController extends GetxController {
   }
 
   /// Silent refresh patient profile without loading indicator
+  bool _silentRefreshInFlight = false;
+
   Future<void> silentRefreshPatientProfile(String patientId) async {
     if (suspendSilentRefresh) return;
+    // The profile request is heavy; with the 10-second timer a slow one would
+    // otherwise pile up a second identical request behind it - and the first
+    // load (isProfileLoading) is already fetching the same thing.
+    if (_silentRefreshInFlight || isProfileLoading.value == true) return;
+    _silentRefreshInFlight = true;
     try {
       final response = await service.getPatientProfile(patientId);
 
@@ -1634,6 +1641,8 @@ class PatientsController extends GetxController {
       }
     } catch (e) {
       debugPrint('Silent refresh error: $e');
+    } finally {
+      _silentRefreshInFlight = false;
     }
   }
 
