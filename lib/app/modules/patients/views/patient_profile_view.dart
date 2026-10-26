@@ -459,6 +459,18 @@ class _PatientProfileViewState extends State<PatientProfileView> {
     );
   }
 
+  /// False once every week of the current cycle has ended. Missing schedule
+  /// data (older plans) counts as still running.
+  bool _currentCycleStillRunning() {
+    final schedule = controller.patientProfileModel.value?.weekSchedule ?? [];
+    final ends = schedule.map((w) => w.endDate).whereType<DateTime>();
+    if (ends.isEmpty) return true;
+    final last = ends.reduce((a, b) => a.isAfter(b) ? a : b);
+    final now = DateTime.now();
+    return !DateTime(last.year, last.month, last.day)
+        .isBefore(DateTime(now.year, now.month, now.day));
+  }
+
   /// Brings the in-progress week ([activeCardIndex], 0-based across all
   /// cycles) into view once per plan, a card or so from the left edge.
   void _scrollWeeklyPlansToActive(int activeCardIndex, String planKey) {
@@ -1071,7 +1083,9 @@ class _PatientProfileViewState extends State<PatientProfileView> {
           // it before scrolling. The membership badge / avatar ring above
           // deliberately still show the *current* cycle's tier; the new
           // one is built lower under Weekly Diet Plans (RenewalCycleSection).
-          if (status?.renewalPending == true)
+          // Only while the current cycle is still running: once its last
+          // week has ended the "current plan keeps running" copy is wrong.
+          if (status?.renewalPending == true && _currentCycleStillRunning())
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 10, 16, 2),
               child: Container(
@@ -2117,9 +2131,23 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                     // Cal/day in primary color standing in for the generic
                     // "Generate plan"/"Pick meals" subtitle.
                     if (isFinalized) {
+                      // A week whose own end date has passed is complete even
+                      // when no later week of this cycle is finalized (the
+                      // next cycle's weeks live in separate cards).
+                      final weekEnd = thisWeekScheduleMatches.isNotEmpty
+                          ? thisWeekScheduleMatches.first.endDate
+                          : null;
+                      final today = DateTime.now();
+                      final weekEnded =
+                          weekEnd != null &&
+                          DateTime(
+                            weekEnd.year,
+                            weekEnd.month,
+                            weekEnd.day,
+                          ).isBefore(DateTime(today.year, today.month, today.day));
                       final colors = controller.getColor(
                         weekNum,
-                        effectiveCurrentWeek,
+                        weekEnded ? weekNum + 1 : effectiveCurrentWeek,
                       );
                       return Padding(
                         padding: const EdgeInsets.only(right: 12),
