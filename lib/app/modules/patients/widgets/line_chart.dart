@@ -47,9 +47,11 @@ class TargetWeightChart extends StatelessWidget {
     final loggedSpots = [
       for (var i = 0; i < points.length; i++)
         if (points[i].measuredWeight != null)
-          FlSpot(i.toDouble(), points[i].measuredWeight!),
+          FlSpot(_loggedX(points, i), points[i].measuredWeight!),
     ];
-    final start = (startWeight != null && startWeight! > 0) ? startWeight : null;
+    final start = (startWeight != null && startWeight! > 0)
+        ? startWeight
+        : null;
     final anchorsStart =
         start != null && loggedSpots.isNotEmpty && loggedSpots.first.x > 0;
     if (anchorsStart) loggedSpots.insert(0, FlSpot(0, start));
@@ -69,7 +71,10 @@ class TargetWeightChart extends StatelessWidget {
     final span = (hi - lo) < 2 ? 2.0 : (hi - lo);
     final minY = (lo - span * 0.15).floorToDouble();
     final maxY = (hi + span * 0.15).ceilToDouble();
-    final interval = ((maxY - minY) / 4).ceilToDouble().clamp(1, 1000).toDouble();
+    final interval = ((maxY - minY) / 4)
+        .ceilToDouble()
+        .clamp(1, 1000)
+        .toDouble();
 
     final maxX = points.length > 1 ? (points.length - 1).toDouble() : 1.0;
     // ~4 evenly spread date labels, always including first and last.
@@ -123,9 +128,7 @@ class TargetWeightChart extends StatelessWidget {
                     interval: 1,
                     getTitlesWidget: (v, meta) {
                       final i = v.round();
-                      if ((v - i).abs() > 0.01 ||
-                          i < 0 ||
-                          i >= points.length) {
+                      if ((v - i).abs() > 0.01 || i < 0 || i >= points.length) {
                         return const SizedBox.shrink();
                       }
                       final isEdge = i == 0 || i == points.length - 1;
@@ -133,8 +136,7 @@ class TargetWeightChart extends StatelessWidget {
                         return const SizedBox.shrink();
                       }
                       // Drop a middle label that would crowd the last one.
-                      if (!isEdge &&
-                          (points.length - 1 - i) < labelStep / 2) {
+                      if (!isEdge && (points.length - 1 - i) < labelStep / 2) {
                         return const SizedBox.shrink();
                       }
                       // fitInside nudges the first/last label back inside the
@@ -185,7 +187,13 @@ class TargetWeightChart extends StatelessWidget {
                     return [
                       for (var k = 0; k < touched.length; k++)
                         if (k == 0)
-                          _tooltip(points[touched[k].x.round()], isStart: anchorsStart && touched[k].x == 0)
+                          _tooltip(
+                            points[touched[k].x.ceil().clamp(
+                              0,
+                              points.length - 1,
+                            )],
+                            isStart: anchorsStart && touched[k].x == 0,
+                          )
                         else
                           null,
                     ];
@@ -245,12 +253,35 @@ class TargetWeightChart extends StatelessWidget {
           runSpacing: 4,
           children: [
             if (hasLogged) const _Legend(color: _logged, label: 'Logged'),
-            const _Legend(color: _planned, label: 'Planned trend', dashed: true),
-            if (target != null) const _Legend(color: _target, label: 'Target', dashed: true),
+            const _Legend(
+              color: _planned,
+              label: 'Planned trend',
+              dashed: true,
+            ),
+            if (target != null)
+              const _Legend(color: _target, label: 'Target', dashed: true),
           ],
         ),
       ],
     );
+  }
+
+  /// X for point [i]'s logged weight. Buckets are plotted at their end date,
+  /// but a weigh-in can sit earlier in its bucket (logged 11 Oct, bucket ends
+  /// 15 Oct) - interpolate between the previous bucket's date and this one's
+  /// so the solid line stops at the real log date instead of being dragged out
+  /// to the bucket end. Falls back to the bucket's own x without a log date.
+  static double _loggedX(List<WeightDataPoint> points, int i) {
+    final p = points[i];
+    final logged = DateTime.tryParse(p.measuredDate ?? '');
+    final end = DateTime.tryParse(p.date);
+    if (logged == null || end == null || i == 0) return i.toDouble();
+    final prev = DateTime.tryParse(points[i - 1].date);
+    if (prev == null) return i.toDouble();
+    final span = end.difference(prev).inHours;
+    if (span <= 0) return i.toDouble();
+    final f = (logged.difference(prev).inHours / span).clamp(0.0, 1.0);
+    return (i - 1) + f;
   }
 
   LineTooltipItem _tooltip(WeightDataPoint p, {bool isStart = false}) {
@@ -284,7 +315,11 @@ class _Legend extends StatelessWidget {
   final String label;
   final bool dashed;
 
-  const _Legend({required this.color, required this.label, this.dashed = false});
+  const _Legend({
+    required this.color,
+    required this.label,
+    this.dashed = false,
+  });
 
   @override
   Widget build(BuildContext context) {

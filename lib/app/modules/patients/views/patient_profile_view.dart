@@ -2333,7 +2333,18 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                     // patient hasn't started this week, so it always reads
                     // as "future" (pink, no border) until it's finalized and
                     // takes over the "active" slot above.
-                    final colors = controller.getColor(weekNum, 0);
+                    // The exception is a week whose own start date has
+                    // already arrived (not yet finalized): the patient is in
+                    // it now, so it takes the active border instead.
+                    final weekStart = thisWeekScheduleMatches.isNotEmpty
+                        ? thisWeekScheduleMatches.first.startDate
+                        : null;
+                    final weekStarted =
+                        weekStart != null && !weekStart.isAfter(DateTime.now());
+                    final colors = controller.getColor(
+                      weekNum,
+                      weekStarted ? weekNum : 0,
+                    );
                     return Padding(
                       padding: const EdgeInsets.only(right: 12),
                       child: GestureDetector(

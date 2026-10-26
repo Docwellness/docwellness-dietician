@@ -133,11 +133,16 @@ class WeightDataPoint {
   /// weigh in. [weight] is the planned trend line and is unaffected by it.
   final double? measuredWeight;
 
+  /// yyyy-MM-dd the [measuredWeight] was actually logged on - [date] is only
+  /// the bucket's end, which can be days later.
+  final String? measuredDate;
+
   WeightDataPoint({
     required this.label,
     required this.date,
     required this.weight,
     this.measuredWeight,
+    this.measuredDate,
   });
 
   factory WeightDataPoint.fromJson(Map<String, dynamic> json) {
@@ -148,6 +153,7 @@ class WeightDataPoint {
       measuredWeight: json['measuredWeight'] == null
           ? null
           : (json['measuredWeight'] as num).toDouble(),
+      measuredDate: json['measuredDate']?.toString(),
     );
   }
 }
