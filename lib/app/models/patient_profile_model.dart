@@ -23,6 +23,9 @@ class PatientProfileModel {
   // signals drive the "Week 5-8" cards + Create/Resume button under the
   // Weekly Diet Plans section.
   PendingCycle? pendingCycle;
+  // Finished earlier cycles, oldest first, shown read-only (disabled cards)
+  // before the live cycle's weeks so a renewal doesn't make them vanish.
+  List<PreviousCycle> previousCycles = [];
   // One entry per renewal cycle this patient has ever had, newest first -
   // the Payment Information section renders these as collapsed, dated rows
   // once there's more than one (a patient who never renewed just has the
@@ -42,10 +45,12 @@ class PatientProfileModel {
     this.activePlanStrategy,
     List<WeekScheduleEntry>? weekSchedule,
     this.pendingCycle,
+    List<PreviousCycle>? previousCycles,
     List<PaymentHistoryEntry>? paymentHistory,
     this.subscriptionPause,
   }) : generatedWeekNumbers = generatedWeekNumbers ?? [],
        weekSchedule = weekSchedule ?? [],
+       previousCycles = previousCycles ?? [],
        paymentHistory = paymentHistory ?? [];
 
   PatientProfileModel.fromJson(Map<String, dynamic> json) {
@@ -79,6 +84,12 @@ class PatientProfileModel {
     pendingCycle = json['pendingCycle'] != null
         ? PendingCycle.fromJson(json['pendingCycle'])
         : null;
+
+    previousCycles = json['previousCycles'] != null
+        ? List<PreviousCycle>.from(
+            json['previousCycles'].map((x) => PreviousCycle.fromJson(x)),
+          )
+        : [];
 
     paymentHistory = json['paymentHistory'] != null
         ? List<PaymentHistoryEntry>.from(
@@ -200,6 +211,48 @@ class PendingCycle {
 
   /// Internal week 1-4 -> the display number for this cycle (Week 5-8 for
   /// cycle 2, etc.).
+  int displayWeek(int internalWeek) => (cycleNumber - 1) * 4 + internalWeek;
+
+  WeekScheduleEntry? scheduleFor(int internalWeek) {
+    for (final entry in weekSchedule) {
+      if (entry.week == internalWeek) return entry;
+    }
+    return null;
+  }
+}
+
+/// An earlier renewal cycle's plan (see backend patientController's
+/// `previousCycles`). Read-only: only what the disabled week cards need.
+class PreviousCycle {
+  String? dietPlanId;
+  String? status;
+  String? dataModel; // plan-item / days-array
+  String? membershipPlan;
+  int cycleNumber;
+  List<WeekScheduleEntry> weekSchedule;
+  List<int> finalizedWeekNumbers;
+  List<int> generatedWeekNumbers;
+
+  PreviousCycle.fromJson(Map<String, dynamic> json)
+      : cycleNumber = json['cycleNumber'] ?? 1,
+        weekSchedule = json['weekSchedule'] != null
+            ? List<WeekScheduleEntry>.from(
+                json['weekSchedule'].map((x) => WeekScheduleEntry.fromJson(x)),
+              )
+            : const [],
+        finalizedWeekNumbers = json['finalizedWeekNumbers'] != null
+            ? List<int>.from(json['finalizedWeekNumbers'])
+            : const [],
+        generatedWeekNumbers = json['generatedWeekNumbers'] != null
+            ? List<int>.from(json['generatedWeekNumbers'])
+            : const [] {
+    dietPlanId = json['dietPlanId']?.toString();
+    status = json['status'];
+    dataModel = json['dataModel'];
+    membershipPlan = json['membershipPlan'];
+  }
+
+  /// Internal week 1-4 -> the display number for this cycle.
   int displayWeek(int internalWeek) => (cycleNumber - 1) * 4 + internalWeek;
 
   WeekScheduleEntry? scheduleFor(int internalWeek) {

@@ -470,11 +470,24 @@ class _DietStartDateRow extends StatelessWidget {
       final requested = _parse(patients.patientProfileModel.value?.healthSummary?.startDateForDiet);
       // A requested date already in the past means "as soon as possible".
       final today = _today();
-      final date = (requested != null && !requested.isBefore(today)) ? requested : today;
+      // An earlier cycle's plan is view-only: show the date that cycle
+      // actually started on (its Week 1) and don't let it be changed.
+      final locked = wizard.readOnly;
+      var date = (requested != null && !requested.isBefore(today)) ? requested : today;
+      if (locked) {
+        final cycles = patients.patientProfileModel.value?.previousCycles ?? const [];
+        final cycleStart = cycles
+            .where((c) => c.dietPlanId == wizard.dietPlanId.value)
+            .map((c) => c.scheduleFor(1)?.startDate)
+            .firstWhere((d) => d != null, orElse: () => null);
+        if (cycleStart != null) {
+          date = DateTime(cycleStart.year, cycleStart.month, cycleStart.day);
+        }
+      }
       final isToday = date == today;
 
       return InkWell(
-        onTap: saving ? null : () => _pick(context, date),
+        onTap: (saving || locked) ? null : () => _pick(context, date),
         borderRadius: BorderRadius.circular(WizardPalette.cardRadius),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -513,7 +526,7 @@ class _DietStartDateRow extends StatelessWidget {
                   height: 18,
                   child: CircularProgressIndicator(strokeWidth: 2, color: WizardPalette.magenta),
                 )
-              else
+              else if (!locked)
                 const CustomText(
                   text: 'Change',
                   fontWeight: FontWeight.w600,

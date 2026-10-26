@@ -268,6 +268,9 @@ class _PatientProfileViewState extends State<PatientProfileView> {
     // _pendingWeekCard) - same read-only review treatment as the running
     // cycle's finalized-week cards (_openWeightDialogForWeek's viewOnly).
     bool viewOnly = false,
+    // True for an earlier, finished cycle's week: view only, no Refine /
+    // Regenerate (see _previousWeekCard).
+    bool readOnly = false,
   }) async {
     final status = controller.patientProfileModel.value?.status;
     final name =
@@ -319,9 +322,90 @@ class _PatientProfileViewState extends State<PatientProfileView> {
       resumeInPlace: resumeInPlace,
       initialStep: step,
       reopenedPlanView: reopenedPlanView,
+      readOnly: readOnly,
     );
     await Get.to(() => const WizardView(), binding: WizardBinding(wizardController));
     await controller.getPatientProfile(widget.patientId);
+  }
+
+  /// A week card for an earlier, finished cycle: kept on the record so a
+  /// renewal never makes its weeks vanish. Opens the same review screen as a
+  /// finalized week but read-only - no Refine / Regenerate.
+  Widget _previousWeekCard(PreviousCycle cycle, int week) {
+    final sched = cycle.scheduleFor(week);
+    final range = (sched?.startDate != null && sched?.endDate != null)
+        ? '${_formatShortDate(sched!.startDate!)} - ${_formatShortDate(sched.endDate!)}'
+        : null;
+    final hadContent = cycle.finalizedWeekNumbers.contains(week) ||
+        cycle.generatedWeekNumbers.contains(week);
+    return Padding(
+      padding: const EdgeInsets.only(right: 12),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          if (!hadContent) {
+            showAppToast(
+              Get.overlayContext!,
+              message: 'Week ${cycle.displayWeek(week)} was never built.',
+              type: AppToastType.warning,
+            );
+            return;
+          }
+          _openRenewalWizard(
+            PendingCycle(
+              dietPlanId: cycle.dietPlanId,
+              status: cycle.status,
+              dataModel: cycle.dataModel,
+              cycleNumber: cycle.cycleNumber,
+            ),
+            forWeek: week,
+            viewOnly: true,
+            readOnly: true,
+          );
+        },
+        child: Container(
+          width: 120,
+          height: 130,
+          decoration: BoxDecoration(
+            color: const Color(0xffF3F4F6),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xffE5E7EB)),
+            boxShadow: cardShadow,
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(
+                Icons.history,
+                color: Color(0xff9DA4AE),
+                size: 22,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Week ${cycle.displayWeek(week)}',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xff6C737F),
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                hadContent ? 'Completed' : 'Not built',
+                style: const TextStyle(fontSize: 10, color: Color(0xff9DA4AE)),
+              ),
+              if (range != null) ...[
+                const SizedBox(height: 2),
+                Text(
+                  range,
+                  style: const TextStyle(fontSize: 8, color: Color(0xffB0B7C0)),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   /// A week card for the pending renewal cycle (weeks past the current
@@ -1946,6 +2030,9 @@ class _PatientProfileViewState extends State<PatientProfileView> {
               // the backend hands over (pendingCycle then clears).
               final hasPending = profileModel?.pendingCycle != null;
               final totalWeeks = hasPending ? 8 : 4;
+              // Earlier cycles' weeks (4 each) lead the row, disabled.
+              final previous = profileModel?.previousCycles ?? const [];
+              final previousCount = previous.length * 4;
 
               // Scroll the row so the in-progress week is on screen on open
               // (not always Week 1). "In progress" = the latest finalized
@@ -1966,7 +2053,7 @@ class _PatientProfileViewState extends State<PatientProfileView> {
               final activeCardIndex =
                   (started && latestFinalized > 0) ? latestFinalized - 1 : 0;
               _scrollWeeklyPlansToActive(
-                activeCardIndex,
+                activeCardIndex + previousCount,
                 '${status.activeDietPlanId ?? ''}'
                     '_${profileModel?.pendingCycle?.dietPlanId ?? ''}',
               );
@@ -1977,10 +2064,17 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                 height: 130,
                 child: ListView.builder(
                   controller: _weeklyPlansScroll,
-                  itemCount: totalWeeks,
+                  itemCount: previousCount + totalWeeks,
                   shrinkWrap: true,
                   scrollDirection: Axis.horizontal,
-                  itemBuilder: (context, index) {
+                  itemBuilder: (context, rawIndex) {
+                    if (rawIndex < previousCount) {
+                      return _previousWeekCard(
+                        previous[rawIndex ~/ 4],
+                        rawIndex % 4 + 1,
+                      );
+                    }
+                    final index = rawIndex - previousCount;
                     // Weeks past the current cycle's 4 belong to the pending
                     // renewal cycle - a simpler card (no tier-gated locks).
                     if (index >= 4) {

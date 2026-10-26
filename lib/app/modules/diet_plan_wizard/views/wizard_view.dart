@@ -142,7 +142,7 @@ class _WizardHeader extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                if (onReopenReview)
+                if (onReopenReview && !wizard.readOnly)
                   PopupMenuButton<String>(
                     icon: const Icon(Icons.more_vert, color: _headerColor),
                     onSelected: (value) {

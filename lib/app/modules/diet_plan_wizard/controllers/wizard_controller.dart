@@ -74,6 +74,10 @@ class WizardController extends GetxController {
   /// view an already-built plan from the patient profile.
   final bool reopenedPlanView;
 
+  /// True when the reopened plan belongs to an earlier, finished cycle: the
+  /// review is for looking only, so its Refine / Regenerate menu is removed.
+  final bool readOnly;
+
   final PatientsController patientsController = Get.find<PatientsController>();
   final DietPlanWizardService _wizardService = DietPlanWizardService();
 
@@ -201,6 +205,7 @@ class WizardController extends GetxController {
     // back button and moves Refine / Regenerate into a top-right menu, and
     // its footer is a single "Done" that leaves without changes.
     this.reopenedPlanView = false,
+    this.readOnly = false,
   }) : targetWeek = initialWeek.obs,
        weeksToGenerate = weeksToGenerate ?? [initialWeek],
        currentStep = initialStep.clamp(1, stepCount).obs,
