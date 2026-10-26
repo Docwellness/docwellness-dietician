@@ -2110,35 +2110,25 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                         ? '${_formatShortDate(thisWeekScheduleMatches.first.startDate!)} - ${_formatShortDate(thisWeekScheduleMatches.first.endDate!)}'
                         : null;
                     // The week the patient is actually living through right
-                    // now is the latest *finalized* one - not whichever week
-                    // happens to be eligible/pre-generated, which may well
-                    // be a future week the dietician got a head start on.
-                    final latestFinalizedWeek = finalizedWeeks.isEmpty
+                    // now is the latest *finalized* one that has actually
+                    // started - not whichever week happens to be
+                    // eligible/pre-generated, and not a later finalized week
+                    // still in the future (a dietician can, for
+                    // Golden/Platinum, finalize ahead of a week's own date);
+                    // that must not stop an earlier, running week from being
+                    // marked current. Missing/incomplete schedule data (older
+                    // plans predating weekSchedule) falls back to the old
+                    // "finalized = active" behavior rather than losing the
+                    // active-week styling entirely.
+                    final startedFinalizedWeeks = finalizedWeeks.where((w) {
+                      final sched = weekSchedule.where((s) => s.week == w);
+                      return sched.isEmpty ||
+                          sched.first.startDate == null ||
+                          !sched.first.startDate!.isAfter(DateTime.now());
+                    });
+                    final effectiveCurrentWeek = startedFinalizedWeeks.isEmpty
                         ? 0
-                        : finalizedWeeks.reduce((a, b) => a > b ? a : b);
-                    // ...but "finalized" only means the content is ready,
-                    // not that the patient has actually started it - a
-                    // dietician can (and does, for Golden/Platinum) finalize
-                    // a week whose own scheduled date is still in the
-                    // future. Showing that week with the bold "active right
-                    // now" card would be misleading, so it only counts as
-                    // the active week once its own weekSchedule date has
-                    // actually arrived. Missing/incomplete schedule data
-                    // (older plans predating weekSchedule) falls back to the
-                    // old "finalized = active" behavior rather than losing
-                    // the active-week styling entirely.
-                    final latestFinalizedWeekSchedule = weekSchedule
-                        .where((w) => w.week == latestFinalizedWeek)
-                        .toList();
-                    final latestFinalizedWeekStarted =
-                        latestFinalizedWeekSchedule.isEmpty ||
-                        latestFinalizedWeekSchedule.first.startDate == null ||
-                        !latestFinalizedWeekSchedule.first.startDate!.isAfter(
-                          DateTime.now(),
-                        );
-                    final effectiveCurrentWeek = latestFinalizedWeekStarted
-                        ? latestFinalizedWeek
-                        : 0;
+                        : startedFinalizedWeeks.reduce((a, b) => a > b ? a : b);
                     final cardState = _weekCardState(
                       weekNum,
                       tier,
