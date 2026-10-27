@@ -94,7 +94,8 @@ class RecipePreview {
     // forward, since that list is never empty by the time it reaches here -
     // see each copyWith* method's own explicit value below.
     bool? hasRealComponents,
-  }) : hasRealComponents = hasRealComponents ?? (components != null && components.isNotEmpty),
+  }) : hasRealComponents =
+           hasRealComponents ?? (components != null && components.isNotEmpty),
        components = (components == null || components.isEmpty)
            ? [
                RecipeComponent(

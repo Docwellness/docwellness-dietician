@@ -24,7 +24,14 @@ import 'package:posthog_flutter/posthog_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// AI diet-plan generation states - AI_EXECUTION_PLAN.md Phase 7, P7-05.
-enum AiGenerationStatus { idle, queued, generating, reviewDraft, failed, published }
+enum AiGenerationStatus {
+  idle,
+  queued,
+  generating,
+  reviewDraft,
+  failed,
+  published,
+}
 
 class PatientsController extends GetxController {
   Rx<PatientProfileModel?> patientProfileModel = Rx<PatientProfileModel?>(null);
@@ -325,13 +332,18 @@ class PatientsController extends GetxController {
   /// questions
   RxString report = ''.obs;
 
-  final TextEditingController currentEatingStyleOtherInfo = TextEditingController();
-  final TextEditingController allergiesIntolerancesOtherInfo = TextEditingController();
+  final TextEditingController currentEatingStyleOtherInfo =
+      TextEditingController();
+  final TextEditingController allergiesIntolerancesOtherInfo =
+      TextEditingController();
   final TextEditingController foodsToAvoid = TextEditingController();
   final TextEditingController waterIntake = TextEditingController();
-  final TextEditingController alcoholOrSmokingFrequency = TextEditingController();
-  final TextEditingController sleepStressSleepDuration = TextEditingController();
-  final TextEditingController medicationSupplementsDetails = TextEditingController();
+  final TextEditingController alcoholOrSmokingFrequency =
+      TextEditingController();
+  final TextEditingController sleepStressSleepDuration =
+      TextEditingController();
+  final TextEditingController medicationSupplementsDetails =
+      TextEditingController();
   final TextEditingController supplementsOther = TextEditingController();
   final TextEditingController finalNotesConcerns = TextEditingController();
 
@@ -411,7 +423,11 @@ class PatientsController extends GetxController {
       textColor = const Color(0xffEF45B2);
     }
 
-    return {"bg": containerColor, "border": containerBorderColor, "text": textColor};
+    return {
+      "bg": containerColor,
+      "border": containerBorderColor,
+      "text": textColor,
+    };
   }
 
   RxList<DietOption> allergiesOrIntolerances = <DietOption>[
@@ -989,7 +1005,8 @@ class PatientsController extends GetxController {
     if (age != null) context['age'] = age;
     if (health?.height != null) context['heightCm'] = health!.height;
     if (health?.weight != null) context['weightKg'] = health!.weight;
-    if (health?.primaryGoal != null) context['primaryGoal'] = health!.primaryGoal;
+    if (health?.primaryGoal != null)
+      context['primaryGoal'] = health!.primaryGoal;
     if (health?.targetWeight != null) {
       context['targetWeight'] = health!.targetWeight;
     }
@@ -1083,7 +1100,10 @@ class PatientsController extends GetxController {
   /// a network blip no longer just shows a blank spinner-less screen.
   final RxBool profileError = false.obs;
 
-  Future<void> getPatientProfile(String patientId, {bool silent = false}) async {
+  Future<void> getPatientProfile(
+    String patientId, {
+    bool silent = false,
+  }) async {
     if (!silent) {
       isProfileLoading.value = true;
       profileError.value = false;
@@ -1156,19 +1176,24 @@ class PatientsController extends GetxController {
     List<Map<String, dynamic>> dayGroupEntries,
   ) async {
     final existing = exercisePlan.value?['dailyExercises'] as List? ?? [];
-    final otherDays = existing.whereType<Map>().where((e) => e['dayGroup'] != dayGroup).map((e) {
-      final exerciseField = e['exerciseId'];
-      final id = exerciseField is Map
-          ? (exerciseField['_id'] ?? exerciseField['id'])
-          : exerciseField;
-      return {
-        'exerciseId': id,
-        if (e['durationMinutes'] != null) 'durationMinutes': e['durationMinutes'],
-        if (e['sets'] != null) 'sets': e['sets'],
-        if (e['reps'] != null) 'reps': e['reps'],
-        'dayGroup': e['dayGroup'],
-      };
-    }).toList();
+    final otherDays = existing
+        .whereType<Map>()
+        .where((e) => e['dayGroup'] != dayGroup)
+        .map((e) {
+          final exerciseField = e['exerciseId'];
+          final id = exerciseField is Map
+              ? (exerciseField['_id'] ?? exerciseField['id'])
+              : exerciseField;
+          return {
+            'exerciseId': id,
+            if (e['durationMinutes'] != null)
+              'durationMinutes': e['durationMinutes'],
+            if (e['sets'] != null) 'sets': e['sets'],
+            if (e['reps'] != null) 'reps': e['reps'],
+            'dayGroup': e['dayGroup'],
+          };
+        })
+        .toList();
 
     final merged = [...otherDays, ...dayGroupEntries];
 
@@ -1187,7 +1212,6 @@ class PatientsController extends GetxController {
     await fetchExercisePlan(patientId);
     return true;
   }
-
 
   /// Deletes the selected [categories] of a patient's data (or, with
   /// [deleteAccount] true, the whole account + Supabase identity). The
@@ -1325,7 +1349,9 @@ class PatientsController extends GetxController {
         calorieTrackingData.value = tracking;
         dietStartDate.value ??= tracking.planStartDate;
         calorieRangeStart.value =
-            tracking.appliedStartDate ?? calorieRangeStart.value ?? DateTime.now();
+            tracking.appliedStartDate ??
+            calorieRangeStart.value ??
+            DateTime.now();
         calorieRangeEnd.value =
             tracking.appliedEndDate ?? calorieRangeEnd.value ?? DateTime.now();
       }
@@ -1347,7 +1373,9 @@ class PatientsController extends GetxController {
         weightTrackingData.value = tracking;
         dietStartDate.value ??= tracking.planStartDate;
         weightRangeStart.value =
-            tracking.appliedStartDate ?? weightRangeStart.value ?? DateTime.now();
+            tracking.appliedStartDate ??
+            weightRangeStart.value ??
+            DateTime.now();
         weightRangeEnd.value =
             tracking.appliedEndDate ?? weightRangeEnd.value ?? DateTime.now();
       }
@@ -1670,18 +1698,30 @@ class PatientsController extends GetxController {
     int currentPage;
     switch (tab) {
       case 'ongoing':
-        (loading, error, hasMore, loadingMore) =
-            (isOngoingLoading, ongoingError, ongoingHasMore, ongoingLoadingMore);
+        (loading, error, hasMore, loadingMore) = (
+          isOngoingLoading,
+          ongoingError,
+          ongoingHasMore,
+          ongoingLoadingMore,
+        );
         currentPage = _ongoingPage;
         break;
       case 'past':
-        (loading, error, hasMore, loadingMore) =
-            (isPastLoading, pastError, pastHasMore, pastLoadingMore);
+        (loading, error, hasMore, loadingMore) = (
+          isPastLoading,
+          pastError,
+          pastHasMore,
+          pastLoadingMore,
+        );
         currentPage = _pastPage;
         break;
       default:
-        (loading, error, hasMore, loadingMore) =
-            (isNewLoading, newError, newHasMore, newLoadingMore);
+        (loading, error, hasMore, loadingMore) = (
+          isNewLoading,
+          newError,
+          newHasMore,
+          newLoadingMore,
+        );
         currentPage = _newPage;
     }
 
@@ -1736,11 +1776,17 @@ class PatientsController extends GetxController {
     }
   }
 
-  void _applyPatientPage(String tab, List<dynamic> raw, {required bool append}) {
+  void _applyPatientPage(
+    String tab,
+    List<dynamic> raw, {
+    required bool append,
+  }) {
     switch (tab) {
       case 'ongoing':
         final parsed = raw.map((e) => OngoingPatientModel.fromJson(e)).toList();
-        append ? ongoingPatients.addAll(parsed) : ongoingPatients.value = parsed;
+        append
+            ? ongoingPatients.addAll(parsed)
+            : ongoingPatients.value = parsed;
         break;
       case 'past':
         final parsed = raw.map((e) => PastPatientModel.fromJson(e)).toList();
@@ -1785,9 +1831,8 @@ class PatientsController extends GetxController {
     final list = ongoingPatients.toList();
     if (sortByAttentionFirst.value) {
       list.sort(
-        (a, b) => (a.adherencePercent ?? 100).compareTo(
-          b.adherencePercent ?? 100,
-        ),
+        (a, b) =>
+            (a.adherencePercent ?? 100).compareTo(b.adherencePercent ?? 100),
       );
     } else {
       list.sort(
@@ -2173,7 +2218,8 @@ class PatientsController extends GetxController {
       if (response != null && response['success'] == true) {
         await getPatientProfile(patientId);
       } else {
-        errorMessage = response?['message']?.toString() ?? 'Could not update date.';
+        errorMessage =
+            response?['message']?.toString() ?? 'Could not update date.';
       }
     } catch (e) {
       debugPrint('-----------------------> $e');
@@ -2346,7 +2392,11 @@ class PatientsController extends GetxController {
   /// whatever was selected there. Supplements are already identical across
   /// all 4 day-groups by construction (see toggleMealSelection) and are
   /// left untouched - duplicating them would be a no-op anyway.
-  void duplicateDayGroup(int weekNumber, String fromDayGroup, String toDayGroup) {
+  void duplicateDayGroup(
+    int weekNumber,
+    String fromDayGroup,
+    String toDayGroup,
+  ) {
     if (fromDayGroup == toDayGroup) return;
     final currentWeekRecipes = List<Recipe>.from(
       weekSelectedRecipes[weekNumber] ?? [],
@@ -2703,8 +2753,10 @@ class PatientsController extends GetxController {
 
   /// All of `r`'s components at their never-explicitly-adjusted defaults -
   /// see [_defaultComponentServing].
-  List<num> _defaultComponentServings(Recipe r) =>
-      List<num>.generate(r.components.length, (i) => _defaultComponentServing(r, i));
+  List<num> _defaultComponentServings(Recipe r) => List<num>.generate(
+    r.components.length,
+    (i) => _defaultComponentServing(r, i),
+  );
 
   /// Clamps a stepper-adjusted value for component `index` to the trend's
   /// realistic range - only component 0, only within scope; every other
@@ -2739,7 +2791,12 @@ class PatientsController extends GetxController {
   /// egg, bowl, cup, tbsp, tsp...), 10 for a plain mass/volume (e.g. 80g
   /// chikki total) - matches the old secondary-component step sizes, now
   /// applied per-component.
-  num _componentStep(Recipe r, int index, num current, {required bool incrementing}) {
+  num _componentStep(
+    Recipe r,
+    int index,
+    num current, {
+    required bool incrementing,
+  }) {
     final unit = r.components[index].unit;
     if (index == 0) {
       if (_isCountable(unit)) {
@@ -2799,8 +2856,10 @@ class PatientsController extends GetxController {
 
   // Backward-compatible aliases for the old fixed primary/secondary API -
   // component 0 is the old "primary", component 1 the old "secondary".
-  void incrementServings(Recipe recipe) => incrementComponentServings(recipe, 0);
-  void decrementServings(Recipe recipe) => decrementComponentServings(recipe, 0);
+  void incrementServings(Recipe recipe) =>
+      incrementComponentServings(recipe, 0);
+  void decrementServings(Recipe recipe) =>
+      decrementComponentServings(recipe, 0);
   void incrementSecondaryServings(Recipe recipe) =>
       incrementComponentServings(recipe, 1);
   void decrementSecondaryServings(Recipe recipe) =>
@@ -2867,8 +2926,9 @@ class PatientsController extends GetxController {
     // `nutrition` is intentionally zeroed server-side) - excluded so the
     // budget reflects food only, by construction rather than by coincidence
     // of zeroed data.
-    final selectedRecipes = (weekSelectedRecipes[weekNumber] ?? [])
-        .where((r) => !r.tags.contains('supplement'));
+    final selectedRecipes = (weekSelectedRecipes[weekNumber] ?? []).where(
+      (r) => !r.tags.contains('supplement'),
+    );
 
     final caloriesByDayGroup = <String, double>{};
     final fatByDayGroup = <String, double>{};
@@ -2986,9 +3046,7 @@ class PatientsController extends GetxController {
   /// aren't things a dietician resolves by editing servings/selections.
   List<String> filterStaleCalorieWarnings(List<String> warnings) {
     return warnings.where((message) {
-      final calorieMatch = _calorieDeviationWarningPattern.firstMatch(
-        message,
-      );
+      final calorieMatch = _calorieDeviationWarningPattern.firstMatch(message);
       if (calorieMatch != null) {
         final week = int.tryParse(calorieMatch.group(1)!);
         final dayGroup = calorieMatch.group(2)!;
@@ -3001,8 +3059,7 @@ class PatientsController extends GetxController {
             )
             .fold<double>(
               0.0,
-              (sum, r) =>
-                  sum + r.nutrition.calories * _nutritionScaleRatio(r),
+              (sum, r) => sum + r.nutrition.calories * _nutritionScaleRatio(r),
             );
         // Nothing selected for this day-group yet - not resolved, still warn.
         if (liveCalories <= 0) return true;
@@ -3018,8 +3075,7 @@ class PatientsController extends GetxController {
         if (week == null) return true;
 
         final hasRealSelection = (weekSelectedRecipes[week] ?? []).any(
-          (r) =>
-              r.servingTime == servingTime && !r.tags.contains('supplement'),
+          (r) => r.servingTime == servingTime && !r.tags.contains('supplement'),
         );
         return !hasRealSelection;
       }
@@ -3343,7 +3399,9 @@ class PatientsController extends GetxController {
       } else {
         showAppToast(
           Get.overlayContext!,
-          message: response?['message']?.toString() ?? 'Could not update the start date. Please try again.',
+          message:
+              response?['message']?.toString() ??
+              'Could not update the start date. Please try again.',
           type: AppToastType.error,
         );
       }
