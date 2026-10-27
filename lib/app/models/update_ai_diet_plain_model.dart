@@ -315,12 +315,34 @@ class NutritionModel {
   final int fats;
   final int fiber;
 
+  // Micronutrients: null means "not researched", never 0. saturatedFat,
+  // transFat and sugar are in g; the rest are in mg. Kept as num (not int)
+  // since they are often fractional.
+  final num? saturatedFat;
+  final num? transFat;
+  final num? sugar;
+  final num? cholesterol;
+  final num? sodium;
+  final num? calcium;
+  final num? iron;
+  final num? potassium;
+  final num? vitaminC;
+
   NutritionModel({
     required this.calories,
     required this.protein,
     required this.carbs,
     required this.fats,
     required this.fiber,
+    this.saturatedFat,
+    this.transFat,
+    this.sugar,
+    this.cholesterol,
+    this.sodium,
+    this.calcium,
+    this.iron,
+    this.potassium,
+    this.vitaminC,
   });
 
   factory NutritionModel.fromJson(Map<String, dynamic> json) {
@@ -332,6 +354,15 @@ class NutritionModel {
       carbs: toInt(json['carbs']),
       fats: toInt(json['fats']),
       fiber: toInt(json['fiber']),
+      saturatedFat: json['saturatedFat'] as num?,
+      transFat: json['transFat'] as num?,
+      sugar: json['sugar'] as num?,
+      cholesterol: json['cholesterol'] as num?,
+      sodium: json['sodium'] as num?,
+      calcium: json['calcium'] as num?,
+      iron: json['iron'] as num?,
+      potassium: json['potassium'] as num?,
+      vitaminC: json['vitaminC'] as num?,
     );
   }
 }

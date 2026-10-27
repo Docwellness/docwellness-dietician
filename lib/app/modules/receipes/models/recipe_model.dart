@@ -94,7 +94,8 @@ class RecipePreview {
     // forward, since that list is never empty by the time it reaches here -
     // see each copyWith* method's own explicit value below.
     bool? hasRealComponents,
-  }) : hasRealComponents = hasRealComponents ?? (components != null && components.isNotEmpty),
+  }) : hasRealComponents =
+           hasRealComponents ?? (components != null && components.isNotEmpty),
        components = (components == null || components.isEmpty)
            ? [
                RecipeComponent(
@@ -376,12 +377,23 @@ class RecipePreview {
     if (ratios.isEmpty) return baseNutrition;
     final scale = ratios.reduce((a, b) => a + b) / ratios.length;
     num scaled(num? value) => value == null ? 0 : value * scale;
+    // Micronutrients stay null when unknown ("not researched", never 0).
+    num? scaledOrNull(num? value) => value == null ? null : value * scale;
     return Nutrition(
       calories: scaled(baseNutrition.calories),
       protein: scaled(baseNutrition.protein),
       carbs: scaled(baseNutrition.carbs),
       fats: scaled(baseNutrition.fats),
       fiber: scaled(baseNutrition.fiber),
+      saturatedFat: scaledOrNull(baseNutrition.saturatedFat),
+      transFat: scaledOrNull(baseNutrition.transFat),
+      sugar: scaledOrNull(baseNutrition.sugar),
+      cholesterol: scaledOrNull(baseNutrition.cholesterol),
+      sodium: scaledOrNull(baseNutrition.sodium),
+      calcium: scaledOrNull(baseNutrition.calcium),
+      iron: scaledOrNull(baseNutrition.iron),
+      potassium: scaledOrNull(baseNutrition.potassium),
+      vitaminC: scaledOrNull(baseNutrition.vitaminC),
     );
   }
 
@@ -726,7 +738,37 @@ class Nutrition {
   final num? fats;
   final num? fiber;
 
-  Nutrition({this.calories, this.protein, this.carbs, this.fats, this.fiber});
+  // Micronutrients: null means "not researched" and is shown as "—", never 0.
+  // saturatedFat, transFat and sugar are in g; the rest are in mg. toJson
+  // sends the five macros only: the backend merges a save into the stored
+  // nutrition and keeps these, and sending them would also feed them into the
+  // OpenAI prompt of /recipes/ai-update-from-edits.
+  final num? saturatedFat;
+  final num? transFat;
+  final num? sugar;
+  final num? cholesterol;
+  final num? sodium;
+  final num? calcium;
+  final num? iron;
+  final num? potassium;
+  final num? vitaminC;
+
+  Nutrition({
+    this.calories,
+    this.protein,
+    this.carbs,
+    this.fats,
+    this.fiber,
+    this.saturatedFat,
+    this.transFat,
+    this.sugar,
+    this.cholesterol,
+    this.sodium,
+    this.calcium,
+    this.iron,
+    this.potassium,
+    this.vitaminC,
+  });
 
   factory Nutrition.fromJson(Map<String, dynamic> json) {
     return Nutrition(
@@ -735,6 +777,15 @@ class Nutrition {
       carbs: json['carbs'],
       fats: json['fats'],
       fiber: json['fiber'],
+      saturatedFat: json['saturatedFat'],
+      transFat: json['transFat'],
+      sugar: json['sugar'],
+      cholesterol: json['cholesterol'],
+      sodium: json['sodium'],
+      calcium: json['calcium'],
+      iron: json['iron'],
+      potassium: json['potassium'],
+      vitaminC: json['vitaminC'],
     );
   }
 
