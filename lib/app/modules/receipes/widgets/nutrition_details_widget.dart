@@ -7,6 +7,66 @@ import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
 import 'package:docwellnesdoc/app/utils/theme/app_shadows.dart';
 import 'package:flutter/material.dart';
 
+// %DV reference values: FDA 2020 label base table (design.md, Decision 9).
+// Trans fat and total sugar have no DV, so they have no constant here.
+const double dvFat = 78; // g
+const double dvSaturatedFat = 20; // g
+const double dvCarbs = 275; // g
+const double dvFiber = 28; // g
+const double dvProtein = 50; // g
+const double dvCholesterol = 300; // mg
+const double dvSodium = 2300; // mg
+const double dvCalcium = 1300; // mg
+const double dvIron = 18; // mg
+const double dvPotassium = 4700; // mg
+const double dvVitaminC = 90; // mg
+
+/// "3.1mg" for a researched value, "—" when it is unknown (null). A null is
+/// never shown as 0: 0 is a finding, null is "not researched". A positive value
+/// that would round to "0" at one decimal shows "<0.1", so only a true 0 reads
+/// "0mg".
+String microValueText(num? value, String unit) {
+  if (value == null) return '—';
+  if (_isTrace(value)) return '<0.1$unit';
+  final text = value.toStringAsFixed(1);
+  return '${text.endsWith('.0') ? text.substring(0, text.length - 2) : text}$unit';
+}
+
+/// Positive but below the 0.05 that one decimal can show.
+bool _isTrace(num value) => value > 0 && value < 0.05;
+
+/// "%DV" text, blank when the value is unknown, the nutrient has no DV, or the
+/// value is a trace (shown as "<0.1").
+String dvPercentText(num? value, double? dailyValue) {
+  if (value == null || dailyValue == null || _isTrace(value)) return '';
+  return '${((value / dailyValue) * 100).toStringAsFixed(0)}%';
+}
+
+/// "%DV" text for a macro row (fat, protein, carbs, fiber). Macros always show
+/// their %DV, even a small one ("0%"); the trace rule above is for the
+/// micronutrient rows only.
+String macroDvPercentText(num value, double dailyValue) =>
+    '${((value / dailyValue) * 100).toStringAsFixed(0)}%';
+
+/// Ring fractions for the macro circles. Protein, fat and carbs are their share
+/// of energy (4P / 9F / 4C) and add up to 100%. Fiber is already inside carbs,
+/// so it is shown as its share of the carbs rather than added on top of them.
+({double protein, double fats, double carbs, double fiber}) macroRingShares({
+  required num protein,
+  required num fats,
+  required num carbs,
+  required num fiber,
+}) {
+  final energy = 4 * protein + 9 * fats + 4 * carbs;
+  if (energy <= 0) return (protein: 0.25, fats: 0.25, carbs: 0.25, fiber: 0.25);
+  return (
+    protein: 4 * protein / energy,
+    fats: 9 * fats / energy,
+    carbs: 4 * carbs / energy,
+    fiber: carbs > 0 ? (fiber / carbs).clamp(0.0, 1.0).toDouble() : 0.0,
+  );
+}
+
 class NutritionDetailsWidget extends StatefulWidget {
   final Nutrition? nutrition;
   // Real active-ingredient facts for a supplement recipe - when present,
@@ -33,11 +93,14 @@ class _NutritionDetailsWidgetState extends State<NutritionDetailsWidget> {
   num get fiber => widget.nutrition?.fiber ?? 0;
   num get calories => widget.nutrition?.calories ?? 0;
 
-  double get total => (protein + fats + carbs + fiber).toDouble();
-  double get proteinPercent => total > 0 ? protein / total : 0.25;
-  double get fatsPercent => total > 0 ? fats / total : 0.25;
-  double get carbsPercent => total > 0 ? carbs / total : 0.25;
-  double get fiberPercent => total > 0 ? fiber / total : 0.25;
+  Nutrition? get _n => widget.nutrition;
+
+  ({double protein, double fats, double carbs, double fiber}) get _rings =>
+      macroRingShares(protein: protein, fats: fats, carbs: carbs, fiber: fiber);
+  double get proteinPercent => _rings.protein;
+  double get fatsPercent => _rings.fats;
+  double get carbsPercent => _rings.carbs;
+  double get fiberPercent => _rings.fiber;
 
   bool get _isSupplement =>
       widget.supplementFacts != null &&
@@ -76,7 +139,8 @@ class _NutritionDetailsWidgetState extends State<NutritionDetailsWidget> {
                 percent: carbsPercent,
               ),
               NutritionCircle(
-                title: "Fiber",
+                // Its % is fiber as a share of carbs, not of energy.
+                title: "Fiber (of carbs)",
                 grams: fiber.toDouble(),
                 percent: fiberPercent,
               ),
@@ -155,39 +219,75 @@ class _NutritionDetailsWidgetState extends State<NutritionDetailsWidget> {
               nutritionItem(
                 title: "Total fat",
                 value: "${fats.toStringAsFixed(1)}g",
-                dv: "${((fats / 65) * 100).toStringAsFixed(0)}%",
-                sub: const [
-                  SubNutrition(title: "Saturated fat", value: "0g", dv: "0%"),
-                  SubNutrition(title: "Trans fat", value: "0g", dv: "0%"),
+                dv: macroDvPercentText(fats, dvFat),
+                sub: [
+                  SubNutrition(
+                    title: "Saturated fat",
+                    value: microValueText(_n?.saturatedFat, "g"),
+                    dv: dvPercentText(_n?.saturatedFat, dvSaturatedFat),
+                  ),
+                  SubNutrition(
+                    title: "Trans fat",
+                    value: microValueText(_n?.transFat, "g"),
+                    dv: "",
+                  ),
                 ],
               ),
 
               nutritionItem(
                 title: "Protein",
                 value: "${protein.toStringAsFixed(1)}g",
-                dv: "${((protein / 50) * 100).toStringAsFixed(0)}%",
+                dv: macroDvPercentText(protein, dvProtein),
               ),
 
               nutritionItem(
                 title: "Total Carbohydrates",
                 value: "${carbs.toStringAsFixed(1)}g",
-                dv: "${((carbs / 300) * 100).toStringAsFixed(0)}%",
+                dv: macroDvPercentText(carbs, dvCarbs),
                 sub: [
                   SubNutrition(
                     title: "Dietary Fiber",
                     value: "${fiber.toStringAsFixed(1)}g",
-                    dv: "${((fiber / 25) * 100).toStringAsFixed(0)}%",
+                    dv: macroDvPercentText(fiber, dvFiber),
                   ),
-                  const SubNutrition(title: "Sugar", value: "0g", dv: "0%"),
+                  SubNutrition(
+                    title: "Sugar",
+                    value: microValueText(_n?.sugar, "g"),
+                    dv: "",
+                  ),
                 ],
               ),
 
-              nutritionItem(title: "Cholesterol", value: "0mg", dv: "0%"),
-              nutritionItem(title: "Sodium", value: "0mg", dv: "0%"),
-              nutritionItem(title: "Calcium", value: "0mg", dv: "0%"),
-              nutritionItem(title: "Iron", value: "0mg", dv: "0%"),
-              nutritionItem(title: "Potassium", value: "0mg", dv: "0%"),
-              nutritionItem(title: "Vitamin C", value: "0mg", dv: "0%"),
+              nutritionItem(
+                title: "Cholesterol",
+                value: microValueText(_n?.cholesterol, "mg"),
+                dv: dvPercentText(_n?.cholesterol, dvCholesterol),
+              ),
+              nutritionItem(
+                title: "Sodium",
+                value: microValueText(_n?.sodium, "mg"),
+                dv: dvPercentText(_n?.sodium, dvSodium),
+              ),
+              nutritionItem(
+                title: "Calcium",
+                value: microValueText(_n?.calcium, "mg"),
+                dv: dvPercentText(_n?.calcium, dvCalcium),
+              ),
+              nutritionItem(
+                title: "Iron",
+                value: microValueText(_n?.iron, "mg"),
+                dv: dvPercentText(_n?.iron, dvIron),
+              ),
+              nutritionItem(
+                title: "Potassium",
+                value: microValueText(_n?.potassium, "mg"),
+                dv: dvPercentText(_n?.potassium, dvPotassium),
+              ),
+              nutritionItem(
+                title: "Vitamin C",
+                value: microValueText(_n?.vitaminC, "mg"),
+                dv: dvPercentText(_n?.vitaminC, dvVitaminC),
+              ),
             ],
           ),
         ),
@@ -405,12 +505,20 @@ class NutritionCircle extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 6),
-        Text(
-          title,
-          style: const TextStyle(
-            fontWeight: FontWeight.w700,
-            fontSize: 10,
-            color: Color(0xff530630),
+        // Fit the title to the circle's width so a long one ("Fiber (of
+        // carbs)") shrinks instead of widening the ring row.
+        SizedBox(
+          width: 54,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              title,
+              style: const TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 10,
+                color: Color(0xff530630),
+              ),
+            ),
           ),
         ),
       ],

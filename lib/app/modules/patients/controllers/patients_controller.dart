@@ -1005,8 +1005,9 @@ class PatientsController extends GetxController {
     if (age != null) context['age'] = age;
     if (health?.height != null) context['heightCm'] = health!.height;
     if (health?.weight != null) context['weightKg'] = health!.weight;
-    if (health?.primaryGoal != null)
+    if (health?.primaryGoal != null) {
       context['primaryGoal'] = health!.primaryGoal;
+    }
     if (health?.targetWeight != null) {
       context['targetWeight'] = health!.targetWeight;
     }
@@ -2576,13 +2577,7 @@ class PatientsController extends GetxController {
       name: m.name,
       image: m.image,
       totalWeightGrams: m.servingSize.quantity.round(),
-      nutrition: Nutrition(
-        calories: m.nutrition.calories,
-        protein: m.nutrition.protein,
-        carbs: m.nutrition.carbs,
-        fats: m.nutrition.fats,
-        fiber: m.nutrition.fiber,
-      ),
+      nutrition: planNutritionFromOption(m.nutrition),
       servingTime: persistedServingTime,
       tags: m.tags,
       dayGroup: dayGroup,
@@ -4153,6 +4148,25 @@ class PatientsController extends GetxController {
     return false;
   }
 }
+
+/// The plan-side Nutrition of a recipe picked from the options list, carrying
+/// the nine micronutrients through as they are (null stays null, 0 stays 0).
+Nutrition planNutritionFromOption(NutritionModel n) => Nutrition(
+  calories: n.calories,
+  protein: n.protein,
+  carbs: n.carbs,
+  fats: n.fats,
+  fiber: n.fiber,
+  saturatedFat: n.saturatedFat,
+  transFat: n.transFat,
+  sugar: n.sugar,
+  cholesterol: n.cholesterol,
+  sodium: n.sodium,
+  calcium: n.calcium,
+  iron: n.iron,
+  potassium: n.potassium,
+  vitaminC: n.vitaminC,
+);
 
 class SingleDietOption {
   String name;

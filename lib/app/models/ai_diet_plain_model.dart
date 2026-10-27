@@ -326,12 +326,34 @@ class Nutrition {
   final num fats;
   final num fiber;
 
+  // Micronutrients: null means "not researched", never 0. saturatedFat,
+  // transFat and sugar are in g; the rest are in mg. Carried in memory only:
+  // toJson does not send them.
+  final num? saturatedFat;
+  final num? transFat;
+  final num? sugar;
+  final num? cholesterol;
+  final num? sodium;
+  final num? calcium;
+  final num? iron;
+  final num? potassium;
+  final num? vitaminC;
+
   Nutrition({
     required this.calories,
     required this.protein,
     required this.carbs,
     required this.fats,
     required this.fiber,
+    this.saturatedFat,
+    this.transFat,
+    this.sugar,
+    this.cholesterol,
+    this.sodium,
+    this.calcium,
+    this.iron,
+    this.potassium,
+    this.vitaminC,
   });
 
   factory Nutrition.fromJson(Map<String, dynamic> json) {
@@ -341,6 +363,15 @@ class Nutrition {
       carbs: (json["carbs"] as num?) ?? 0,
       fats: (json["fats"] as num?) ?? 0,
       fiber: (json["fiber"] as num?) ?? 0,
+      saturatedFat: json["saturatedFat"] as num?,
+      transFat: json["transFat"] as num?,
+      sugar: json["sugar"] as num?,
+      cholesterol: json["cholesterol"] as num?,
+      sodium: json["sodium"] as num?,
+      calcium: json["calcium"] as num?,
+      iron: json["iron"] as num?,
+      potassium: json["potassium"] as num?,
+      vitaminC: json["vitaminC"] as num?,
     );
   }
 
