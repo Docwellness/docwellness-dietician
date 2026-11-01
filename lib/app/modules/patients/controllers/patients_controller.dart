@@ -1101,10 +1101,39 @@ class PatientsController extends GetxController {
   /// a network blip no longer just shows a blank spinner-less screen.
   final RxBool profileError = false.obs;
 
+  // The patient whose data the profile-screen state below belongs to.
+  String? _loadedPatientId;
+
+  /// This controller is shared by every patient profile screen, so opening a
+  /// different patient must not leave the previous one's data in place: a slow
+  /// or failed load for the new patient would otherwise show the old patient
+  /// (or a mix of both). Clears everything patient-specific the first time a
+  /// new patient id is seen; the same patient refreshing is left alone.
+  void _resetForPatient(String patientId) {
+    if (_loadedPatientId == patientId) return;
+    _loadedPatientId = patientId;
+    patientProfileModel.value = null;
+    weeklyDietPlans.clear();
+    exercisePlan.value = null;
+    journeyImages.clear();
+    isAutoMilestonesLoaded.value = false;
+    doctorNotes.clear();
+    calorieTrackingData.value = null;
+    weightTrackingData.value = null;
+    bmiTrackingData.value = null;
+    calorieRangeStart.value = null;
+    calorieRangeEnd.value = null;
+    weightRangeStart.value = null;
+    weightRangeEnd.value = null;
+    bmiRangeStart.value = null;
+    bmiRangeEnd.value = null;
+  }
+
   Future<void> getPatientProfile(
     String patientId, {
     bool silent = false,
   }) async {
+    _resetForPatient(patientId);
     if (!silent) {
       isProfileLoading.value = true;
       profileError.value = false;

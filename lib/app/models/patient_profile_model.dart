@@ -359,8 +359,10 @@ class Basic {
 
 class HealthSummary {
   String? startDateForDiet;
-  int? height;
-  int? weight;
+  // A decimal reading (63.3 kg, 165.5 cm) arrives as a double; a whole one as
+  // an int. Both must parse, so these are num rather than int.
+  num? height;
+  num? weight;
   double? bmi;
   int? weightIndex;
   String? primaryGoal;
@@ -382,10 +384,10 @@ class HealthSummary {
 
   HealthSummary.fromJson(Map<String, dynamic> json) {
     startDateForDiet = json['startDateForDiet'];
-    height = json['height'];
-    weight = json['weight'];
+    height = json['height'] as num?;
+    weight = json['weight'] as num?;
     bmi = (json['bmi'] as num?)?.toDouble();
-    weightIndex = json['weightIndex'];
+    weightIndex = (json['weightIndex'] as num?)?.toInt();
     primaryGoal = json['primaryGoal'];
     targetWeight = json['targetWeight'];
     activityLevel = json['activityLevel'];
