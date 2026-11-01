@@ -3,6 +3,26 @@ import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
+/// The tap tooltip's lines for a bar: its average kcal, then (for a bar that
+/// covers more than one day) the dates it covers, then how many days were
+/// logged when that is under 7. An older backend sends no dates beyond
+/// `dateRange`, which is used as is.
+@visibleForTesting
+List<String> calorieTooltipLines(CalorieDataPoint point) {
+  final lines = ['${point.calories} kcal'];
+  final range = point.dateRange;
+  if (range == null || range.isEmpty) return lines;
+  final ends = range.split(' - ');
+  final singleDay = ends.length == 2 && ends[0] == ends[1];
+  if (singleDay) return lines;
+  lines.add(range);
+  final logged = point.daysLogged;
+  if (logged != null && logged < 7) {
+    lines.add('$logged ${logged == 1 ? 'day' : 'days'} logged');
+  }
+  return lines;
+}
+
 /// Calorie intake bars - built on fl_chart's BarChart (same as BmiChart),
 /// so tapping a bar shows its value in the same default tooltip bubble BMI
 /// already has. The whole chart (bars + its own left-axis scale) lives in
@@ -157,14 +177,25 @@ class _CalorieIntakeContainerState extends State<CalorieIntakeContainer> {
                         ),
                         tooltipMargin: 6,
                         getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                          final point = data[groupIndex];
+                          final lines = calorieTooltipLines(data[groupIndex]);
                           return BarTooltipItem(
-                            '${point.calories} kcal',
+                            lines.first,
                             const TextStyle(
                               color: Colors.white,
                               fontSize: 11,
                               fontWeight: FontWeight.w500,
                             ),
+                            children: [
+                              for (final line in lines.skip(1))
+                                TextSpan(
+                                  text: '\n$line',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w400,
+                                  ),
+                                ),
+                            ],
                           );
                         },
                       ),

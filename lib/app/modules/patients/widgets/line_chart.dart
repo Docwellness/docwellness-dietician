@@ -255,7 +255,7 @@ class TargetWeightChart extends StatelessWidget {
             if (hasLogged) const _Legend(color: _logged, label: 'Logged'),
             const _Legend(
               color: _planned,
-              label: 'Planned trend',
+              label: 'Planned (from last weigh-in)',
               dashed: true,
             ),
             if (target != null)

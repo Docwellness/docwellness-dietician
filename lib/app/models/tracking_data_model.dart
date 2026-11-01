@@ -99,6 +99,11 @@ class CalorieDataPoint {
   final int? mealsLogged;
   final int? daysLogged;
 
+  /// First and last day (YYYY-MM-DD) the bar covers. Null from an older
+  /// backend, which only sends [dateRange].
+  final String? startDate;
+  final String? endDate;
+
   CalorieDataPoint({
     required this.label,
     this.date,
@@ -108,6 +113,8 @@ class CalorieDataPoint {
     required this.plannedCalories,
     this.mealsLogged,
     this.daysLogged,
+    this.startDate,
+    this.endDate,
   });
 
   factory CalorieDataPoint.fromJson(Map<String, dynamic> json) {
@@ -120,6 +127,8 @@ class CalorieDataPoint {
       plannedCalories: json['plannedCalories'] ?? 0,
       mealsLogged: json['mealsLogged'],
       daysLogged: json['daysLogged'],
+      startDate: json['startDate']?.toString(),
+      endDate: json['endDate']?.toString(),
     );
   }
 }
