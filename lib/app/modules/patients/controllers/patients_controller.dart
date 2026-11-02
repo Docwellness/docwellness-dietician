@@ -4,7 +4,6 @@ import 'dart:developer';
 
 import 'package:dio/dio.dart' as dio;
 import 'package:docwellnesdoc/app/models/ai_diet_plain_model.dart';
-import 'package:docwellnesdoc/app/models/journey_image_model.dart';
 import 'package:docwellnesdoc/app/models/patient_list_model.dart';
 import 'package:docwellnesdoc/app/models/patient_profile_model.dart';
 import 'package:docwellnesdoc/app/models/tracking_data_model.dart';
@@ -276,14 +275,6 @@ class PatientsController extends GetxController {
   Rx<DateTime?> weightRangeEnd = Rx<DateTime?>(null);
   Rx<DateTime?> bmiRangeStart = Rx<DateTime?>(null);
   Rx<DateTime?> bmiRangeEnd = Rx<DateTime?>(null);
-
-  // ===== Journey Images =====
-  RxList<JourneyImageModel> journeyImages = <JourneyImageModel>[].obs;
-  // Auto-generated milestone journey cards from body logs
-  RxList<JourneyImageModel> autoJourneyCards = <JourneyImageModel>[].obs;
-  RxBool isJourneyLoading = false.obs;
-  RxBool isAutoMilestonesLoaded = false.obs;
-  RxBool isJourneyUploading = false.obs;
 
   // ===== Doctor Notes =====
   RxList<Map<String, dynamic>> doctorNotes = <Map<String, dynamic>>[].obs;
@@ -1115,8 +1106,6 @@ class PatientsController extends GetxController {
     patientProfileModel.value = null;
     weeklyDietPlans.clear();
     exercisePlan.value = null;
-    journeyImages.clear();
-    isAutoMilestonesLoaded.value = false;
     doctorNotes.clear();
     calorieTrackingData.value = null;
     weightTrackingData.value = null;
@@ -1452,189 +1441,6 @@ class PatientsController extends GetxController {
     bmiRangeStart.value = range.start;
     bmiRangeEnd.value = range.end;
     fetchBmiTrackingData(patientId);
-  }
-
-  // ===== Journey Image Methods =====
-
-  /// Fetch auto-generated milestone journey cards from body log images
-  Future<void> fetchAutoJourneyMilestones(String patientId) async {
-    isAutoMilestonesLoaded.value = false;
-    try {
-      final response = await service.getPatientJourneyMilestones(patientId);
-      if (isClosed) return;
-      debugPrint(
-        '📸 fetchAutoJourneyMilestones response: ${response != null ? 'OK' : 'NULL'}',
-      );
-      if (response != null && response['success'] == true) {
-        final data = response['data'];
-        final List milestones = data['milestones'] ?? [];
-        final List manual = data['manualImages'] ?? [];
-        debugPrint(
-          '📸 milestones: ${milestones.length}, manual: ${manual.length}',
-        );
-
-        final List<JourneyImageModel>
-        cards = milestones.map<JourneyImageModel>((m) {
-          debugPrint(
-            '📸 milestone ${m['dayLabel']}: beforeImageUrl=${(m['beforeImageUrl'] ?? '').toString().length > 20 ? 'YES' : 'EMPTY'}',
-          );
-          return JourneyImageModel(
-            id: 'auto_${m['dayNumber']}',
-            patientId: patientId,
-            dieticianId: '',
-            uploadedBy: '',
-            uploadedByRole: 'auto',
-            beforeImageUrl: m['beforeImageUrl'] ?? '',
-            afterImageUrl: m['afterImageUrl'] ?? '',
-            description: m['description'] ?? '',
-            dayLabel: m['dayLabel'] ?? 'Day 1',
-            createdAt: m['date'] != null
-                ? DateTime.parse(m['date'].toString())
-                : DateTime.now(),
-            updatedAt: DateTime.now(),
-          );
-        }).toList();
-
-        // Append any manual journey images
-        for (final m in manual) {
-          cards.add(JourneyImageModel.fromJson(m));
-        }
-
-        debugPrint('📸 Setting autoJourneyCards with ${cards.length} cards');
-        autoJourneyCards.assignAll(cards);
-      }
-    } catch (e) {
-      debugPrint('fetchAutoJourneyMilestones error: $e');
-    }
-    if (!isClosed) isAutoMilestonesLoaded.value = true;
-  }
-
-  /// Fetch all journey images for a patient
-  Future<void> fetchJourneyImages(String patientId) async {
-    isJourneyLoading.value = true;
-    try {
-      final response = await service.getPatientJourneyImages(patientId);
-      if (isClosed) return;
-      if (response != null && response['success'] == true) {
-        final List data = response['data'] ?? [];
-        journeyImages.value = data
-            .map((e) => JourneyImageModel.fromJson(e))
-            .toList();
-      }
-    } catch (e) {
-      debugPrint('fetchJourneyImages error: $e');
-    }
-    if (!isClosed) isJourneyLoading.value = false;
-  }
-
-  /// Upload journey images for a patient
-  Future<bool> uploadJourneyImage(
-    String patientId, {
-    String? beforeImagePath,
-    String? afterImagePath,
-    String description = '',
-    String dayLabel = 'Day 1',
-  }) async {
-    isJourneyUploading.value = true;
-    try {
-      final map = <String, dynamic>{
-        'description': description,
-        'dayLabel': dayLabel,
-      };
-      if (beforeImagePath != null) {
-        map['beforeImage'] = await dio.MultipartFile.fromFile(beforeImagePath);
-      }
-      if (afterImagePath != null) {
-        map['afterImage'] = await dio.MultipartFile.fromFile(afterImagePath);
-      }
-      final formData = dio.FormData.fromMap(map);
-
-      final response = await service.uploadJourneyImage(patientId, formData);
-      if (response != null && response['success'] == true) {
-        showAppToast(
-          Get.overlayContext!,
-          message: 'Journey image uploaded!',
-          type: AppToastType.success,
-        );
-        await fetchJourneyImages(patientId);
-        isJourneyUploading.value = false;
-        return true;
-      }
-    } catch (e) {
-      debugPrint('uploadJourneyImage error: $e');
-    }
-    isJourneyUploading.value = false;
-    showAppToast(
-      Get.overlayContext!,
-      message: 'Failed to upload image',
-      type: AppToastType.error,
-    );
-    return false;
-  }
-
-  /// Update a journey image entry
-  Future<bool> updateJourneyImage(
-    String patientId,
-    String imageId, {
-    String? beforeImagePath,
-    String? afterImagePath,
-    String? description,
-    String? dayLabel,
-  }) async {
-    try {
-      final map = <String, dynamic>{};
-      if (description != null) map['description'] = description;
-      if (dayLabel != null) map['dayLabel'] = dayLabel;
-      if (beforeImagePath != null) {
-        map['beforeImage'] = await dio.MultipartFile.fromFile(beforeImagePath);
-      }
-      if (afterImagePath != null) {
-        map['afterImage'] = await dio.MultipartFile.fromFile(afterImagePath);
-      }
-      final formData = dio.FormData.fromMap(map);
-
-      final response = await service.updateJourneyImage(
-        patientId,
-        imageId,
-        formData,
-      );
-      if (response != null && response['success'] == true) {
-        showAppToast(
-          Get.overlayContext!,
-          message: 'Journey image updated!',
-          type: AppToastType.success,
-        );
-        await fetchJourneyImages(patientId);
-        return true;
-      }
-    } catch (e) {
-      debugPrint('updateJourneyImage error: $e');
-    }
-    showAppToast(
-      Get.overlayContext!,
-      message: 'Failed to update',
-      type: AppToastType.error,
-    );
-    return false;
-  }
-
-  /// Delete a journey image
-  Future<bool> deleteJourneyImage(String patientId, String imageId) async {
-    try {
-      final response = await service.deleteJourneyImage(patientId, imageId);
-      if (response != null && response['success'] == true) {
-        showAppToast(
-          Get.overlayContext!,
-          message: 'Journey image deleted',
-          type: AppToastType.success,
-        );
-        await fetchJourneyImages(patientId);
-        return true;
-      }
-    } catch (e) {
-      debugPrint('deleteJourneyImage error: $e');
-    }
-    return false;
   }
 
   /// Silent refresh patient profile without loading indicator
