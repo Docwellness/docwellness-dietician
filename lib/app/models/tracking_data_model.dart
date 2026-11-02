@@ -10,6 +10,9 @@ class TrackingData {
   final DateTime? appliedEndDate;
   final DateRangeLabel dateRange;
   final int currentIndex;
+  // Index of today in [calorieData] (one item per day); null from an older
+  // backend, whose [currentIndex] describes the weight buckets instead.
+  final int? calorieCurrentIndex;
   final double currentWeight;
   // Plan-start and target weight - 0 when the backend didn't send them.
   final double startWeight;
@@ -28,6 +31,7 @@ class TrackingData {
     this.appliedEndDate,
     required this.dateRange,
     required this.currentIndex,
+    this.calorieCurrentIndex,
     required this.currentWeight,
     this.startWeight = 0,
     this.targetWeight = 0,
@@ -53,6 +57,7 @@ class TrackingData {
           : null,
       dateRange: DateRangeLabel.fromJson(json['dateRange'] ?? {}),
       currentIndex: json['currentIndex'] ?? 0,
+      calorieCurrentIndex: (json['calorieCurrentIndex'] as num?)?.toInt(),
       currentWeight: (json['currentWeight'] ?? 0).toDouble(),
       startWeight: (json['startWeight'] ?? 0).toDouble(),
       targetWeight: (json['targetWeight'] ?? 0).toDouble(),
@@ -104,6 +109,10 @@ class CalorieDataPoint {
   final String? startDate;
   final String? endDate;
 
+  /// A plannedCalories of 0 means that day has no calorie target (no plan
+  /// covered it); the chart draws it as a plain bar.
+  bool get hasTarget => plannedCalories > 0;
+
   CalorieDataPoint({
     required this.label,
     this.date,
@@ -124,7 +133,7 @@ class CalorieDataPoint {
       dateRange: json['dateRange'],
       calories: json['calories'] ?? 0,
       totalCalories: json['totalCalories'],
-      plannedCalories: json['plannedCalories'] ?? 0,
+      plannedCalories: (json['plannedCalories'] as num?)?.toInt() ?? 0,
       mealsLogged: json['mealsLogged'],
       daysLogged: json['daysLogged'],
       startDate: json['startDate']?.toString(),

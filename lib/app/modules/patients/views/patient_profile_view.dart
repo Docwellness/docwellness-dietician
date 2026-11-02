@@ -2731,7 +2731,7 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                         return CalorieIntakeContainer(
                           data: td.calorieData,
                           plannedCalories: td.plannedDailyCalories,
-                          currentIndex: td.currentIndex,
+                          currentIndex: td.calorieCurrentIndex ?? -1,
                         );
                       }),
                     ],
