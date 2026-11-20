@@ -11,6 +11,7 @@ import 'package:docwellnesdoc/app/modules/patients/views/payment_status_view.dar
 import 'package:docwellnesdoc/app/utils/membership_badge.dart';
 import 'package:docwellnesdoc/app/modules/patients/views/profile_options_sheet.dart';
 import 'package:docwellnesdoc/app/modules/patients/views/questions_view.dart';
+import 'package:docwellnesdoc/app/modules/patients/utils/approved_on_label.dart';
 import 'package:docwellnesdoc/app/modules/patients/utils/week_lock.dart';
 import 'package:docwellnesdoc/app/modules/patients/widgets/bmi_and_body_fat_container.dart';
 import 'package:docwellnesdoc/app/modules/patients/widgets/edit_exercise_day_sheet.dart';
@@ -1044,6 +1045,12 @@ class _PatientProfileViewState extends State<PatientProfileView> {
   Widget _buildProfileContent() {
     final basic = controller.patientProfileModel.value?.basic;
     final healthSummary = controller.patientProfileModel.value?.healthSummary;
+    // "Approved on 20 Nov 2026": when the payment was approved, shown under the
+    // start day so a wrongly picked start stands out. Null when not activated.
+    final approvedOnCaption = approvedOnLabel(
+      healthSummary?.activationDate,
+      withTime: false,
+    );
     final status = controller.patientProfileModel.value?.status;
     final membershipBadge = membershipBadgeStyle(status?.membershipPlan);
 
@@ -1343,6 +1350,20 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                                             : () => _editDietStartDate(healthSummary?.startDateForDiet),
                                       ),
                               ),
+                              if (approvedOnCaption != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 6, left: 4),
+                                  child: Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      approvedOnCaption,
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        color: Color(0xff6C737F),
+                                      ),
+                                    ),
+                                  ),
+                                ),
                               const SizedBox(height: 16),
                               _boxField(
                                 label: 'Full name',
@@ -2146,6 +2167,9 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                             thisWeekScheduleMatches.first.endDate != null
                         ? '${_formatShortDate(thisWeekScheduleMatches.first.startDate!)} - ${_formatShortDate(thisWeekScheduleMatches.first.endDate!)}'
                         : null;
+                    final week1ApprovedLabel = approvedOnLabel(
+                      profileModel?.healthSummary?.activationDate,
+                    );
                     // The week the patient is actually living through right
                     // now is the latest *finalized* one that has actually
                     // started - not whichever week happens to be
@@ -2344,6 +2368,20 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                                     thisWeekDateRange,
                                     style: TextStyle(
                                       fontSize: 8,
+                                      color: colors['text'],
+                                    ),
+                                  ),
+                                ],
+                                // Week 1 also says when the payment was
+                                // approved, next to the start day it was
+                                // approved with.
+                                if (weekNum == 1 && week1ApprovedLabel != null) ...[
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    week1ApprovedLabel,
+                                    style: TextStyle(
+                                      fontSize: 8,
+                                      fontStyle: FontStyle.italic,
                                       color: colors['text'],
                                     ),
                                   ),
