@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:docwellnesdoc/app/modules/patients/controllers/patients_controller.dart';
+import 'package:docwellnesdoc/app/modules/patients/widgets/start_date_row.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_button.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_field.dart';
 import 'package:docwellnesdoc/app/utils/common_widgets/custom_text.dart';
@@ -395,6 +396,21 @@ class PaymentStatusSheet extends StatelessWidget {
             ),
             SizedBox(height: 16),
 
+            // The day the plan starts. Dated here, at approval, so a late
+            // payment never starts a plan in the past. Hidden for a plan that
+            // already has its dates.
+            if (!isRenewal && dietPlanId.isNotEmpty) ...[
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: StartDateRow(
+                  state: controller.startDateOptions,
+                  patientId: patientId,
+                  dietPlanId: dietPlanId,
+                ),
+              ),
+              SizedBox(height: 16),
+            ],
+
             // // Doctor's Note (for rejection)
             // Padding(
             //   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -476,6 +492,8 @@ class PaymentStatusSheet extends StatelessWidget {
                           Obx(
                             () => CustomButton(
                               isLoading: controller.activateDietPlanLoading.value,
+                              // Waits for the server's start-date options.
+                              isDisabled: controller.startDateOptions.blocksConfirm,
                               onTap: () async {
                                 debugPrint('🔘 Accept button tapped!');
                                 debugPrint('   patientId: $patientId');

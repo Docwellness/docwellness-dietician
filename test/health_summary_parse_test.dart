@@ -31,4 +31,21 @@ void main() {
       expect(health.weightIndex, isNull);
     });
   });
+
+  group('Status.fromJson startDatePending', () {
+    test('is true when the backend says the plan has no start date yet', () {
+      expect(
+        Status.fromJson({'startDatePending': true}).startDatePending,
+        isTrue,
+      );
+    });
+
+    test('is false when false or missing (an older backend)', () {
+      expect(
+        Status.fromJson({'startDatePending': false}).startDatePending,
+        isFalse,
+      );
+      expect(Status.fromJson({}).startDatePending, isFalse);
+    });
+  });
 }

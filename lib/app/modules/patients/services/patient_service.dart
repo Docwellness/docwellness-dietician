@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart' as dio;
+import 'package:docwellnesdoc/app/models/start_date_options_model.dart';
 import 'package:docwellnesdoc/app/utils/functions/dio_function.dart';
 import 'package:docwellnesdoc/main.dart';
 import 'package:flutter/widgets.dart';
@@ -198,32 +199,6 @@ class PatientService {
         if (response.data is Map) {
           return response.data;
         }
-      }
-    } catch (e) {
-      debugPrint('-----------------------> $e');
-    }
-    return null;
-  }
-
-  /// Lightweight alternative to generateWeek - moves just this week's date
-  /// (cascading every later week to follow it, see the backend's
-  /// cascadeWeekScheduleFrom) without touching content/strategy.
-  Future<dynamic> updateWeekScheduleDate(
-    String patientId,
-    String dietPlanId,
-    int week,
-    DateTime startDate,
-  ) async {
-    try {
-      final response = await service.request(
-        endPoint: '/patients/$patientId/diet-plans/$dietPlanId/weeks/$week/schedule',
-        method: 'PATCH',
-        headers: {'Authorization': "Bearer $token"},
-        data: {'startDate': startDate.toIso8601String()},
-      );
-
-      if (response != null && response.data is Map) {
-        return response.data;
       }
     } catch (e) {
       debugPrint('-----------------------> $e');
@@ -433,12 +408,33 @@ class PatientService {
     return null;
   }
 
+  /// The start-date choices for approving a plan's payment. Null when the
+  /// call failed (the caller shows an error); a 404 is an old backend, see
+  /// [StartDateOptions.fromResponse].
+  Future<StartDateOptions?> getStartDateOptions(
+    String patientId,
+    String dietPlanId,
+  ) async {
+    try {
+      final response = await service.request(
+        endPoint: '/patients/$patientId/diet-plans/$dietPlanId/start-date-options',
+        method: 'GET',
+        headers: {'Authorization': "Bearer $token"},
+      );
+      return StartDateOptions.fromResponse(response?.statusCode, response?.data);
+    } catch (e) {
+      debugPrint('getStartDateOptions error: $e');
+    }
+    return null;
+  }
+
   Future<dynamic> activateDietPlan(
     String patientId,
     String dietPlanId, {
     String? proofId,
     double? amountReceived,
     double? amountPending,
+    DateTime? startDay,
   }) async {
     try {
       debugPrint(
@@ -448,11 +444,12 @@ class PatientService {
         endPoint: '/patients/$patientId/diet-plans/$dietPlanId/activate',
         method: 'POST',
         headers: {'Authorization': "Bearer $token"},
-        data: {
-          if (proofId != null && proofId.isNotEmpty) 'proofId': proofId,
-          if (amountReceived != null) 'amountReceived': amountReceived,
-          if (amountPending != null) 'amountPending': amountPending,
-        },
+        data: buildActivateBody(
+          proofId: proofId,
+          amountReceived: amountReceived,
+          amountPending: amountPending,
+          startDay: startDay,
+        ),
       );
 
       debugPrint(

@@ -175,6 +175,10 @@ class PendingCycle {
   List<int> finalizedWeekNumbers;
   ActivePlanStrategy? activePlanStrategy;
 
+  /// True while this cycle has no start date yet (it is chosen when the
+  /// payment is approved), so its weeks after Week 1 stay locked.
+  final bool startDatePending;
+
   PendingCycle({
     this.dietPlanId,
     this.status,
@@ -185,10 +189,12 @@ class PendingCycle {
     this.generatedWeekNumbers = const [],
     this.finalizedWeekNumbers = const [],
     this.activePlanStrategy,
+    this.startDatePending = false,
   });
 
   PendingCycle.fromJson(Map<String, dynamic> json)
       : cycleNumber = json['cycleNumber'] ?? 1,
+        startDatePending = json['startDatePending'] == true,
         weekSchedule = json['weekSchedule'] != null
             ? List<WeekScheduleEntry>.from(
                 json['weekSchedule'].map((x) => WeekScheduleEntry.fromJson(x)),
@@ -439,6 +445,9 @@ class Status {
   bool? canSendPaymentRequest;
   bool? hasPaymentUpdate;
   bool? isActive;
+  // The newest diet plan has no start date yet: it is chosen when the payment
+  // is approved, so the profile shows the start date read-only until then.
+  bool startDatePending = false;
   String? subscriptionExpiresAt;
   PaymentSummary? paymentSummary;
 
@@ -461,6 +470,7 @@ class Status {
     this.canSendPaymentRequest,
     this.hasPaymentUpdate,
     this.isActive,
+    this.startDatePending = false,
     this.subscriptionExpiresAt,
     this.paymentSummary,
   });
@@ -484,6 +494,7 @@ class Status {
     canSendPaymentRequest = json['canSendPaymentRequest'];
     hasPaymentUpdate = json['hasPaymentUpdate'];
     isActive = json['isActive'];
+    startDatePending = json['startDatePending'] == true;
     subscriptionExpiresAt = json['subscriptionExpiresAt'];
     paymentSummary = json['paymentSummary'] != null
         ? PaymentSummary.fromJson(json['paymentSummary'])

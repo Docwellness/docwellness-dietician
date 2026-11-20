@@ -9,6 +9,7 @@ import 'package:docwellnesdoc/app/models/patient_profile_model.dart';
 import 'package:docwellnesdoc/app/models/tracking_data_model.dart';
 import 'package:docwellnesdoc/app/models/update_ai_diet_plain_model.dart';
 import 'package:docwellnesdoc/app/modules/exercises/services/exercise_service.dart';
+import 'package:docwellnesdoc/app/modules/patients/controllers/start_date_options_state.dart';
 import 'package:docwellnesdoc/app/modules/patients/services/consultation_mock_fill_service.dart';
 import 'package:docwellnesdoc/app/modules/patients/services/patient_service.dart';
 import 'package:docwellnesdoc/app/modules/patients/views/questions_view.dart';
@@ -37,6 +38,11 @@ class PatientsController extends GetxController {
   Rx<DietPlanWeekData?> dietPlanWeekData = Rx<DietPlanWeekData?>(null);
 
   final PatientService service = PatientService();
+
+  // The payment review's "Diet starts on" options (see StartDateRow).
+  late final StartDateOptionsState startDateOptions = StartDateOptionsState(
+    fetch: service.getStartDateOptions,
+  );
 
   // Which segmented tab the Patients screen shows (0 Ongoing / 1 New /
   // 2 Past). Held here (not in PatientsView's State) so other screens - the
@@ -1944,18 +1950,17 @@ class PatientsController extends GetxController {
     String patientId,
     String firstConsultationId,
     String requestId, {
-    DateTime? startDate,
     double? currentWeight,
   }) async {
     generateDietPlanLoading.value = true;
     aiGenerationStatus.value = AiGenerationStatus.generating;
     lastDietPlanGenerationError = null;
+    // No start date: the plan is dated when the payment is approved.
     final data = {
       'firstConsultationId': firstConsultationId,
       'requestId': requestId,
       'calorieStrategy': selectedCalorieStrategy,
       'macroStrategy': selectedMacroStrategy,
-      if (startDate != null) 'startDate': startDate.toIso8601String(),
       if (currentWeight != null) 'currentWeight': currentWeight,
     };
     String? dietPlanId;
@@ -2028,41 +2033,6 @@ class PatientsController extends GetxController {
     }
     generateDietPlanLoading.value = false;
     return response;
-  }
-
-  /// Lightweight reschedule - just moves this week's date (and cascades
-  /// later weeks to follow it), without touching content/strategy the way
-  /// regenerateWeek does. Returns an error message on failure (e.g. the
-  /// backend's "startDate cannot be earlier than today"), or null on
-  /// success.
-  RxBool updatingWeekDate = false.obs;
-  Future<String?> updateWeekDate(
-    String patientId,
-    String dietPlanId,
-    int week,
-    DateTime startDate,
-  ) async {
-    updatingWeekDate.value = true;
-    String? errorMessage;
-    try {
-      final response = await service.updateWeekScheduleDate(
-        patientId,
-        dietPlanId,
-        week,
-        startDate,
-      );
-      if (response != null && response['success'] == true) {
-        await getPatientProfile(patientId);
-      } else {
-        errorMessage =
-            response?['message']?.toString() ?? 'Could not update date.';
-      }
-    } catch (e) {
-      debugPrint('-----------------------> $e');
-      errorMessage = 'Something went wrong. Please try again.';
-    }
-    updatingWeekDate.value = false;
-    return errorMessage;
   }
 
   Future<void> getAiGeneratedDietPlan(
@@ -3258,6 +3228,17 @@ class PatientsController extends GetxController {
       return;
     }
 
+    // The start day comes from the server's options; never guess one.
+    if (startDateOptions.blocksConfirm) {
+      showAppToast(
+        Get.overlayContext!,
+        message:
+            "The start date is not loaded yet. Please wait or tap Retry on the start date.",
+        type: AppToastType.warning,
+      );
+      return;
+    }
+
     final amountReceivedValue = double.tryParse(totalAmount.text.trim());
     final amountPendingValue = double.tryParse(pendingAmount.text.trim());
 
@@ -3298,6 +3279,9 @@ class PatientsController extends GetxController {
         proofId: paymentProofId.value,
         amountReceived: amountReceivedValue,
         amountPending: amountPendingValue,
+        startDay: startDateOptions.required
+            ? startDateOptions.selectedDay
+            : null,
       );
 
       if (response != null) {
@@ -3311,6 +3295,13 @@ class PatientsController extends GetxController {
             type: AppToastType.success,
           );
         } else {
+          // A refused start day: the toast below shows the server's message,
+          // and the options reload so the picker offers the allowed days.
+          await startDateOptions.refreshIfStartDateRejected(
+            patientId,
+            dietPlanId,
+            response,
+          );
           showAppToast(
             Get.overlayContext!,
             message: response['message'] ?? "Failed to activate diet plan",

@@ -31,7 +31,7 @@ class GenerationStepController extends GetxController {
   final RxnString errorMessage = RxnString();
   final RxInt supplementFlushFailures = 0.obs;
 
-  Future<void> generate({double? currentWeight, DateTime? startDate}) async {
+  Future<void> generate({double? currentWeight}) async {
     phase.value = GenerationPhase.generatingMeals;
     errorMessage.value = null;
 
@@ -90,7 +90,6 @@ class GenerationStepController extends GetxController {
         wizard.patientId,
         wizard.firstConsultationId,
         wizard.requestId,
-        startDate: startDate,
         currentWeight: currentWeight,
       );
       success = resultDietPlanId != null;
@@ -115,7 +114,6 @@ class GenerationStepController extends GetxController {
         existingDietPlanId,
         wizard.weeksToGenerate,
         currentWeight: currentWeight,
-        startDate: startDate,
       );
       success = response != null && response['success'] == true;
       resultDietPlanId = existingDietPlanId;

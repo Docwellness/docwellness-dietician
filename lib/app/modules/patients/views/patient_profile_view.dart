@@ -11,6 +11,7 @@ import 'package:docwellnesdoc/app/modules/patients/views/payment_status_view.dar
 import 'package:docwellnesdoc/app/utils/membership_badge.dart';
 import 'package:docwellnesdoc/app/modules/patients/views/profile_options_sheet.dart';
 import 'package:docwellnesdoc/app/modules/patients/views/questions_view.dart';
+import 'package:docwellnesdoc/app/modules/patients/utils/week_lock.dart';
 import 'package:docwellnesdoc/app/modules/patients/widgets/bmi_and_body_fat_container.dart';
 import 'package:docwellnesdoc/app/modules/patients/widgets/edit_exercise_day_sheet.dart';
 import 'package:docwellnesdoc/app/modules/patients/widgets/bmi_card.dart';
@@ -433,6 +434,7 @@ class _PatientProfileViewState extends State<PatientProfileView> {
       finalizedSet,
       weekSchedule,
       dataModel: pc?.dataModel,
+      startDatePending: pc?.startDatePending ?? false,
     );
     final isGenerated = !isFinalized && cardState == _WeekCardState.generated;
     final isEligible = !isFinalized && cardState == _WeekCardState.eligible;
@@ -443,7 +445,13 @@ class _PatientProfileViewState extends State<PatientProfileView> {
       if (isLocked) {
         showAppToast(
           Get.overlayContext!,
-          message: _lockedExplanation(week, tier, finalizedSet, weekSchedule),
+          message: _lockedExplanation(
+            week,
+            tier,
+            finalizedSet,
+            weekSchedule,
+            startDatePending: pc?.startDatePending ?? false,
+          ),
           type: AppToastType.warning,
         );
         return;
@@ -810,8 +818,17 @@ class _PatientProfileViewState extends State<PatientProfileView> {
     Set<int> finalizedWeeks,
     List<WeekScheduleEntry> weekSchedule, {
     String? dataModel,
+    bool startDatePending = false,
   }) {
     if (generatedWeeks.contains(weekNum)) return _WeekCardState.generated;
+    // No start date yet means no dated weeks: only Week 1 is open until the
+    // payment is approved (the backend refuses the rest with a 409).
+    if (weekLockedUntilActivation(
+      startDatePending: startDatePending,
+      week: weekNum,
+    )) {
+      return _WeekCardState.locked;
+    }
     // A v4.0 plan-item plan has exactly the weeks the wizard generated -
     // there's no per-week regeneration for it (see
     // generation_step_controller.dart), so a week that isn't in
@@ -845,8 +862,15 @@ class _PatientProfileViewState extends State<PatientProfileView> {
     int weekNum,
     String? tier,
     Set<int> finalizedWeeks,
-    List<WeekScheduleEntry> weekSchedule,
-  ) {
+    List<WeekScheduleEntry> weekSchedule, {
+    bool startDatePending = false,
+  }) {
+    if (weekLockedUntilActivation(
+      startDatePending: startDatePending,
+      week: weekNum,
+    )) {
+      return kWeekLockedUntilActivationMessage;
+    }
     final priorWeek = tier == 'golden' ? 2 : weekNum - 1;
     final priorLabel = tier == 'golden' ? 'Week 2' : 'Week $priorWeek';
     final nextLabel = tier == 'golden' ? 'weeks 3-4' : 'Week $weekNum';
@@ -993,7 +1017,10 @@ class _PatientProfileViewState extends State<PatientProfileView> {
       builder: (ctx) => AlertDialog(
         title: const CustomText(text: 'Move the diet start date?', fontWeight: FontWeight.w600, fontSize: 16, color: Color(0xff530630)),
         content: CustomText(
-          text: 'The diet plan\'s week schedule and the exercise plan (if generated) will shift to start on ${DateFormat('dd MMM yyyy').format(picked)}.',
+          text: startDateEditConfirmText(
+            renewalPending: controller.patientProfileModel.value?.pendingCycle != null,
+            day: DateFormat('dd MMM yyyy').format(picked),
+          ),
           fontWeight: FontWeight.w400,
           fontSize: 13,
           color: const Color(0xff1F2A37),
@@ -1294,13 +1321,27 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                           child: Column(
                             children: [
                               Obx(
-                                () => _boxField(
-                                  label: 'Start Date for Diet',
-                                  value: healthSummary?.startDateForDiet ?? '—',
-                                  onTap: controller.updateDietStartDateLoading.value
-                                      ? null
-                                      : () => _editDietStartDate(healthSummary?.startDateForDiet),
-                                ),
+                                // Reads the Rx profile, so this Obx always has
+                                // an observable to follow.
+                                () => runningPlanStartPending(
+                                      startDatePending:
+                                          controller.patientProfileModel.value?.status?.startDatePending == true,
+                                      hasPendingCycle:
+                                          controller.patientProfileModel.value?.pendingCycle != null,
+                                    )
+                                    // Not started: the date is chosen when the
+                                    // payment is approved, so it is read-only.
+                                    ? _boxField(
+                                        label: 'Start Date for Diet',
+                                        value: 'Set when you approve payment',
+                                      )
+                                    : _boxField(
+                                        label: 'Start Date for Diet',
+                                        value: healthSummary?.startDateForDiet ?? '—',
+                                        onTap: controller.updateDietStartDateLoading.value
+                                            ? null
+                                            : () => _editDietStartDate(healthSummary?.startDateForDiet),
+                                      ),
                               ),
                               const SizedBox(height: 16),
                               _boxField(
@@ -2125,6 +2166,13 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                     final effectiveCurrentWeek = startedFinalizedWeeks.isEmpty
                         ? 0
                         : startedFinalizedWeeks.reduce((a, b) => a > b ? a : b);
+                    // The profile's pending flag follows the newest cycle, so
+                    // during a renewal it describes the renewal, not this
+                    // running plan (its cards are never locked by it).
+                    final startDatePending = runningPlanStartPending(
+                      startDatePending: status.startDatePending,
+                      hasPendingCycle: profileModel?.pendingCycle != null,
+                    );
                     final cardState = _weekCardState(
                       weekNum,
                       tier,
@@ -2132,6 +2180,7 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                       finalizedWeeks,
                       weekSchedule,
                       dataModel: status.activeDietPlanDataModel,
+                      startDatePending: startDatePending,
                     );
 
                     // ── LOCKED CARD (not yet eligible to generate) ────
@@ -2147,6 +2196,7 @@ class _PatientProfileViewState extends State<PatientProfileView> {
                               tier,
                               finalizedWeeks,
                               weekSchedule,
+                              startDatePending: startDatePending,
                             ),
                             type: AppToastType.warning,
                           ),
